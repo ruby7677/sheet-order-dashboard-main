@@ -1,0 +1,42 @@
+# 啟用 RewriteEngine
+RewriteEngine On
+
+# 設置基礎路徑
+RewriteBase /
+
+# 如果請求的是實際存在的文件或目錄，則不進行重寫
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# 處理前端路由
+# 將所有其他請求重寫到 index.html（除了 API 請求）
+RewriteCond %{REQUEST_URI} !^/api/
+RewriteRule ^ index.html [L]
+
+# 設置 CORS 標頭
+<IfModule mod_headers.c>
+    Header set Access-Control-Allow-Origin "*"
+    Header set Access-Control-Allow-Methods "GET, POST, OPTIONS"
+    Header set Access-Control-Allow-Headers "Content-Type"
+</IfModule>
+
+# 禁用瀏覽器快取 API 響應
+<FilesMatch "\.(php)$">
+    <IfModule mod_headers.c>
+        Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+        Header set Pragma "no-cache"
+        Header set Expires "0"
+    </IfModule>
+</FilesMatch>
+
+# 啟用 PHP 錯誤顯示（僅用於開發環境）
+<IfModule mod_php7.c>
+    php_flag display_errors on
+    php_value error_reporting E_ALL
+</IfModule>
+
+<IfModule mod_php8.c>
+    php_flag display_errors on
+    php_value error_reporting E_ALL
+</IfModule>
