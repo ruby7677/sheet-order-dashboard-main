@@ -9,7 +9,7 @@ export default {
     const corsHeaders = {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, X-Requested-With',
+      'Access-Control-Allow-Headers': 'Content-Type, X-Requested-With, Cache-Control, Pragma, Expires',
       'Access-Control-Max-Age': '86400',
     };
 
