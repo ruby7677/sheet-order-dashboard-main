@@ -10,7 +10,8 @@
       "Bash(npm uninstall:*)",
       "Bash(curl:*)",
       "Bash(git push:*)",
-      "Bash(wrangler deploy:*)"
+      "Bash(wrangler deploy:*)",
+      "Bash(git add:*)"
     ],
     "deny": []
   }
