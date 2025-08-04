@@ -8,7 +8,9 @@
       "Bash(npm view:*)",
       "Bash(npm search:*)",
       "Bash(npm uninstall:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(git push:*)",
+      "Bash(wrangler deploy:*)"
     ],
     "deny": []
   }
