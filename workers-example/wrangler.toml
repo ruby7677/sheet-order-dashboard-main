@@ -10,41 +10,35 @@ compatibility_date = "2025-08-03"
 #   { pattern = "api.yourdomain.com/*", zone_name = "yourdomain.com" }
 # ]
 
-# KV 命名空間 (用於快取)
-[[kv_namespaces]]
+# 生產環境設定
+[env.production]
+name = "sheet-order-api"
+
+[[env.production.kv_namespaces]]
 binding = "CACHE_KV"
 id = "37c85c7f1aa84365810dc5ddb4015d47"
-preview_id = "your-preview-kv-namespace-id"
 
-# 環境變數 (非敏感資訊)
 [env.production.vars]
 GOOGLE_SHEET_ID = "10MMALrfBonchPGjb-ps6Knw7MV6lllrrKRCTeafCIuo"
 APP_ENV = "production"
 CACHE_DURATION = "15000"
 DEBUG_MODE = "false"
 
-# Secrets (敏感資訊，需透過 wrangler secret 設定)
-# wrangler secret put GOOGLE_SERVICE_ACCOUNT_KEY
-# 將 service-account-key2.json 的內容複製貼上
-
 # 開發環境設定
 [env.development]
 name = "sheet-order-api-dev"
-[env.production.vars]
-GOOGLE_SHEET_ID = "10MMALrfBonchPGjb-ps6Knw7MV6lllrrKRCTeafCIuo"
 
-[env.production.secrets]
-GOOGLE_SERVICE_ACCOUNT_KEY = "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDQV2Ms32rtS6Q8\npHbbXiL7jSyufnY/IZ3dOe0m5uC5mlkF1jbWcAygdN13v00F0+zrdsVaT53mPhVm\nV/9Z6d8D6Z5Y/eWfJiMkmUXscIrdLOnmCoemlH06LaH6+eAhKss5NJkAgvVh4IZf\nlkugbYQabcL4oUl4YDBJCHNJUPkj07L5+A4wWb0N8cNcnF94TCEZayOE1yyv77SA\nTjbC8NeZCOHvFuCmtFwvXCfpKnCbTWCb2b+ovuozFZILSupFfRn4vdIEuf11Czge\nyZiF5ClU5jMkqP9fxqI8Uz1DxanwvsfXC5J+h9X8PWTT3V0JiBkFOCF9CwgHrVw4\no8b8N29FAgMBAAECggEAY3wfHPnQhuB0XArSwLyqasFGgUpc75d/WPjEsCtWSvqT\noPBh/jLCLMqxSHGed3ZzrxpncdEL3rptoJHLmuVM+4LOfMM8pyrgZCUWmSlCfgvo\n4tLLZLWKOMI6k2xHZL8ZDMd7eh2Oy/6ZW8KaeVBiYPZhwDTQLv2LgQxadLuIRF0B\ncmLmu1y4dF36zLfOQXKaZUmR5/VCtpvbrYn1vCQGhH+Eu322I3cjAGG2gpttVDwC\nN6KuUCMy1bIvFpNsTFGDyJKOd4gb9n8yaEzpFUQ71T4uREUgCCv9TQTnNYyVHOLf\nqEfcyhHR0VffM/TDztX4XwWyW0FysgdCnRMFNjQkrwKBgQDuSqusapSDcognupO2\nOioTTXISsU9pRF9RdmUyRMUfQNWVtfTsbMpM5BmG0O0rt1YAs4HDBE5ssbd3njpz\nwNOyLp2K9Qc8F8qNshvDizBwgtmtOA7cpbCdCbdzEtdcw9Zl6Zz0S79DaoTdTNfU\n+jW6usnClLaenC38/KryNMLe+wKBgQDf0u7ncgyK9su3tdupRO6a1+Ezuj9h2JQx\nRj5Hc8msVvTojb8eMa6/laFTbpEs7MHma4ZO/Lvjhwc6yyaI2jzomcoppvkIY6kc\n/HysTypo7FcoEDMkftoXXb3rowtcX/Djxd4frn550Gvxz+Jew73ABoq2acPTEcBT\nsXHgqMSWvwKBgQC2b4a1zzd617H0ML0sM6XI928RbpysrEMJvEpHzSzZ+6pKH2+v\nnq7XZX9Bny0lXgzDJqt/Ignk377mHscDniq1bUkCfQwX7uMNzsHA2Qyx5ww+uP9v\n4I6x/CFuQYuOowS/K7cVtfRt6dxlDZLkpNeD6cPUbETQdCQlX1CFdO2JBwKBgFRN\nMkZiIm9EvT4YdP+wQt53aQ7+m1jTJh3ZAyQObGtI5T2iBdXtiJAIX5b5Eh0Fn5KV\n9SRS9MGh3gs68OyipkZFhmthxHJwdwW/44VS2/pg6gLg9yJL1QDwAdR6uJC2Yhio\nMh1kr6ZZ5g5R6kUfHJzy2dQSyfr5uKLNNsMTTdgpAoGBAMAxeGjC53A5Ni4Ncghh\n7BereU8gpvwW/dHeasjP99Xyi8c5tu9caEQUlOPlqxF5HS01qqMeMXtNMfuENBuW\nZNoDaNE68KGOy5h/RCEp3sAmr1cVFx3dfK9L6id3OA5FTbSgnU3g72/BCgurer0d\nfgApSuwPDPQuoFxl8YRlkVCI\n-----END PRIVATE KEY-----\n"
+[[env.development.kv_namespaces]]
+binding = "CACHE_KV"
+id = "9e131cdce1674b5e946c19ece9efef0c"
+
 [env.development.vars]
 GOOGLE_SHEET_ID = "10MMALrfBonchPGjb-ps6Knw7MV6lllrrKRCTeafCIuo"
 APP_ENV = "development"
 CACHE_DURATION = "5000"
 DEBUG_MODE = "true"
 
-# 資源限制
-[limits]
-cpu_ms = 10000
-
-# 觸發器設定
-[[triggers]]
-crons = ["0 */4 * * *"]  # 每4小時清理快取 (可選)
+# Secrets 設定說明
+# 使用以下命令設定敏感資訊：
+# wrangler secret put GOOGLE_SERVICE_ACCOUNT_KEY
+# 將 service-account-key2.json 的完整內容複製貼上

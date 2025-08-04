@@ -15,18 +15,18 @@ npm install -g wrangler
 wrangler login
 ```
 
-### 步驟 2: 建立 KV 命名空間
+### 步驟 2: 建立 KV 命名空間 (Wrangler v4)
 ```bash
 cd workers-example/
 
-# 生產環境 KV
-wrangler kv:namespace create "CACHE_KV"
+# 建立 KV namespace (新版 Wrangler 語法)
+wrangler kv namespace create "CACHE_KV"
 # 輸出範例: 🌀 Creating namespace with title "sheet-order-api-CACHE_KV"
 # ✨ Success! Created KV namespace with id "37c85c7f1aa84365810dc5ddb4015d47"
 
-# 開發環境 KV  
-wrangler kv:namespace create "CACHE_KV" --preview
-# 輸出範例: 🌀 Creating namespace with title "sheet-order-api-CACHE_KV_preview"
+# 建立預覽環境 KV namespace
+wrangler kv namespace create "CACHE_KV_preview"
+# 輸出範例: 🌀 Creating namespace with title "sheet-order-api-CACHE_KV_preview"  
 # ✨ Success! Created KV namespace with id "b8d2c4e6f8a0b2d4e6f8a0b2d4e6f8a0"
 ```
 
@@ -41,8 +41,12 @@ id = "37c85c7f1aa84365810dc5ddb4015d47"        # 👈 生產環境 ID
 preview_id = "b8d2c4e6f8a0b2d4e6f8a0b2d4e6f8a0" # 👈 開發環境 ID
 ```
 
-### 步驟 4: 設定 Google Service Account 金鑰
+### 步驟 4: 設定 Google Service Account 金鑰 (Wrangler v4)
+
+⚠️ **重要安全提醒**: 我注意到您已經在 `wrangler.toml` 中直接設定了私鑰，這不安全！請移除並使用 secrets：
+
 ```bash
+# 正確的做法：使用 secrets (新版語法)
 wrangler secret put GOOGLE_SERVICE_ACCOUNT_KEY
 
 # 系統會提示輸入，將 service-account-key2.json 的完整內容複製貼上
@@ -56,6 +60,14 @@ wrangler secret put GOOGLE_SERVICE_ACCOUNT_KEY
 #   "client_id": "...",
 #   ...
 # }
+```
+
+#### 🔧 清理 wrangler.toml 安全問題
+請從 `wrangler.toml` 中移除：
+```toml
+# ❌ 刪除這些不安全的設定
+[env.production.secrets]
+GOOGLE_SERVICE_ACCOUNT_KEY = "-----BEGIN PRIVATE KEY-----\n..."
 ```
 
 ### 步驟 5: 部署到 Cloudflare
