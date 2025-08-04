@@ -62,7 +62,7 @@ const Index: React.FC = () => {
         });
         return;
       }
-      downloadQuickStoreXlsx(selectedOrders, `快速到店訂單_${new Date().toISOString().split('T')[0]}.xlsx`);
+      await downloadQuickStoreXlsx(selectedOrders, `快速到店訂單_${new Date().toISOString().split('T')[0]}.xlsx`);
       toast({
         title: '成功',
         description: '快速到店 xlsx 已下載',

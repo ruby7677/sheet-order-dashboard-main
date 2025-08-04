@@ -1,4 +1,4 @@
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import { Order } from '@/types/order';
 
 /**
@@ -6,8 +6,12 @@ import { Order } from '@/types/order';
  * @param orders 勾選的訂單
  * @param filename 檔案名稱
  */
-export function downloadQuickStoreXlsx(orders: Order[], filename = '快速到店訂單.xlsx') {
-  // 標題
+export async function downloadQuickStoreXlsx(orders: Order[], filename = '快速到店訂單.xlsx') {
+  // 建立新的工作簿
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet('B2S訂單');
+
+  // 標題行
   const headers = [
     '訂單編號',
     '收件人姓名(必填)',
@@ -21,8 +25,11 @@ export function downloadQuickStoreXlsx(orders: Order[], filename = '快速到店
     '溫層'
   ];
 
-  // 產生資料
-  const data = orders.map((order, idx) => {
+  // 設定標題行
+  worksheet.addRow(headers);
+
+  // 產生資料行
+  orders.forEach((order, idx) => {
     // 訂單編號：依勾選順序產生1~99
     const orderNumber = (idx + 1).toString();
     // 收件人姓名
@@ -45,14 +52,19 @@ export function downloadQuickStoreXlsx(orders: Order[], filename = '快速到店
     const printCount = '1';
     // 溫層
     const temp = '0002';
-    return [orderNumber, name, phone, fbName, notes, cod, storeCode, bankCode, printCount, temp];
+    
+    worksheet.addRow([orderNumber, name, phone, fbName, notes, cod, storeCode, bankCode, printCount, temp]);
   });
 
-  // 建立 worksheet & workbook
-  const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'B2S訂單');
-
-  // 下載
-  XLSX.writeFile(wb, filename);
+  // 產生檔案並下載
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  window.URL.revokeObjectURL(url);
 }
