@@ -137,16 +137,16 @@ async function getOrdersFromSheet(request, env) {
 async function fetchFromGoogleSheets(env) {
   // 解析 Service Account 金鑰
   const serviceAccount = JSON.parse(env.GOOGLE_SERVICE_ACCOUNT_KEY);
-  
+
   // 建立 JWT Token
   const jwtToken = await createJWT(serviceAccount);
-  
+
   // 取得 Access Token
   const accessToken = await getAccessToken(jwtToken);
-  
-  // 呼叫 Google Sheets API
-  const spreadsheetId = env.GOOGLE_SHEET_ID;
-  const range = 'Sheet1!A:P'; // A到P欄，對應原本的15個欄位
+
+  // 使用硬編碼的 spreadsheetId
+  const spreadsheetId = '10MMALrfBonchPGjb-ps6Knw7MV6lllrrKRCTeafCIuo';
+  const range = 'Sheet1!A:P';
   
   const response = await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`,
@@ -159,12 +159,11 @@ async function fetchFromGoogleSheets(env) {
   );
 
   if (!response.ok) {
-    throw new Error(`Google Sheets API error: ${response.status}`);
+    const errorText = await response.text();
+    throw new Error(`Google Sheets API error: ${response.status} - ${errorText}`);
   }
 
   const data = await response.json();
-  
-  // 轉換資料格式 (與 PHP 版本保持一致)
   return transformSheetsData(data.values);
 }
 
@@ -184,18 +183,20 @@ async function createJWT(serviceAccount) {
     iat: now
   };
 
-  // 使用 Web Crypto API 簽署 JWT
-  const encoder = new TextEncoder();
-  const keyData = serviceAccount.private_key
-    .replace(/-----BEGIN PRIVATE KEY-----/, '')
-    .replace(/-----END PRIVATE KEY-----/, '')
-    .replace(/\n/g, '');
-  
-  const keyBuffer = Uint8Array.from(atob(keyData), c => c.charCodeAt(0));
-  
+  // 修正 private key 處理
+  const privateKey = serviceAccount.private_key
+    .replace(/-----BEGIN PRIVATE KEY-----/g, '')
+    .replace(/-----END PRIVATE KEY-----/g, '')
+    .replace(/\\n/g, '\n')
+    .replace(/\n/g, '')
+    .trim();
+
+  // 使用正確的 base64 解碼
+  const binaryKey = Uint8Array.from(atob(privateKey), c => c.charCodeAt(0));
+
   const cryptoKey = await crypto.subtle.importKey(
     'pkcs8',
-    keyBuffer,
+    binaryKey,
     {
       name: 'RSASSA-PKCS1-v1_5',
       hash: 'SHA-256'
@@ -204,17 +205,28 @@ async function createJWT(serviceAccount) {
     ['sign']
   );
 
-  const headerB64 = btoa(JSON.stringify(header)).replace(/=/g, '');
-  const payloadB64 = btoa(JSON.stringify(payload)).replace(/=/g, '');
-  const signatureData = encoder.encode(`${headerB64}.${payloadB64}`);
-  
+  // 修正 base64url 編碼
+  const headerB64 = btoa(JSON.stringify(header))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=/g, '');
+    
+  const payloadB64 = btoa(JSON.stringify(payload))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=/g, '');
+
+  const signatureData = new TextEncoder().encode(`${headerB64}.${payloadB64}`);
+
   const signature = await crypto.subtle.sign(
     'RSASSA-PKCS1-v1_5',
     cryptoKey,
     signatureData
   );
-  
+
   const signatureB64 = btoa(String.fromCharCode(...new Uint8Array(signature)))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
     .replace(/=/g, '');
 
   return `${headerB64}.${payloadB64}.${signatureB64}`;
@@ -372,3 +384,5 @@ function checkApiPath() {
 function generateRequestId() {
   return Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
 }
+
+
