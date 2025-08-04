@@ -28,7 +28,7 @@ const API_BASE = getApiBase();
 // 輸出當前使用的 API 路徑，方便調試
 console.log('當前 API 路徑:', API_BASE);
 
-// 快取機制
+// 快取機制 
 interface OrderCache {
   timestamp: number;
   data: Order[];
