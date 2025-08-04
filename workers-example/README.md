@@ -75,7 +75,7 @@ curl https://sheet-order-api.your-subdomain.workers.dev/api/check_api_path.php
 curl https://sheet-order-api.your-subdomain.workers.dev/api/get_orders_from_sheet.php
 ```
 
-## ⚡ 效能特點
+## ⚡ 效能特點 
 
 - **全球邊緣運算**: 在全球 200+ 個數據中心運行
 - **零冷啟動**: 比傳統 serverless 更快
