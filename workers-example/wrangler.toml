@@ -1,0 +1,47 @@
+# Cloudflare Workers 配置檔案
+# 用於部署 Sheet Order Dashboard API
+
+name = "sheet-order-api"
+main = "index.js"
+compatibility_date = "2024-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# 設定自定義域名 (可選)
+# routes = [
+#   { pattern = "api.yourdomain.com/*", zone_name = "yourdomain.com" }
+# ]
+
+# KV 命名空間 (用於快取)
+[[kv_namespaces]]
+binding = "CACHE_KV"
+id = "your-kv-namespace-id"
+preview_id = "your-preview-kv-namespace-id"
+
+# 環境變數 (非敏感資訊)
+[env.production.vars]
+GOOGLE_SHEET_ID = "10MMALrfBonchPGjb-ps6Knw7MV6lllrrKRCTeafCIuo"
+APP_ENV = "production"
+CACHE_DURATION = "15000"
+DEBUG_MODE = "false"
+
+# Secrets (敏感資訊，需透過 wrangler secret 設定)
+# wrangler secret put GOOGLE_SERVICE_ACCOUNT_KEY
+# 將 service-account-key2.json 的內容複製貼上
+
+# 開發環境設定
+[env.development]
+name = "sheet-order-api-dev"
+
+[env.development.vars]
+GOOGLE_SHEET_ID = "10MMALrfBonchPGjb-ps6Knw7MV6lllrrKRCTeafCIuo"
+APP_ENV = "development"
+CACHE_DURATION = "5000"
+DEBUG_MODE = "true"
+
+# 資源限制
+[limits]
+cpu_ms = 10000
+
+# 觸發器設定
+[[triggers]]
+crons = ["0 */4 * * *"]  # 每4小時清理快取 (可選)
