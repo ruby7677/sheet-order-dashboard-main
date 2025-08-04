@@ -75,8 +75,13 @@ export const fetchOrders = async (filters?: {
   const timestamp = Date.now();
   const nonce = Math.random().toString(36).substring(2, 15);
 
+  // 構建完整的 API URL - 直接使用 Workers API
+  const apiUrl = 'https://sheet-order-api.ruby7677.workers.dev/api/get_orders_from_sheet.php';
+  
+  console.log('📡 API 請求 URL:', apiUrl);
+
   // 添加多個隨機參數，確保每次請求都是唯一的
-  const url = new URL(`${window.location.origin}${API_BASE}/get_orders_from_sheet.php`);
+  const url = new URL(apiUrl);
   url.searchParams.append('refresh', '1');
   url.searchParams.append('_', timestamp.toString());
   url.searchParams.append('nonce', nonce);
@@ -392,8 +397,8 @@ export const updateOrderStatus = async (id: string, status: '訂單確認中' | 
   const timestamp = Date.now();
   const nonce = Math.random().toString(36).substring(2, 15);
 
-  // 構建 URL 並添加參數
-  const url = new URL(`${window.location.origin}${API_BASE}/update_order_status.php`);
+  // 構建 URL 並添加參數 - 使用 Workers API
+  const url = new URL('https://sheet-order-api.ruby7677.workers.dev/api/update_order_status.php');
   url.searchParams.append('_', timestamp.toString());
   url.searchParams.append('nonce', nonce);
 
@@ -444,8 +449,8 @@ export const updateOrderPaymentStatus = async (id: string, paymentStatus: string
   const timestamp = Date.now();
   const nonce = Math.random().toString(36).substring(2, 15);
 
-  // 構建 URL 並添加參數
-  const url = new URL(`${window.location.origin}${API_BASE}/update_payment_status.php`);
+  // 構建 URL 並添加參數 - 使用 Workers API
+  const url = new URL('https://sheet-order-api.ruby7677.workers.dev/api/update_payment_status.php');
   url.searchParams.append('_', timestamp.toString());
   url.searchParams.append('nonce', nonce);
 
@@ -495,8 +500,8 @@ export const updateOrderItems = async (id: string, items: OrderItem[], total: nu
   const timestamp = Date.now();
   const nonce = Math.random().toString(36).substring(2, 15);
 
-  // 構建 URL 並添加參數
-  const url = new URL(`${window.location.origin}${API_BASE}/update_order_items.php`);
+  // 構建 URL 並添加參數 - 使用 Workers API
+  const url = new URL('https://sheet-order-api.ruby7677.workers.dev/api/update_order_items.php');
   url.searchParams.append('_', timestamp.toString());
   url.searchParams.append('nonce', nonce);
 
@@ -535,8 +540,8 @@ export const deleteOrder = async (id: string): Promise<any> => {
   const timestamp = Date.now();
   const nonce = Math.random().toString(36).substring(2, 15);
 
-  // 構建 URL 並添加參數
-  const url = new URL(`${window.location.origin}${API_BASE}/delete_order.php`);
+  // 構建 URL 並添加參數 - 使用 Workers API
+  const url = new URL('https://sheet-order-api.ruby7677.workers.dev/api/delete_order.php');
   url.searchParams.append('_', timestamp.toString());
   url.searchParams.append('nonce', nonce);
 
@@ -587,8 +592,8 @@ export const batchDeleteOrders = async (ids: string[]): Promise<{
   const timestamp = Date.now();
   const nonce = Math.random().toString(36).substring(2, 15);
 
-  // 構建 URL 並添加參數
-  const url = new URL(`${window.location.origin}${API_BASE}/batch_delete_orders.php`);
+  // 構建 URL 並添加參數 - 使用 Workers API
+  const url = new URL('https://sheet-order-api.ruby7677.workers.dev/api/batch_delete_orders.php');
   url.searchParams.append('_', timestamp.toString());
   url.searchParams.append('nonce', nonce);
 
