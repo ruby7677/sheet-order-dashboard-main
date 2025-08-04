@@ -1,13 +1,24 @@
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
+  // 載入環境變數
+  const env = loadEnv(mode, process.cwd(), '');
+  
   console.log('🔧 Vite config loading, mode:', mode);
   console.log('🔧 Current working directory:', process.cwd());
   console.log('🔧 __dirname:', __dirname);
+  console.log('🔧 Environment:', {
+    VITE_APP_ENV: env.VITE_APP_ENV,
+    VITE_API_BASE_URL: env.VITE_API_BASE_URL,
+    VITE_API_HOST: env.VITE_API_HOST
+  });
+  
+  const isProduction = mode === 'production';
+  const isDevelopment = mode === 'development';
   
   return {
   server: {
@@ -20,7 +31,8 @@ export default defineConfig(({ mode }) => {
       'Cross-Origin-Embedder-Policy': 'unsafe-none',
       'Cross-Origin-Opener-Policy': 'unsafe-none',
     },
-    proxy: {
+    // 只在開發環境啟用 proxy
+    proxy: isDevelopment ? {
       '/api': {
         target: 'http://localhost:80',
         changeOrigin: true,
@@ -73,7 +85,7 @@ export default defineConfig(({ mode }) => {
           });
         }
       }
-    },
+    } : undefined,
     port: 8080,
     hmr: {
       overlay: false

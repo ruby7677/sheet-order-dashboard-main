@@ -23,6 +23,20 @@
         // 檢測當前環境
         getApiBase: function() {
           try {
+            // 嘗試從 Vite 環境變數獲取 API 配置
+            const viteApiBase = '%VITE_API_BASE_URL%';
+            const viteApiHost = '%VITE_API_HOST%';
+            const viteAppEnv = '%VITE_APP_ENV%';
+            
+            // 檢查環境變數是否已被 Vite 替換（生產環境）
+            if (viteApiBase && !viteApiBase.startsWith('%VITE_')) {
+              if (viteApiHost && !viteApiHost.startsWith('%VITE_')) {
+                return viteApiHost + viteApiBase;
+              }
+              return viteApiBase;
+            }
+            
+            // 開發環境：動態檢測
             const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
             const port = window.location.port;
 
@@ -31,12 +45,35 @@
               return '/sheet-order-dashboard-main/api';
             }
 
-            // 生產環境或其他情況
+            // 其他情況默認為 /api
             return '/api';
           } catch (error) {
             console.error('API_CONFIG error:', error);
             return '/api';
           }
+        },
+        
+        // 檢查是否為生產環境
+        isProduction: function() {
+          const viteAppEnv = '%VITE_APP_ENV%';
+          if (viteAppEnv && !viteAppEnv.startsWith('%VITE_')) {
+            return viteAppEnv === 'production';
+          }
+          return !this.isDevelopment();
+        },
+        
+        // 檢查是否為開發環境
+        isDevelopment: function() {
+          const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+          const port = window.location.port;
+          return isLocalhost && port === '8080';
+        },
+        
+        // 獲取完整的 API URL
+        getFullApiUrl: function(endpoint) {
+          const baseUrl = this.getApiBase();
+          const cleanEndpoint = endpoint.startsWith('/') ? endpoint.slice(1) : endpoint;
+          return baseUrl + '/' + cleanEndpoint;
         }
       };
 

@@ -1,0 +1,64 @@
+name: Deploy to Cloudflare Pages
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    environment:
+      name: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
+    
+    steps:
+      - name: Checkout 
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run linting
+        run: npm run lint
+
+      - name: Create environment file
+        run: |
+          echo "VITE_APP_ENV=${{ vars.VITE_APP_ENV || 'production' }}" > .env
+          echo "VITE_API_BASE_URL=${{ vars.VITE_API_BASE_URL || '/api' }}" >> .env
+          echo "VITE_API_HOST=${{ secrets.VITE_API_HOST }}" >> .env
+          echo "VITE_GOOGLE_SHEET_ID=${{ vars.VITE_GOOGLE_SHEET_ID }}" >> .env
+          echo "VITE_APP_TITLE=${{ vars.VITE_APP_TITLE || '融氏古早味蘿蔔糕 - 訂單管理後台' }}" >> .env
+          echo "VITE_APP_DESCRIPTION=${{ vars.VITE_APP_DESCRIPTION || '蘿蔔糕訂購系統管理後台' }}" >> .env
+          echo "VITE_CACHE_DURATION=${{ vars.VITE_CACHE_DURATION || '15000' }}" >> .env
+          echo "VITE_DEBUG_MODE=${{ vars.VITE_DEBUG_MODE || 'false' }}" >> .env
+
+      - name: Build application
+        run: npm run build
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/pages-action@v1
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          projectName: ${{ vars.CLOUDFLARE_PROJECT_NAME || 'sheet-order-dashboard' }}
+          directory: dist
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Deploy notification
+        if: success()
+        run: |
+          echo "🚀 部署成功！"
+          echo "環境: ${{ github.ref == 'refs/heads/main' && 'Production' || 'Staging' }}"
+          echo "分支: ${{ github.ref_name }}"
+          echo "提交: ${{ github.sha }}"
