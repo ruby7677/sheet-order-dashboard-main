@@ -14,7 +14,7 @@ compatibility_flags = ["nodejs_compat"]
 # KV 命名空間 (用於快取)
 [[kv_namespaces]]
 binding = "CACHE_KV"
-id = "your-kv-namespace-id"
+id = "37c85c7f1aa84365810dc5ddb4015d47"
 preview_id = "your-preview-kv-namespace-id"
 
 # 環境變數 (非敏感資訊)
