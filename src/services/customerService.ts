@@ -70,12 +70,13 @@ export const fetchCustomers = async (filters?: CustomerFilterCriteria): Promise<
   const timestamp = Date.now();
   const nonce = Math.random().toString(36).substring(2, 15);
 
-  // 使用 Workers API 獲取訂單資料來提取客戶資料
-  const url = new URL('https://sheet-order-api.ruby7677.workers.dev/api/get_orders_from_sheet.php');
+  // 添加多個隨機參數，確保每次請求都是唯一的
+  const url = new URL(`${window.location.origin}${API_BASE}/get_customers_from_sheet.php`);
   url.searchParams.append('refresh', '1');
   url.searchParams.append('_', timestamp.toString());
   url.searchParams.append('nonce', nonce);
   url.searchParams.append('v', '1.1'); // API 版本號
+  url.searchParams.append('random', Math.random().toString(36).substring(2, 15)); // 額外的隨機參數
 
   // 使用 no-store 快取策略
   const res = await fetch(url.toString(), {
@@ -97,22 +98,8 @@ export const fetchCustomers = async (filters?: CustomerFilterCriteria): Promise<
     throw new Error(result.message || '獲取客戶資料失敗');
   }
 
-  // 從訂單資料中提取客戶資料
-  const orders = result.data;
-  const customers: Customer[] = orders.map((order: any) => ({
-    id: order.id,
-    name: order.customer.name,
-    phone: order.customer.phone,
-    address: order.deliveryAddress,
-    items: order.items.map((item: any) => `${item.product} x ${item.quantity}`).join(', '),
-    total: order.total,
-    orderDate: order.createdAt,
-    contactMethod: order.contactMethod,
-    socialAccount: order.socialAccount || '',
-    paymentMethod: order.paymentMethod,
-    status: order.status,
-    paymentStatus: order.paymentStatus
-  }));
+  // 將原始客戶資料轉換為帶有統計資訊的客戶資料
+  const customers = result.data as Customer[];
 
   // 按電話號碼分組
   const customersByPhone: { [phone: string]: Customer[] } = {};
@@ -284,12 +271,12 @@ export const fetchCustomerOrders = async (phone: string): Promise<CustomerOrder[
   const timestamp = Date.now();
   const nonce = Math.random().toString(36).substring(2, 15);
 
-  // 使用 Workers API 獲取訂單資料然後過濾特定客戶
-  const url = new URL('https://sheet-order-api.ruby7677.workers.dev/api/get_orders_from_sheet.php');
+  const url = new URL(`${window.location.origin}${API_BASE}/get_customer_orders.php`);
+  url.searchParams.append('phone', phone);
   url.searchParams.append('refresh', '1');
   url.searchParams.append('_', timestamp.toString());
   url.searchParams.append('nonce', nonce);
-  url.searchParams.append('v', '1.1'); // API 版本號
+  url.searchParams.append('random', Math.random().toString(36).substring(2, 15)); // 額外的隨機參數
 
   const res = await fetch(url.toString(), {
     method: 'GET',
@@ -310,22 +297,7 @@ export const fetchCustomerOrders = async (phone: string): Promise<CustomerOrder[
     throw new Error(result.message || '獲取客戶訂單失敗');
   }
 
-  // 從所有訂單中過濾出特定客戶的訂單
-  const allOrders = result.data;
-  const orders: CustomerOrder[] = allOrders
-    .filter((order: any) => order.customer.phone === phone)
-    .map((order: any) => ({
-      id: order.id,
-      orderNumber: order.orderNumber,
-      orderDate: order.createdAt,
-      items: order.items.map((item: any) => `${item.product} x ${item.quantity}`).join(', '),
-      total: order.total,
-      status: order.status,
-      paymentStatus: order.paymentStatus,
-      deliveryMethod: order.deliveryMethod,
-      dueDate: order.dueDate,
-      notes: order.notes
-    }));
+  const orders = result.data as CustomerOrder[];
 
   // 更新快取
   customerOrdersCache[phone] = {
