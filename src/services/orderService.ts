@@ -140,8 +140,8 @@ export const fetchOrders = async (filters?: {
     const createdAt = String(row['createdAt'] || row['訂單時間'] || row[0] || new Date().toISOString().split('T')[0]);
     const id = String(row.id || `generated_id_${idx}`); // 提供預設ID以防萬一
     const orderNumber = String(row.orderNumber || `ORD-${Date.now()}-${idx}`); // 提供預設訂單號
-    const customerName = String(row.customerName || row['姓名'] || '');
-    const customerPhone = String(row.customerPhone || row['電話'] || '');
+    const customerName = String(row.customerName || row['姓名'] || row[1] || '');
+    const customerPhone = String(row.customerPhone || row['電話'] || row[2] || '');
 
     let itemsArray: { product: string; quantity: number; price: number; subtotal: number }[] = [];
     if (typeof row.items === 'string' && row.items.trim() !== '') {
