@@ -311,22 +311,154 @@ api/ (13個檔案)
 - **資料庫優化**：Google Sheets 批量讀寫
 - **壓縮傳輸**：Gzip 壓縮回應資料
 
-## 五、部署架構與流程
+## 五、Cloudflare Pages + Workers 部署架構
 
-### 5.1 部署環境需求
-#### 5.1.1 伺服器環境
-- **作業系統**：Linux/Windows Server
-- **Web 伺服器**：Apache 2.4+ 或 Nginx 1.18+
-- **PHP 版本**：PHP 7.4+ (建議 8.0+)
-- **SSL 憑證**：支援 HTTPS (生產環境必須)
+### 5.1 現代化架構設計
+#### 5.1.1 前端：Cloudflare Pages
+- **框架**：React + TypeScript + Vite
+- **部署平台**：Cloudflare Pages (全球 CDN)
+- **靜態資源**：自動優化與壓縮
+- **CI/CD**：GitHub Actions 自動部署
+- **域名管理**：Cloudflare DNS
 
-#### 5.1.2 PHP 擴展需求
-- php-curl (Google API 通訊)
-- php-json (JSON 處理)
-- php-openssl (SSL 連線)
-- php-mbstring (多位元組字串處理)
+#### 5.1.2 後端：Cloudflare Workers
+- **運行環境**：Cloudflare Workers (V8 JavaScript)
+- **API 框架**：Hono + chanfana (OpenAPI)
+- **無伺服器**：邊緣運算，全球分佈
+- **成本效益**：按請求計費，低成本高效能
+- **開發語言**：TypeScript
 
-### 5.2 前端部署
+#### 5.1.3 資料存取
+- **資料來源**：Google Sheets API v4
+- **認證方式**：Google Service Account
+- **快取策略**：Workers KV Store (全球快取)
+- **安全性**：Cloudflare WAF + DDoS 防護
+
+### 5.2 傳統 PHP 架構 vs Cloudflare 架構對比
+
+| 項目 | 傳統 PHP 架構 | Cloudflare 架構 |
+|------|---------------|-----------------|
+| **前端託管** | Apache/Nginx + PHP | Cloudflare Pages |
+| **後端 API** | PHP 7.4+ | Cloudflare Workers |
+| **快取機制** | 檔案系統快取 | Workers KV Store |
+| **部署方式** | FTP/SSH 手動部署 | Git 自動部署 |
+| **全球可用性** | 單一伺服器 | 全球邊緣網路 |
+| **擴展性** | 垂直擴展 | 自動水平擴展 |
+| **成本** | 固定伺服器費用 | 按使用量計費 |
+| **維護成本** | 伺服器維護 | 無伺服器維護 |
+
+### 5.3 Workers API 遷移架構
+
+#### 5.3.1 API 端點對應表
+| PHP 端點 | Workers 端點 | 狀態 | 複雜度 |
+|----------|--------------|------|--------|
+| `get_orders_from_sheet.php` | `endpoints/getOrdersFromSheet.ts` | ❌ 待遷移 | ⭐⭐⭐ |
+| `get_customers_from_sheet.php` | `endpoints/getCustomersFromSheet.ts` | ❌ 待遷移 | ⭐⭐⭐ |
+| `update_order_status.php` | `endpoints/updateOrderStatus.ts` | ❌ 待遷移 | ⭐⭐⭐⭐ |
+| `update_payment_status.php` | `endpoints/updatePaymentStatus.ts` | ❌ 待遷移 | ⭐⭐⭐ |
+| `update_order_items.php` | `endpoints/updateOrderItems.ts` | ❌ 待遷移 | ⭐⭐⭐⭐ |
+| `delete_order.php` | `endpoints/deleteOrder.ts` | ❌ 待遷移 | ⭐⭐⭐⭐⭐ |
+| `batch_delete_orders.php` | `endpoints/batchDeleteOrders.ts` | ❌ 待遷移 | ⭐⭐⭐⭐⭐ |
+| `admin_login.php` | `endpoints/adminLogin.ts` | ❌ 待遷移 | ⭐⭐⭐ |
+| `get_customer_orders.php` | `endpoints/getCustomerOrders.ts` | ❌ 待遷移 | ⭐⭐ |
+
+#### 5.3.2 Workers 技術棧
+```typescript
+// 核心框架
+import { Hono } from 'hono';
+import { fromHono } from 'chanfana';
+
+// Google Sheets 整合
+import { GoogleAuth } from 'google-auth-library';
+import { sheets_v4 } from 'googleapis';
+
+// 快取與存儲
+interface Env {
+  ORDERS_CACHE: KVNamespace;
+  GOOGLE_SERVICE_ACCOUNT: string; // Secret
+  SHEETS_ID: string;
+}
+```
+
+#### 5.3.3 快取策略設計
+```mermaid
+graph TD
+    A[API 請求] --> B{KV Store 檢查}
+    B -->|快取命中| C[返回快取資料]
+    B -->|快取過期| D[Google Sheets API]
+    D --> E[更新 KV Store]
+    E --> F[返回最新資料]
+    F --> G[設置 15s TTL]
+```
+
+#### 5.3.4 核心功能實作重點
+
+**A. Google Sheets 整合**
+```typescript
+class SheetsService {
+  private auth: GoogleAuth;
+  private sheets: sheets_v4.Sheets;
+  
+  constructor(serviceAccountKey: string) {
+    this.auth = new GoogleAuth({
+      credentials: JSON.parse(serviceAccountKey),
+      scopes: ['https://www.googleapis.com/auth/spreadsheets']
+    });
+  }
+  
+  async getOrders(): Promise<Order[]> {
+    // 實作細節...
+  }
+  
+  async updateOrderStatus(id: string, status: string): Promise<void> {
+    // 實作細節...
+  }
+}
+```
+
+**B. KV Store 快取管理**
+```typescript
+class CacheManager {
+  constructor(private kv: KVNamespace) {}
+  
+  async get<T>(key: string): Promise<T | null> {
+    const cached = await this.kv.get(key, 'json');
+    return cached as T;
+  }
+  
+  async set<T>(key: string, value: T, ttl: number = 15): Promise<void> {
+    await this.kv.put(key, JSON.stringify(value), {
+      expirationTtl: ttl
+    });
+  }
+  
+  async invalidate(pattern: string): Promise<void> {
+    // 清除相關快取
+  }
+}
+```
+
+**C. 錯誤處理與重試**
+```typescript
+class ApiError extends Error {
+  constructor(
+    public status: number,
+    message: string,
+    public code?: string
+  ) {
+    super(message);
+  }
+}
+
+const withRetry = async <T>(
+  fn: () => Promise<T>,
+  maxRetries = 3
+): Promise<T> => {
+  // 指數退避重試邏輯
+};
+```
+
+
 #### 5.2.1 建置流程
 ```bash
 # 安裝依賴
@@ -361,7 +493,7 @@ chmod 755 cache/
 chmod 666 cache/*.json
 ```
 
-### 5.4 Cloudflare 設定
+### 5.4 前端部署 (Cloudflare Pages)
 #### 5.4.1 快取規則
 - **API 路徑**：*yourdomain.com/api/* (繞過快取)
 - **靜態資源**：*yourdomain.com/assets/* (長期快取)
