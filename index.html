@@ -1,0 +1,117 @@
+
+<!DOCTYPE html>
+<html lang="zh-TW">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>融氏古早味蘿蔔糕 - 訂單管理後台</title>
+    <meta name="description" content="蘿蔔糕訂購系統管理後台，查看訂單、列印訂單、下載CSV" />
+    <meta name="author" content="融氏古早味" />
+
+    <meta property="og:title" content="蘿蔔糕訂購系統 - 管理後台" />
+    <meta property="og:description" content="蘿蔔糕訂購系統管理後台，查看訂單、列印訂單、下載CSV" />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="/public/LOGO-1.webp" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- 動態設置 API 基礎路徑 -->
+    <script>
+      window.API_CONFIG = {
+        // 檢測當前環境
+        getApiBase: function() {
+          try {
+            // 嘗試從 Vite 環境變數獲取 API 配置
+            const viteApiBase = '%VITE_API_BASE_URL%';
+            const viteApiHost = '%VITE_API_HOST%';
+            const viteAppEnv = '%VITE_APP_ENV%';
+            
+            // 檢查環境變數是否已被 Vite 替換（生產環境）
+            if (viteApiBase && !viteApiBase.startsWith('%VITE_')) {
+              if (viteApiHost && !viteApiHost.startsWith('%VITE_')) {
+                return viteApiHost + viteApiBase;
+              }
+              return viteApiBase;
+            }
+            
+            // 開發環境：動態檢測
+            const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+            const port = window.location.port;
+
+            // 本地開發環境
+            if (isLocalhost && port === '8080') {
+              return '/sheet-order-dashboard-main/api';
+            }
+
+            // 其他情況默認為 /api
+            return '/api';
+          } catch (error) {
+            console.error('API_CONFIG error:', error);
+            return '/api';
+          }
+        },
+        
+        // 檢查是否為生產環境
+        isProduction: function() {
+          const viteAppEnv = '%VITE_APP_ENV%';
+          if (viteAppEnv && !viteAppEnv.startsWith('%VITE_')) {
+            return viteAppEnv === 'production';
+          }
+          return !this.isDevelopment();
+        },
+        
+        // 檢查是否為開發環境
+        isDevelopment: function() {
+          const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+          const port = window.location.port;
+          return isLocalhost && port === '8080';
+        },
+        
+        // 獲取完整的 API URL
+        getFullApiUrl: function(endpoint) {
+          const baseUrl = this.getApiBase();
+          const cleanEndpoint = endpoint.startsWith('/') ? endpoint.slice(1) : endpoint;
+          return baseUrl + '/' + cleanEndpoint;
+        }
+      };
+
+      // 全域錯誤處理
+      window.addEventListener('error', function(event) {
+        if (event.error && event.error.message && event.error.message.includes('URI malformed')) {
+          console.warn('URI malformed error detected, attempting recovery...');
+          // 可以在這裡添加自動重新載入邏輯
+          setTimeout(() => {
+            if (confirm('檢測到路徑編碼錯誤，是否重新載入頁面？')) {
+              window.location.reload();
+            }
+          }, 1000);
+        }
+      });
+
+      // 處理未捕獲的 Promise 拒絕
+      window.addEventListener('unhandledrejection', function(event) {
+        if (event.reason && event.reason.message && event.reason.message.includes('URI malformed')) {
+          console.warn('Unhandled URI malformed promise rejection:', event.reason);
+          event.preventDefault();
+        }
+      });
+    </script>
+  </head>
+
+  <body>
+    <div id="root"></div>
+    <!-- GPT Engineer script - only load in localhost development environment -->
+    <script>
+      // Only load GPT Engineer script in localhost development environment
+      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        const script = document.createElement('script');
+        script.src = 'https://cdn.gpteng.co/gptengineer.js';
+        script.type = 'module';
+        document.head.appendChild(script);
+      }
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
