@@ -317,6 +317,124 @@ export class GoogleSheetsService {
 	}
 
 	/**
+	 * 執行 Google Sheets batchUpdate 請求
+	 * 支援各種批次操作，包括刪除行、插入行等
+	 * @param requests 批次請求陣列
+	 * @param retryCount 重試次數
+	 */
+	async batchUpdate(
+		requests: any[],
+		retryCount: number = 3
+	): Promise<any> {
+		for (let attempt = 1; attempt <= retryCount; attempt++) {
+			try {
+				const accessToken = await this.getAccessToken();
+				
+				// 準備 batchUpdate 請求體
+				const requestBody = {
+					requests: requests
+				};
+
+				const response = await fetch(
+					`https://sheets.googleapis.com/v4/spreadsheets/${this.spreadsheetId}:batchUpdate`,
+					{
+						method: 'POST',
+						headers: {
+							'Authorization': `Bearer ${accessToken}`,
+							'Content-Type': 'application/json'
+						},
+						body: JSON.stringify(requestBody)
+					}
+				);
+
+				if (!response.ok) {
+					const errorText = await response.text();
+					
+					if (response.status === 401 && attempt < retryCount) {
+						this.accessToken = null;
+						this.tokenExpiry = 0;
+						continue;
+					}
+					
+					throw new ApiError(
+						response.status,
+						`Google Sheets batchUpdate 失敗: ${errorText}`,
+						'SHEETS_BATCH_UPDATE_ERROR'
+					);
+				}
+
+				const result = await response.json();
+				return result;
+			} catch (error) {
+				if (error instanceof ApiError) {
+					if (attempt === retryCount) throw error;
+					if (error.statusCode !== 401) {
+						await this.delay(Math.pow(2, attempt) * 1000);
+					}
+				} else {
+					if (attempt === retryCount) {
+						throw new ApiError(500, `網路錯誤: ${error instanceof Error ? error.message : String(error)}`, 'NETWORK_ERROR');
+					}
+					await this.delay(Math.pow(2, attempt) * 1000);
+				}
+			}
+		}
+	}
+
+	/**
+	 * 獲取工作表的基本資訊，包括工作表 ID
+	 * @param retryCount 重試次數
+	 */
+	async getSpreadsheetInfo(retryCount: number = 3): Promise<any> {
+		for (let attempt = 1; attempt <= retryCount; attempt++) {
+			try {
+				const accessToken = await this.getAccessToken();
+				
+				const response = await fetch(
+					`https://sheets.googleapis.com/v4/spreadsheets/${this.spreadsheetId}`,
+					{
+						headers: {
+							'Authorization': `Bearer ${accessToken}`,
+							'Content-Type': 'application/json'
+						}
+					}
+				);
+
+				if (!response.ok) {
+					const errorText = await response.text();
+					
+					if (response.status === 401 && attempt < retryCount) {
+						this.accessToken = null;
+						this.tokenExpiry = 0;
+						continue;
+					}
+					
+					throw new ApiError(
+						response.status,
+						`Google Sheets API 錯誤: ${errorText}`,
+						'SHEETS_API_ERROR'
+					);
+				}
+
+				const data = await response.json();
+				return data;
+			} catch (error) {
+				if (error instanceof ApiError) {
+					if (attempt === retryCount) throw error;
+					if (error.statusCode !== 401) {
+						await this.delay(Math.pow(2, attempt) * 1000);
+					}
+				} else {
+					if (attempt === retryCount) {
+						throw new ApiError(500, `網路錯誤: ${error instanceof Error ? error.message : String(error)}`, 'NETWORK_ERROR');
+					}
+					await this.delay(Math.pow(2, attempt) * 1000);
+				}
+			}
+		}
+	}
+
+	/**
 	 * 延遲函數，用於重試機制
 	 */
 	private delay(ms: number): Promise<void> {

@@ -215,7 +215,7 @@ export const fetchOrders = async (filters?: {
         : itemsArray.reduce((sum, i) => sum + i.subtotal, 0),
       dueDate: formattedDueDate,
       deliveryTime: String(row.deliveryTime || ''),
-      notes: String(row.note || row['note'] || row['備註'] || ''),
+      notes: String(row.note || (row as any).customer?.note || row['note'] || row['備註'] || ''),
       status: String(row.status || '訂單確認中'), // 提供預設狀態
       deliveryMethod: String(row.deliveryMethod || ''),
       deliveryAddress: String(row.deliveryAddress || ''),
