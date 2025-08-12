@@ -9,6 +9,11 @@ import { GetCustomersFromSheet } from './endpoints/getCustomersFromSheet';
 import { UpdateOrderStatus } from './endpoints/updateOrderStatus';
 import { UpdatePaymentStatus } from './endpoints/updatePaymentStatus';
 import { UpdateOrderItems } from './endpoints/updateOrderItems';
+import { DeleteOrder } from './endpoints/deleteOrder';
+import { BatchDeleteOrders } from './endpoints/batchDeleteOrders';
+import { AdminLogin } from './endpoints/adminLogin';
+import { GetCustomerOrders } from './endpoints/getCustomerOrders';
+import { GetAdminDashboard } from './endpoints/getAdminDashboard';
 
 // Start a Hono app
 const app = new Hono<{ Bindings: Env }>();
@@ -31,6 +36,11 @@ openapi.get("/api/customers", GetCustomersFromSheet);
 openapi.put("/api/orders/status", UpdateOrderStatus);
 openapi.put("/api/orders/payment", UpdatePaymentStatus);
 openapi.put("/api/orders/items", UpdateOrderItems);
+openapi.delete("/api/orders", DeleteOrder);
+openapi.delete("/api/orders/batch", BatchDeleteOrders);
+openapi.post("/api/admin/login", AdminLogin);
+openapi.get("/api/customers/orders", GetCustomerOrders);
+openapi.get("/api/admin/dashboard", GetAdminDashboard);
 
 // You may also register routes for non OpenAPI directly on Hono
 // app.get('/test', (c) => c.text('Hono!'))
