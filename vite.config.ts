@@ -86,7 +86,7 @@ export default defineConfig(({ mode }) => {
         }
       }
     } : undefined,
-    port: process.env.PORT ? parseInt(process.env.PORT) : 3000,
+    port: 8080,
     hmr: {
       overlay: false
     },

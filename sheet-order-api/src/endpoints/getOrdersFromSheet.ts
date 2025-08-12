@@ -190,28 +190,18 @@ export class GetOrdersFromSheet extends OpenAPIRoute {
 				}
 			}
 
-			// 備註欄位資料（H欄，索引7）
-			const noteValue = row[7] || '';
-
 			// 建立訂單物件（對應原 PHP 的欄位映射）
-			// 為了相容前端 orderService.ts 的備註欄位映射邏輯，提供多種備註欄位格式
 			orders.push({
 				createdAt: row[0] || '', // A欄 訂單時間
 				id: idx, // 使用當前行索引作為 ID
 				orderNumber: `ORD-${idx.toString().padStart(3, '0')}`, // 生成格式化的訂單編號
 				customerName: row[1] || '', // B欄 客戶姓名
 				customerPhone: row[2] || '', // C欄 客戶電話
-				customer: {
-					name: row[1] || '', // 客戶姓名
-					phone: row[2] || '', // 客戶電話
-					note: noteValue // 客戶備註（相容前端 customer.note 映射）
-				},
 				items: row[8] || '', // I欄 訂購商品
 				amount: row[9] || '', // J欄 訂單金額
 				dueDate: dueDate, // F欄 到貨日期 (已轉為 YYYY-MM-DD)
 				deliveryTime: row[6] || '', // G欄 宅配時段
-				note: noteValue, // H欄 備註（主要備註欄位）
-				'備註': noteValue, // 中文鍵名（相容前端 row['備註'] 映射）
+				note: row[7] || '', // H欄 備註
 				status: row[14] || '', // O欄 訂單狀態
 				deliveryMethod: row[3] || '', // D欄 配送方式
 				deliveryAddress: row[4] || '', // E欄 配送地址
