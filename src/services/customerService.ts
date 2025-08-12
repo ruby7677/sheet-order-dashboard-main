@@ -1,4 +1,5 @@
 import { Customer, CustomerWithStats, CustomerOrder, CustomerFilterCriteria, CustomerStats } from '@/types/customer';
+import { fetchOrders } from './orderService';
 
 // 根據環境動態設置 API 基礎路徑
 // 使用全局配置或默認值
@@ -46,118 +47,72 @@ const customerOrdersCache: {
 const CACHE_DURATION = 15 * 1000; // 15秒
 
 // 從後端 API 獲取客戶資料
+// 從訂單資料推導客戶清單與統計（避免呼叫不存在或失敗的客戶 API）
 export const fetchCustomers = async (filters?: CustomerFilterCriteria): Promise<CustomerWithStats[]> => {
   // 檢查是否有快取且未過期
   const now = Date.now();
 
-  // 如果沒有進行搜尋或篩選，且有快取且未過期，直接使用快取資料
   if (
     customerCache &&
     (now - customerCache.timestamp < CACHE_DURATION) &&
     (!filters || (!filters.region && !filters.purchaseCount && !filters.purchasedItem && !filters.search))
   ) {
     console.log('使用快取的客戶資料');
-
-    // 有過濾條件時，在前端篩選快取中的資料
-    if (filters) {
-      return filterCustomersInMemory(customerCache.data, filters);
-    }
-
+    if (filters) return filterCustomersInMemory(customerCache.data, filters);
     return customerCache.data;
   }
 
-  // 從後端 API 取得客戶資料，添加隨機參數防止 Cloudflare 快取
-  const timestamp = Date.now();
-  const nonce = Math.random().toString(36).substring(2, 15);
+  // 直接讀取訂單資料，從中彙總出客戶資料
+  const orders = await fetchOrders();
 
-  // 添加多個隨機參數，確保每次請求都是唯一的
-  const url = new URL('https://sheet-order-api.ruby7677.workers.dev/api/get_customers_from_sheet.php');
-  url.searchParams.append('refresh', '1');
-  url.searchParams.append('_', timestamp.toString());
-  url.searchParams.append('nonce', nonce);
-  url.searchParams.append('v', '1.1'); // API 版本號
-  url.searchParams.append('random', Math.random().toString(36).substring(2, 15)); // 額外的隨機參數
-
-  // 使用 no-store 快取策略
-  const res = await fetch(url.toString(), {
-    method: 'GET',
-    headers: {
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'Pragma': 'no-cache',
-      'Expires': '0'
-    }
+  const customersByPhone: { [phone: string]: typeof orders } = {} as any;
+  orders.forEach(o => {
+    const phone = o.customer?.phone?.trim();
+    if (!phone) return;
+    if (!customersByPhone[phone]) customersByPhone[phone] = [] as any;
+    (customersByPhone[phone] as any).push(o);
   });
 
-  if (!res.ok) {
-    throw new Error(`獲取客戶資料失敗: ${res.status} ${res.statusText}`);
-  }
+  const customersWithStats: CustomerWithStats[] = Object.entries(customersByPhone).map(([phone, group]) => {
+    const latest = group[group.length - 1];
+    const name = latest.customer?.name || '';
+    const address = latest.deliveryAddress || '';
+    const region = extractRegion(address);
+    const deliveryMethod = latest.deliveryMethod || '';
 
-  const result = await res.json();
+    const purchasedSet = new Set<string>();
+    group.forEach(o => o.items.forEach(i => purchasedSet.add(i.product)));
+    const purchasedItems = Array.from(purchasedSet);
 
-  if (!result.success) {
-    throw new Error(result.message || '獲取客戶資料失敗');
-  }
+    const itemsStr = latest.items.map(i => `${i.product} x ${i.quantity}`).join('、');
 
-  // 將原始客戶資料轉換為帶有統計資訊的客戶資料
-  const customers = result.data as Customer[];
+    const c: CustomerWithStats = {
+      id: phone,
+      name,
+      phone,
+      deliveryMethod,
+      address,
+      contactMethod: '',
+      socialId: '',
+      orderTime: latest.createdAt || latest.dueDate || '',
+      items: itemsStr,
+      purchaseCount: group.length,
+      purchasedItems,
+      region,
+    };
 
-  // 按電話號碼分組
-  const customersByPhone: { [phone: string]: Customer[] } = {};
-  customers.forEach(customer => {
-    if (!customer.phone) return;
-
-    if (!customersByPhone[customer.phone]) {
-      customersByPhone[customer.phone] = [];
-    }
-    customersByPhone[customer.phone].push(customer);
-  });
-
-  // 處理每個電話號碼的客戶資料
-  const customersWithStats: CustomerWithStats[] = [];
-
-  Object.entries(customersByPhone).forEach(([phone, customerGroup]) => {
-    // 使用最新的客戶資料（假設資料是按時間排序的，最後一筆是最新的）
-    const latestCustomer = customerGroup[customerGroup.length - 1];
-
-    // 提取地區資訊
-    const region = extractRegion(latestCustomer.address);
-
-    // 收集所有購買過的商品
-    const purchasedItems = new Set<string>();
-    customerGroup.forEach(customer => {
-      if (customer.items) {
-        // 分割商品字串，通常格式為 "商品1 x 數量, 商品2 x 數量"
-        const items = customer.items.split(/[,，]/);
-        items.forEach(item => {
-          // 提取商品名稱（去除數量部分）
-          const productName = item.trim().split(/\s*[xX×]\s*/)[0].trim();
-          if (productName) {
-            purchasedItems.add(productName);
-          }
-        });
-      }
-    });
-
-    // 創建帶有統計資訊的客戶資料
-    customersWithStats.push({
-      ...latestCustomer,
-      purchaseCount: customerGroup.length,
-      purchasedItems: Array.from(purchasedItems),
-      region
-    });
+    return c;
   });
 
   // 更新快取
   customerCache = {
     timestamp: now,
     data: customersWithStats,
-    filters: filters ? { ...filters } : undefined
+    filters: filters ? { ...filters } : undefined,
   };
 
   // 有過濾條件時前端進行過濾
-  if (filters) {
-    return filterCustomersInMemory(customersWithStats, filters);
-  }
+  if (filters) return filterCustomersInMemory(customersWithStats, filters);
 
   return customersWithStats;
 };
@@ -256,6 +211,7 @@ export const getCustomerStats = (customers: CustomerWithStats[]): CustomerStats 
 };
 
 // 獲取客戶訂單歷史
+// 從訂單資料推導客戶的訂單歷史
 export const fetchCustomerOrders = async (phone: string): Promise<CustomerOrder[]> => {
   // 檢查是否有快取且未過期
   const now = Date.now();
@@ -267,42 +223,20 @@ export const fetchCustomerOrders = async (phone: string): Promise<CustomerOrder[
     return customerOrdersCache[phone].data;
   }
 
-  // 從後端 API 取得客戶訂單資料
-  const timestamp = Date.now();
-  const nonce = Math.random().toString(36).substring(2, 15);
-
-  const url = new URL('https://sheet-order-api.ruby7677.workers.dev/api/get_customer_orders.php');
-  url.searchParams.append('phone', phone);
-  url.searchParams.append('refresh', '1');
-  url.searchParams.append('_', timestamp.toString());
-  url.searchParams.append('nonce', nonce);
-  url.searchParams.append('random', Math.random().toString(36).substring(2, 15)); // 額外的隨機參數
-
-  const res = await fetch(url.toString(), {
-    method: 'GET',
-    headers: {
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'Pragma': 'no-cache',
-      'Expires': '0'
-    }
-  });
-
-  if (!res.ok) {
-    throw new Error(`獲取客戶訂單失敗: ${res.status} ${res.statusText}`);
-  }
-
-  const result = await res.json();
-
-  if (!result.success) {
-    throw new Error(result.message || '獲取客戶訂單失敗');
-  }
-
-  const orders = result.data as CustomerOrder[];
+  const allOrders = await fetchOrders();
+  const orders = allOrders
+    .filter(o => o.customer?.phone === phone)
+    .map(o => ({
+      id: o.id,
+      orderTime: o.createdAt || o.dueDate || '',
+      items: o.items.map(i => `${i.product} x ${i.quantity}`).join(', '),
+      name: o.customer?.name,
+    }));
 
   // 更新快取
   customerOrdersCache[phone] = {
     timestamp: now,
-    data: orders
+    data: orders,
   };
 
   return orders;
