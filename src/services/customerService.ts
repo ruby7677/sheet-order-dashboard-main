@@ -62,59 +62,147 @@ export const fetchCustomers = async (filters?: CustomerFilterCriteria): Promise<
     return customerCache.data;
   }
 
-  // 直接讀取訂單資料，從中彙總出客戶資料
-  const orders = await fetchOrders();
+  // 從訂單資料推導（備援方案）
+  const deriveFromOrders = async (): Promise<CustomerWithStats[]> => {
+    const orders = await fetchOrders();
 
-  const customersByPhone: { [phone: string]: typeof orders } = {} as any;
-  orders.forEach(o => {
-    const phone = o.customer?.phone?.trim();
-    if (!phone) return;
-    if (!customersByPhone[phone]) customersByPhone[phone] = [] as any;
-    (customersByPhone[phone] as any).push(o);
-  });
+    const customersByPhone: { [phone: string]: typeof orders } = {} as any;
+    orders.forEach(o => {
+      const phone = o.customer?.phone?.trim();
+      if (!phone) return;
+      if (!customersByPhone[phone]) customersByPhone[phone] = [] as any;
+      (customersByPhone[phone] as any).push(o);
+    });
 
-  const customersWithStats: CustomerWithStats[] = Object.entries(customersByPhone).map(([phone, group]) => {
-    const latest = group[group.length - 1];
-    const name = latest.customer?.name || '';
-    const address = latest.deliveryAddress || '';
-    const region = extractRegion(address);
-    const deliveryMethod = latest.deliveryMethod || '';
+    const customersWithStats: CustomerWithStats[] = Object.entries(customersByPhone).map(([phone, group]) => {
+      const latest = group[group.length - 1];
+      const name = latest.customer?.name || '';
+      const address = latest.deliveryAddress || '';
+      const region = extractRegion(address);
+      const deliveryMethod = latest.deliveryMethod || '';
 
-    const purchasedSet = new Set<string>();
-    group.forEach(o => o.items.forEach(i => purchasedSet.add(i.product)));
-    const purchasedItems = Array.from(purchasedSet);
+      const purchasedSet = new Set<string>();
+      group.forEach(o => o.items.forEach(i => purchasedSet.add(i.product)));
+      const purchasedItems = Array.from(purchasedSet);
 
-    const itemsStr = latest.items.map(i => `${i.product} x ${i.quantity}`).join('、');
+      const itemsStr = latest.items.map(i => `${i.product} x ${i.quantity}`).join('、');
 
-    const c: CustomerWithStats = {
-      id: phone,
-      name,
-      phone,
-      deliveryMethod,
-      address,
-      contactMethod: '',
-      socialId: '',
-      orderTime: latest.createdAt || latest.dueDate || '',
-      items: itemsStr,
-      purchaseCount: group.length,
-      purchasedItems,
-      region,
-    };
+      const c: CustomerWithStats = {
+        id: phone,
+        name,
+        phone,
+        deliveryMethod,
+        address,
+        contactMethod: '',
+        socialId: '',
+        orderTime: latest.createdAt || latest.dueDate || '',
+        items: itemsStr,
+        purchaseCount: group.length,
+        purchasedItems,
+        region,
+      };
 
-    return c;
-  });
+      return c;
+    });
 
-  // 更新快取
-  customerCache = {
-    timestamp: now,
-    data: customersWithStats,
-    filters: filters ? { ...filters } : undefined,
+    return customersWithStats;
   };
 
-  // 有過濾條件時前端進行過濾
-  if (filters) return filterCustomersInMemory(customersWithStats, filters);
+  try {
+    // 主要來源：從 Sheets 的「客戶名單」讀取
+    const resp = await fetch(`${API_BASE}/get_customers_from_sheet.php?nonce=${now}`, {
+      headers: { 'Cache-Control': 'no-cache' },
+    });
+    const json = await resp.json();
 
-  return customersWithStats;
+    if (!json?.success || !Array.isArray(json.data)) {
+      console.warn('客戶名單 API 回傳格式不正確，改用訂單資料推導');
+      const fallback = await deriveFromOrders();
+      customerCache = { timestamp: now, data: fallback, filters: filters ? { ...filters } : undefined };
+      return filters ? filterCustomersInMemory(fallback, filters) : fallback;
+    }
+
+    type RawCustomer = {
+      id?: string | number;
+      name?: string;
+      phone?: string;
+      deliveryMethod?: string;
+      address?: string;
+      contactMethod?: string;
+      socialId?: string;
+      orderTime?: string;
+      items?: string;
+    };
+
+    // 以電話為 key 聚合，避免表內重複列
+    const groups: Record<string, CustomerWithStats> = {};
+    (json.data as RawCustomer[]).forEach((row, idx) => {
+      const phone = (row.phone || '').trim();
+      const name = (row.name || '').trim();
+      const address = (row.address || '').trim();
+      const deliveryMethod = (row.deliveryMethod || '').trim();
+      const orderTime = row.orderTime || '';
+      const itemsStr = row.items || '';
+
+      const purchased: string[] = [];
+      if (itemsStr) {
+        // 以常見分隔符拆分，並移除數量（x/X/×）
+        const parts = itemsStr.split(/[,，、\n]/).map(p => p.trim()).filter(Boolean);
+        parts.forEach(p => {
+          const product = p.split(/x|X|×/)[0].trim();
+          if (product) purchased.push(product);
+        });
+      }
+
+      const id = phone || String(row.id ?? idx);
+      const region = extractRegion(address);
+      const key = phone || id;
+
+      if (!groups[key]) {
+        groups[key] = {
+          id,
+          name,
+          phone,
+          deliveryMethod,
+          address,
+          contactMethod: row.contactMethod || '',
+          socialId: row.socialId || '',
+          orderTime,
+          items: itemsStr,
+          purchaseCount: 0,
+          purchasedItems: [],
+          region,
+        };
+      }
+
+      const g = groups[key];
+      g.purchaseCount += 1;
+      g.purchasedItems = Array.from(new Set([...g.purchasedItems, ...purchased]));
+      // 用較新的非空資料覆蓋
+      if (!g.name && name) g.name = name;
+      if (!g.address && address) g.address = address;
+      if (!g.deliveryMethod && deliveryMethod) g.deliveryMethod = deliveryMethod;
+      if (!g.orderTime && orderTime) g.orderTime = orderTime;
+      if (!g.items && itemsStr) g.items = itemsStr;
+    });
+
+    const customersWithStats = Object.values(groups);
+
+    // 更新快取
+    customerCache = {
+      timestamp: now,
+      data: customersWithStats,
+      filters: filters ? { ...filters } : undefined,
+    };
+
+    // 有過濾條件時前端進行過濾
+    return filters ? filterCustomersInMemory(customersWithStats, filters) : customersWithStats;
+  } catch (err) {
+    console.error('載入客戶名單失敗，改用訂單資料推導:', err);
+    const fallback = await deriveFromOrders();
+    customerCache = { timestamp: now, data: fallback, filters: filters ? { ...filters } : undefined };
+    return filters ? filterCustomersInMemory(fallback, filters) : fallback;
+  }
 };
 
 // 從地址中提取地區資訊
