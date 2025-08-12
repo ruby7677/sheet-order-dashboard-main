@@ -145,25 +145,28 @@ export const fetchOrders = async (filters?: {
 
     let itemsArray: { product: string; quantity: number; price: number; subtotal: number }[] = [];
     if (typeof row.items === 'string' && row.items.trim() !== '') {
-      itemsArray = row.items.split(',').map((itemStr: string) => {
-        const parts = itemStr.split(' x ');
+      const raw = String(row.items).trim();
+      itemsArray = raw.split(/[，,]/).map((itemStr: string) => {
+        const parts = itemStr.trim().split(/\s*[xX×]\s*/);
         const product = parts[0] ? parts[0].trim() : '未知商品';
         const quantity = Number(parts[1]) || 1;
         let price = 0;
-        // 自動對應單價
+        // 自動對應單價（可依實際品項再擴充）
         if (product.includes('原味蘿蔔糕')) price = 250;
         else if (product.includes('芋頭粿')) price = 350;
         else if (product.includes('台式鹹蘿蔔糕')) price = 350;
         else if (product.includes('鳳梨豆腐乳')) price = 300;
-        // 如果 Google Sheet 提供單價，則使用提供的單價
+        // 如果 Google Sheet 提供單價，則使用提供的單價（第三段）
         if (parts.length > 2 && parts[2] && !isNaN(Number(parts[2]))) {
-            price = Number(parts[2]);
+          price = Number(parts[2]);
         }
+        const safePrice = isNaN(price) || price < 0 ? 0 : price;
+        const safeQty = isNaN(quantity) || quantity < 0 ? 0 : quantity;
         return {
           product,
-          quantity,
-          price,
-          subtotal: price * quantity
+          quantity: safeQty,
+          price: safePrice,
+          subtotal: safePrice * safeQty,
         };
       });
     } else if (Array.isArray(row.items)) {
@@ -177,7 +180,7 @@ export const fetchOrders = async (filters?: {
           product: String(item.product || '未知商品'),
           quantity,
           price,
-          subtotal: price * quantity
+          subtotal: price * quantity,
         };
       });
     }
@@ -207,7 +210,9 @@ export const fetchOrders = async (filters?: {
         phone: customerPhone
       },
       items: itemsArray,
-      total: Number(row.amount) || 0,
+      total: (!isNaN(Number(row.amount)) && Number(row.amount) > 0)
+        ? Number(row.amount)
+        : itemsArray.reduce((sum, i) => sum + i.subtotal, 0),
       dueDate: formattedDueDate,
       deliveryTime: String(row.deliveryTime || ''),
       notes: String(row.note || row['note'] || row['備註'] || ''),

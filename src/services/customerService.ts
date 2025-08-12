@@ -71,7 +71,7 @@ export const fetchCustomers = async (filters?: CustomerFilterCriteria): Promise<
   const nonce = Math.random().toString(36).substring(2, 15);
 
   // 添加多個隨機參數，確保每次請求都是唯一的
-  const url = new URL(`${window.location.origin}${API_BASE}/get_customers_from_sheet.php`);
+  const url = new URL('https://sheet-order-api.ruby7677.workers.dev/api/get_customers_from_sheet.php');
   url.searchParams.append('refresh', '1');
   url.searchParams.append('_', timestamp.toString());
   url.searchParams.append('nonce', nonce);
@@ -271,7 +271,7 @@ export const fetchCustomerOrders = async (phone: string): Promise<CustomerOrder[
   const timestamp = Date.now();
   const nonce = Math.random().toString(36).substring(2, 15);
 
-  const url = new URL(`${window.location.origin}${API_BASE}/get_customer_orders.php`);
+  const url = new URL('https://sheet-order-api.ruby7677.workers.dev/api/get_customer_orders.php');
   url.searchParams.append('phone', phone);
   url.searchParams.append('refresh', '1');
   url.searchParams.append('_', timestamp.toString());
