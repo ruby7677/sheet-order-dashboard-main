@@ -4,6 +4,11 @@ import { TaskCreate } from "./endpoints/taskCreate";
 import { TaskDelete } from "./endpoints/taskDelete";
 import { TaskFetch } from "./endpoints/taskFetch";
 import { TaskList } from "./endpoints/taskList";
+import { GetOrdersFromSheet } from './endpoints/getOrdersFromSheet';
+import { GetCustomersFromSheet } from './endpoints/getCustomersFromSheet';
+import { UpdateOrderStatus } from './endpoints/updateOrderStatus';
+import { UpdatePaymentStatus } from './endpoints/updatePaymentStatus';
+import { UpdateOrderItems } from './endpoints/updateOrderItems';
 
 // Start a Hono app
 const app = new Hono<{ Bindings: Env }>();
@@ -14,10 +19,18 @@ const openapi = fromHono(app, {
 });
 
 // Register OpenAPI endpoints
+// 原有的 Task API
 openapi.get("/api/tasks", TaskList);
 openapi.post("/api/tasks", TaskCreate);
 openapi.get("/api/tasks/:taskSlug", TaskFetch);
 openapi.delete("/api/tasks/:taskSlug", TaskDelete);
+
+// 訂單系統 API 端點
+openapi.get("/api/orders", GetOrdersFromSheet);
+openapi.get("/api/customers", GetCustomersFromSheet);
+openapi.put("/api/orders/status", UpdateOrderStatus);
+openapi.put("/api/orders/payment", UpdatePaymentStatus);
+openapi.put("/api/orders/items", UpdateOrderItems);
 
 // You may also register routes for non OpenAPI directly on Hono
 // app.get('/test', (c) => c.text('Hono!'))

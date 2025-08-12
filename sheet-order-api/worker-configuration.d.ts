@@ -3,6 +3,10 @@
 // Runtime types generated with workerd@1.20250730.0 2025-08-03 
 declare namespace Cloudflare {
 	interface Env {
+		GOOGLE_SERVICE_ACCOUNT_KEY: string;
+		GOOGLE_SHEET_ID: string;
+		CACHE_KV: KVNamespace;
+		CACHE_DURATION: string;
 	}
 }
 interface Env extends Cloudflare.Env {}
