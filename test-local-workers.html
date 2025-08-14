@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>測試本地 Workers API</title>
+</head>
+<body>
+    <h1>測試本地 Workers API 連接</h1>
+    <button onclick="testLocalAPI()">測試本地 Workers API</button>
+    <button onclick="testProductionAPI()">測試生產 Workers API</button>
+    <div id="result"></div>
+
+    <script>
+    async function testLocalAPI() {
+        const resultDiv = document.getElementById('result');
+        resultDiv.innerHTML = '測試本地 Workers API...';
+        
+        try {
+            const response = await fetch('http://127.0.0.1:5714/api/get_orders_from_sheet.php', {
+                method: 'GET',
+                headers: {
+                    'Cache-Control': 'no-cache, no-store, must-revalidate',
+                    'Pragma': 'no-cache',
+                    'Expires': '0'
+                }
+            });
+            
+            console.log('本地 API Response status:', response.status);
+            
+            if (!response.ok) {
+                resultDiv.innerHTML = `❌ 本地 API 錯誤: ${response.status} ${response.statusText}`;
+                return;
+            }
+            
+            const data = await response.json();
+            resultDiv.innerHTML = `✅ 本地 API 成功:<br><pre>${JSON.stringify(data, null, 2)}</pre>`;
+            
+        } catch (error) {
+            console.error('本地 API 錯誤:', error);
+            resultDiv.innerHTML = `❌ 本地連接錯誤: ${error.message}`;
+        }
+    }
+    
+    async function testProductionAPI() {
+        const resultDiv = document.getElementById('result');
+        resultDiv.innerHTML = '測試生產 Workers API...';
+        
+        try {
+            const response = await fetch('https://sheet-order-api.ruby7677.workers.dev/api/get_orders_from_sheet.php', {
+                method: 'GET',
+                headers: {
+                    'Cache-Control': 'no-cache, no-store, must-revalidate',
+                    'Pragma': 'no-cache',
+                    'Expires': '0'
+                }
+            });
+            
+            console.log('生產 API Response status:', response.status);
+            
+            if (!response.ok) {
+                resultDiv.innerHTML = `❌ 生產 API 錯誤: ${response.status} ${response.statusText}`;
+                return;
+            }
+            
+            const data = await response.json();
+            resultDiv.innerHTML = `✅ 生產 API 成功:<br><pre>${JSON.stringify(data, null, 2)}</pre>`;
+            
+        } catch (error) {
+            console.error('生產 API 錯誤:', error);
+            resultDiv.innerHTML = `❌ 生產連接錯誤: ${error.message}`;
+        }
+    }
+    </script>
+</body>
+</html>

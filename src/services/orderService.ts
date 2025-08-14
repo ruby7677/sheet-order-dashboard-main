@@ -1,32 +1,108 @@
 import { Order, OrderStats, OrderItem } from '@/types/order';
 // src/services/orderService.ts
 
-// 根據環境動態設置 API 基礎路徑
-// 使用全局配置或默認值
-const getApiBase = () => {
-  // 檢查是否有全局配置
-  if (window.API_CONFIG && typeof window.API_CONFIG.getApiBase === 'function') {
-    return window.API_CONFIG.getApiBase();
-  }
-
-  // 檢查當前環境（備用方案）
-  const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+// 動態 API 配置系統
+const getApiConfig = () => {
+  const hostname = window.location.hostname;
   const port = window.location.port;
-
-  // 本地開發環境（localhost:8080 指向 htdocs，需要完整路徑）
-  if (isLocalhost && port === '8080') {
-    return '/sheet-order-dashboard-main/api';
-  }
-
-  // Cloudflare Tunnels 環境（node.767780.xyz 直接指向 sheet-order-dashboard-main 目錄）
-  // 所以 API 路徑就是 /api
-  return '/api';
+  const protocol = window.location.protocol;
+  
+  // 檢查是否在 Cloudflare Pages 環境
+  const isCloudflarePages = hostname.includes('.pages.dev') || 
+                           hostname.includes('lopokao.767780.xyz') ||
+                           hostname.includes('node.767780.xyz');
+  
+  // 本地開發環境
+  const isLocalDev = hostname === 'localhost' || hostname === '127.0.0.1';
+  
+  console.log('🌍 環境檢測:', {
+    hostname,
+    port,
+    protocol,
+    isCloudflarePages,
+    isLocalDev
+  });
+  
+  return {
+    isLocalDev,
+    isCloudflarePages,
+    // Workers API 端點 (生產環境)
+    workersApiUrl: 'https://sheet-order-api.ruby7677.workers.dev',
+    // 本地 Workers API (開發時)
+    localWorkersApiUrl: 'http://127.0.0.1:5714',
+    // 傳統 PHP API (後備方案)
+    legacyApiBase: isLocalDev && port === '8080' 
+      ? '/sheet-order-dashboard-main/api' 
+      : '/api'
+  };
 };
 
-const API_BASE = getApiBase();
+// 根據環境動態選擇 API 端點
+const getApiEndpoint = (endpoint: string) => {
+  const config = getApiConfig();
+  
+  // 優先嘗試 Workers API
+  if (config.isCloudflarePages || !config.isLocalDev) {
+    // 生產環境或 Cloudflare Pages: 使用生產 Workers API
+    return `${config.workersApiUrl}${endpoint}`;
+  } else if (config.isLocalDev) {
+    // 本地開發: 嘗試本地 Workers API，失敗則降級到傳統 API
+    return `${config.localWorkersApiUrl}${endpoint}`;
+  }
+  
+  // 後備方案: 傳統 PHP API
+  return `${config.legacyApiBase}${endpoint}`;
+};
 
-// 輸出當前使用的 API 路徑，方便調試
-console.log('當前 API 路徑:', API_BASE);
+// 建立一個錯誤處理和重試機制
+const apiCallWithFallback = async (endpoint: string, options: RequestInit = {}) => {
+  const config = getApiConfig();
+  let lastError: Error | null = null;
+  
+  // 嘗試順序: Workers API -> 傳統 API
+  const endpoints = [];
+  
+  if (config.isCloudflarePages || !config.isLocalDev) {
+    endpoints.push(`${config.workersApiUrl}${endpoint}`);
+  } else if (config.isLocalDev) {
+    endpoints.push(`${config.localWorkersApiUrl}${endpoint}`);
+    endpoints.push(`${config.legacyApiBase}${endpoint}`);
+  } else {
+    endpoints.push(`${config.legacyApiBase}${endpoint}`);
+  }
+  
+  console.log('🔗 API 嘗試順序:', endpoints);
+  
+  for (const apiUrl of endpoints) {
+    try {
+      console.log('📡 嘗試 API:', apiUrl);
+      
+      const response = await fetch(apiUrl, {
+        ...options,
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+          ...options.headers
+        }
+      });
+      
+      if (response.ok) {
+        console.log('✅ API 成功:', apiUrl);
+        return response;
+      } else {
+        console.log('❌ API 失敗:', apiUrl, response.status, response.statusText);
+        lastError = new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+    } catch (error) {
+      console.log('❌ API 錯誤:', apiUrl, error);
+      lastError = error instanceof Error ? error : new Error(String(error));
+    }
+  }
+  
+  // 所有端點都失敗
+  throw lastError || new Error('所有 API 端點都無法連接');
+};
 
 // 快取機制 
 interface OrderCache {
@@ -71,30 +147,24 @@ export const fetchOrders = async (filters?: {
     return orderCache.data;
   }
 
-  // 從後端 API 取得 Google Sheets 訂單，添加隨機參數防止 Cloudflare 快取
+  // 使用新的 API 重試機制
   const timestamp = Date.now();
   const nonce = Math.random().toString(36).substring(2, 15);
-
-  // 構建完整的 API URL - 直接使用 Workers API
-  const apiUrl = 'https://sheet-order-api.ruby7677.workers.dev/api/get_orders_from_sheet.php';
   
-  console.log('📡 API 請求 URL:', apiUrl);
-
-  // 添加多個隨機參數，確保每次請求都是唯一的
-  const url = new URL(apiUrl);
-  url.searchParams.append('refresh', '1');
-  url.searchParams.append('_', timestamp.toString());
-  url.searchParams.append('nonce', nonce);
-  url.searchParams.append('v', '1.1'); // API 版本號
-
-  // 使用 no-store 快取策略
-  const res = await fetch(url.toString(), {
-    method: 'GET',
-    headers: {
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'Pragma': 'no-cache',
-      'Expires': '0'
-    }
+  // 構建 API 端點和參數
+  const endpoint = '/api/get_orders_from_sheet.php';
+  const params = new URLSearchParams({
+    refresh: '1',
+    _: timestamp.toString(),
+    nonce: nonce,
+    v: '1.2' // API 版本號
+  });
+  
+  const fullEndpoint = `${endpoint}?${params.toString()}`;
+  
+  // 使用錯誤處理和重試機制
+  const res = await apiCallWithFallback(fullEndpoint, {
+    method: 'GET'
   });
   if (!res.ok) {
     // 如果 HTTP 狀態碼不是 2xx，嘗試讀取錯誤訊息
@@ -402,18 +472,18 @@ export const updateOrderStatus = async (id: string, status: '訂單確認中' | 
   const timestamp = Date.now();
   const nonce = Math.random().toString(36).substring(2, 15);
 
-  // 構建 URL 並添加參數 - 使用 Workers API
-  const url = new URL('https://sheet-order-api.ruby7677.workers.dev/api/update_order_status.php');
-  url.searchParams.append('_', timestamp.toString());
-  url.searchParams.append('nonce', nonce);
+  // 構建 API 端點和參數
+  const params = new URLSearchParams({
+    _: timestamp.toString(),
+    nonce: nonce
+  });
+  
+  const endpoint = `/api/update_order_status.php?${params.toString()}`;
 
-  const res = await fetch(url.toString(), {
+  const res = await apiCallWithFallback(endpoint, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'Pragma': 'no-cache',
-      'Expires': '0'
+      'Content-Type': 'application/json'
     },
     body: JSON.stringify({ id, status, timestamp, nonce }),
   });
@@ -454,18 +524,18 @@ export const updateOrderPaymentStatus = async (id: string, paymentStatus: string
   const timestamp = Date.now();
   const nonce = Math.random().toString(36).substring(2, 15);
 
-  // 構建 URL 並添加參數 - 使用 Workers API
-  const url = new URL('https://sheet-order-api.ruby7677.workers.dev/api/update_payment_status.php');
-  url.searchParams.append('_', timestamp.toString());
-  url.searchParams.append('nonce', nonce);
+  // 構建 API 端點和參數
+  const params = new URLSearchParams({
+    _: timestamp.toString(),
+    nonce: nonce
+  });
+  
+  const endpoint = `/api/update_payment_status.php?${params.toString()}`;
 
-  const res = await fetch(url.toString(), {
+  const res = await apiCallWithFallback(endpoint, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'Pragma': 'no-cache',
-      'Expires': '0'
+      'Content-Type': 'application/json'
     },
     body: JSON.stringify({ id, paymentStatus, timestamp, nonce }),
   });
@@ -505,18 +575,18 @@ export const updateOrderItems = async (id: string, items: OrderItem[], total: nu
   const timestamp = Date.now();
   const nonce = Math.random().toString(36).substring(2, 15);
 
-  // 構建 URL 並添加參數 - 使用 Workers API
-  const url = new URL('https://sheet-order-api.ruby7677.workers.dev/api/update_order_items.php');
-  url.searchParams.append('_', timestamp.toString());
-  url.searchParams.append('nonce', nonce);
+  // 構建 API 端點和參數
+  const params = new URLSearchParams({
+    _: timestamp.toString(),
+    nonce: nonce
+  });
+  
+  const endpoint = `/api/update_order_items.php?${params.toString()}`;
 
-  const res = await fetch(url.toString(), {
+  const res = await apiCallWithFallback(endpoint, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'Pragma': 'no-cache',
-      'Expires': '0'
+      'Content-Type': 'application/json'
     },
     body: JSON.stringify({ id, items, total, timestamp, nonce }),
   });
@@ -545,19 +615,19 @@ export const deleteOrder = async (id: string): Promise<any> => {
   const timestamp = Date.now();
   const nonce = Math.random().toString(36).substring(2, 15);
 
-  // 構建 URL 並添加參數 - 使用 Workers API
-  const url = new URL('https://sheet-order-api.ruby7677.workers.dev/api/delete_order.php');
-  url.searchParams.append('_', timestamp.toString());
-  url.searchParams.append('nonce', nonce);
+  // 構建 API 端點和參數
+  const params = new URLSearchParams({
+    _: timestamp.toString(),
+    nonce: nonce
+  });
+  
+  const endpoint = `/api/delete_order.php?${params.toString()}`;
 
   // 處理刪除訂單的邏輯
-  const res = await fetch(url.toString(), {
+  const res = await apiCallWithFallback(endpoint, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'Pragma': 'no-cache',
-      'Expires': '0'
+      'Content-Type': 'application/json'
     },
     body: JSON.stringify({ id, timestamp, nonce }),
   });
@@ -597,19 +667,19 @@ export const batchDeleteOrders = async (ids: string[]): Promise<{
   const timestamp = Date.now();
   const nonce = Math.random().toString(36).substring(2, 15);
 
-  // 構建 URL 並添加參數 - 使用 Workers API
-  const url = new URL('https://sheet-order-api.ruby7677.workers.dev/api/batch_delete_orders.php');
-  url.searchParams.append('_', timestamp.toString());
-  url.searchParams.append('nonce', nonce);
+  // 構建 API 端點和參數
+  const params = new URLSearchParams({
+    _: timestamp.toString(),
+    nonce: nonce
+  });
+  
+  const endpoint = `/api/batch_delete_orders.php?${params.toString()}`;
 
   // 處理批次刪除訂單的邏輯
-  const res = await fetch(url.toString(), {
+  const res = await apiCallWithFallback(endpoint, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'Pragma': 'no-cache',
-      'Expires': '0'
+      'Content-Type': 'application/json'
     },
     body: JSON.stringify({ ids, timestamp, nonce }),
   });
