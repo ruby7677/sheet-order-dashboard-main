@@ -144,6 +144,120 @@
   background-color: hsl(var(--color-overlay));
 }
 
+/* Tailwind V4 邊框修復實用類別 */
+@utility border-default {
+  border-color: hsl(var(--color-border));
+}
+
+/* Divide utilities - handled by base layer */
+
+@utility ring-default {
+  --tw-ring-color: hsl(var(--color-ring));
+}
+
+/* 透明度修復 */
+@utility bg-transparent-safe {
+  background-color: transparent;
+}
+
+@utility border-transparent-safe {
+  border-color: transparent;
+}
+
+/* Tailwind V4 邊框顏色修復 */
+@utility border-gray-300 {
+  border-color: #d1d5db;
+}
+
+@utility border-blue-400 {
+  border-color: #60a5fa;
+}
+
+@utility border-blue-500 {
+  border-color: #3b82f6;
+}
+
+@utility border-blue-200 {
+  border-color: #dbeafe;
+}
+
+@utility border-purple-400 {
+  border-color: #a78bfa;
+}
+
+@utility border-purple-500 {
+  border-color: #8b5cf6;
+}
+
+@utility border-purple-200 {
+  border-color: #e9d5ff;
+}
+
+@utility border-yellow-400 {
+  border-color: #facc15;
+}
+
+@utility border-yellow-500 {
+  border-color: #eab308;
+}
+
+@utility border-orange-400 {
+  border-color: #fb923c;
+}
+
+@utility border-orange-500 {
+  border-color: #f97316;
+}
+
+@utility border-green-400 {
+  border-color: #4ade80;
+}
+
+@utility border-green-500 {
+  border-color: #22c55e;
+}
+
+@utility border-red-600 {
+  border-color: #dc2626;
+}
+
+@utility border-red-700 {
+  border-color: #b91c1c;
+}
+
+@utility border-red-800 {
+  border-color: #991b1b;
+}
+
+@utility border-white {
+  border-color: #ffffff;
+}
+
+/* 半透明邊框顏色 */
+@utility border-blue-400-80 {
+  border-color: rgb(96 165 250 / 0.8);
+}
+
+@utility border-purple-400-80 {
+  border-color: rgb(167 139 250 / 0.8);
+}
+
+@utility border-yellow-400-80 {
+  border-color: rgb(250 204 21 / 0.8);
+}
+
+@utility border-orange-400-80 {
+  border-color: rgb(251 146 60 / 0.8);
+}
+
+@utility border-green-400-80 {
+  border-color: rgb(74 222 128 / 0.8);
+}
+
+@utility border-white-20 {
+  border-color: rgb(255 255 255 / 0.2);
+}
+
 @keyframes accordion-down {
   from {
     height: 0;
@@ -246,7 +360,10 @@
 /* Dark mode variants will be handled automatically by Tailwind v4 */
 
 @layer base {
-  * {
+  /* Tailwind V4 邊框顏色修復 - 覆蓋預設的 currentColor */
+  *,
+  *::before,
+  *::after {
     border-color: hsl(var(--color-border));
   }
 
@@ -270,6 +387,16 @@
   /* 修復輸入框邊框 */
   input, textarea, select {
     border-color: hsl(var(--color-input));
+  }
+
+  /* 修復 div 和 li 元素的邊框 */
+  div, li, ul, ol {
+    border-color: hsl(var(--color-border));
+  }
+
+  /* 確保所有邊框相關的偽元素也使用正確顏色 */
+  [class*="border"] {
+    border-color: hsl(var(--color-border));
   }
 }
 

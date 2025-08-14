@@ -76,7 +76,7 @@ const CompactControlPanel: React.FC<CompactControlPanelProps> = ({
                         "h-7 px-2 text-xs transition-all duration-200",
                         isStatsExpanded
                           ? "bg-blue-100 text-blue-700 border border-blue-200"
-                          : "text-blue-600 hover:bg-blue-50 border border-transparent hover:border-blue-200"
+                          : "text-blue-600 hover:bg-blue-50 border border-blue-200/0 hover:border-blue-200"
                       )}
                     >
                       <BarChart3 className="h-3 w-3 mr-1" />
@@ -99,7 +99,7 @@ const CompactControlPanel: React.FC<CompactControlPanelProps> = ({
                         "h-7 px-2 text-xs transition-all duration-200",
                         isFiltersExpanded
                           ? "bg-purple-100 text-purple-700 border border-purple-200"
-                          : "text-purple-600 hover:bg-purple-50 border border-transparent hover:border-purple-200"
+                          : "text-purple-600 hover:bg-purple-50 border border-purple-200/0 hover:border-purple-200"
                       )}
                     >
                       <Filter className="h-3 w-3 mr-1" />

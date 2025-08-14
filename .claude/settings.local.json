@@ -14,7 +14,9 @@
       "Bash(git add:*)",
       "WebFetch(domain:sheet-order-api.ruby7677.workers.dev)",
       "Bash(git commit:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "mcp__context7__resolve-library-id",
+      "mcp__context7__get-library-docs"
     ],
     "deny": []
   }

@@ -60,7 +60,7 @@ const AdminLoginPage: React.FC = () => {
           <label className="block mb-1">帳號</label>
           <input
             type="text"
-            className="w-full border rounded px-3 py-2"
+            className="w-full border border-input rounded px-3 py-2 bg-background text-foreground focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2"
             value={username}
             onChange={e => setUsername(e.target.value)}
             required
@@ -70,7 +70,7 @@ const AdminLoginPage: React.FC = () => {
           <label className="block mb-1">密碼</label>
           <input
             type="password"
-            className="w-full border rounded px-3 py-2"
+            className="w-full border border-input rounded px-3 py-2 bg-background text-foreground focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2"
             value={password}
             onChange={e => setPassword(e.target.value)}
             required

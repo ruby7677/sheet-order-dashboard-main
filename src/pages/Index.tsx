@@ -407,7 +407,7 @@ const Index: React.FC = () => {
                   variant="outline"
                   size="sm"
                   onClick={() => window.open('https://767780.xyz/pos8-test.php', '_blank')}
-                  className="h-8 px-3 text-xs border-2 border-blue-400 text-blue-600 hover:bg-blue-50 hover:border-blue-500 transition-all font-medium"
+                  className="h-8 px-3 text-xs border-2 border-blue-400-80 text-blue-600 hover:bg-blue-50 hover:border-blue-500 transition-all font-medium"
                 >
                   {/* 可以考慮加上一個圖示，例如 <FilePenLine className="h-3 w-3 mr-1" /> */}
                   手抄單
@@ -416,7 +416,7 @@ const Index: React.FC = () => {
                   variant="outline"
                   size="sm"
                   onClick={openDeliverySettings}
-                  className="h-8 px-3 text-xs border-2 border-purple-400 text-purple-600 hover:bg-purple-50 hover:border-purple-500 transition-all font-medium"
+                  className="h-8 px-3 text-xs border-2 border-purple-400-80 text-purple-600 hover:bg-purple-50 hover:border-purple-500 transition-all font-medium"
                 >
                   <Calendar className="h-3 w-3 mr-1" />
                   設定到貨日期
@@ -443,7 +443,7 @@ const Index: React.FC = () => {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-7 px-3 text-xs border-2 border-yellow-400 text-yellow-600 hover:bg-yellow-50 hover:border-yellow-500 transition-all font-medium"
+                    className="h-7 px-3 text-xs border-2 border-yellow-400-80 text-yellow-600 hover:bg-yellow-50 hover:border-yellow-500 transition-all font-medium"
                     onClick={handleDuplicateOrdersClick}
                   >
                     <AlertTriangle className="h-3 w-3 mr-1" />
@@ -452,7 +452,7 @@ const Index: React.FC = () => {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-7 px-3 text-xs border-2 border-orange-400 text-orange-600 hover:bg-orange-50 hover:border-orange-500 transition-all font-medium"
+                    className="h-7 px-3 text-xs border-2 border-orange-400-80 text-orange-600 hover:bg-orange-50 hover:border-orange-500 transition-all font-medium"
                     onClick={handlePrintSelected}
                   >
                     <Printer className="h-3 w-3 mr-1" /> 列印訂單
@@ -460,7 +460,7 @@ const Index: React.FC = () => {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-7 px-3 text-xs border-2 border-blue-400 text-blue-600 hover:bg-blue-50 hover:border-blue-500 transition-all font-medium"
+                    className="h-7 px-3 text-xs border-2 border-blue-400-80 text-blue-600 hover:bg-blue-50 hover:border-blue-500 transition-all font-medium"
                     onClick={handleDownloadCsv}
                   >
                     <Download className="h-3 w-3 mr-1" /> 宅配CSV
@@ -468,7 +468,7 @@ const Index: React.FC = () => {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-7 px-3 text-xs border-2 border-green-400 text-green-600 hover:bg-green-50 hover:border-green-500 transition-all font-medium"
+                    className="h-7 px-3 text-xs border-2 border-green-400-80 text-green-600 hover:bg-green-50 hover:border-green-500 transition-all font-medium"
                     onClick={handleDownloadQuickStoreXlsx}
                   >
                     <Download className="h-3 w-3 mr-1" /> 快速到店
