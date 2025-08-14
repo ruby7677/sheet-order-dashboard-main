@@ -12,7 +12,8 @@
       "Bash(git push:*)",
       "Bash(wrangler deploy:*)",
       "Bash(git add:*)",
-      "WebFetch(domain:sheet-order-api.ruby7677.workers.dev)"
+      "WebFetch(domain:sheet-order-api.ruby7677.workers.dev)",
+      "Bash(git commit:*)"
     ],
     "deny": []
   }
