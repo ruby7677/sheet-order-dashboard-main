@@ -135,6 +135,14 @@
   color: hsl(var(--color-destructive-foreground));
 }
 
+@utility border-destructive {
+  border-color: hsl(var(--color-destructive));
+}
+
+@utility ring-destructive {
+  --tw-ring-color: hsl(var(--color-destructive));
+}
+
 /* 彈窗遮罩修復 */
 @utility bg-overlay-80 {
   background-color: hsl(var(--color-overlay) / 0.8);
