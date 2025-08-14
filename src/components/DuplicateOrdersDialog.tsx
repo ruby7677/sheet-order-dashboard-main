@@ -33,8 +33,8 @@ const DuplicateOrdersDialog: React.FC<DuplicateOrdersDialogProps> = ({
   const totalDuplicateOrders = duplicateGroups.reduce((sum, group) => sum + group.count, 0);
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[80vh] overflow-hidden">
+    <div className="fixed inset-0 bg-overlay-80 flex items-center justify-center z-50 p-4">
+      <div className="bg-background rounded-lg shadow-xl max-w-4xl w-full max-h-[80vh] overflow-hidden border border-border">
         {/* 標題列 */}
         <div className={`flex items-center justify-between p-6 border-b ${isAutoAlert ? 'bg-red-50' : 'bg-yellow-50'}`}>
           <div className="flex items-center gap-3">

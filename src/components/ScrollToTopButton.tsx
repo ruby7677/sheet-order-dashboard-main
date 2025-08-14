@@ -59,7 +59,7 @@ const ScrollToTopButton: React.FC<ScrollToTopButtonProps> = ({
         "bg-primary hover:bg-primary/90 text-primary-foreground",
         "transition-all duration-300 ease-in-out",
         "hover:scale-110 hover:shadow-xl",
-        "border-2 border-white/20",
+        "border-2 border-white-20",
         "backdrop-blur-sm",
         className
       )}
