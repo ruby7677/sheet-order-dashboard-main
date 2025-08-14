@@ -29,7 +29,19 @@ app.use("*", cors({
 		"http://0.0.0.0:8080"
 	],
 	allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-	allowHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+	allowHeaders: [
+		"Content-Type", 
+		"Authorization", 
+		"X-Requested-With",
+		"Accept",
+		"Origin",
+		"User-Agent",
+		"Cache-Control",
+		"Pragma",
+		"Expires",
+		"If-Modified-Since",
+		"If-None-Match"
+	],
 	credentials: true
 }));
 
