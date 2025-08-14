@@ -1,119 +1,141 @@
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
-@layer utilities {
-  .border-border { border-color: hsl(var(--border)); }
-  .bg-background { background-color: hsl(var(--background)); }
-  .text-foreground { color: hsl(var(--foreground)); }
-  .ring-ring { box-shadow: 0 0 0 3px hsl(var(--ring)); }
-  .border-input { border-color: hsl(var(--input)); }
-  .bg-card { background-color: hsl(var(--card)); }
-  .text-card-foreground { color: hsl(var(--card-foreground)); }
-  /* 依需求補齊其他自訂色 class */
+@theme {
+  /* 容器配置 */
+  --breakpoint-sm: 640px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
+  --breakpoint-xl: 1280px;
+  --breakpoint-2xl: 1536px;
+  
+  /* 顏色配置 */
+  --color-border: 214.3 31.8% 91.4%;
+  --color-input: 214.3 31.8% 91.4%;
+  --color-ring: 217 91% 60%;
+  --color-background: 220 20% 98%;
+  --color-foreground: 222.2 84% 4.9%;
+  
+  --color-primary: 217 91% 60%;
+  --color-primary-foreground: 210 40% 98%;
+  
+  --color-secondary: 210 40% 96.1%;
+  --color-secondary-foreground: 222.2 47.4% 11.2%;
+  
+  --color-destructive: 0 84.2% 60.2%;
+  --color-destructive-foreground: 210 40% 98%;
+  
+  --color-muted: 210 40% 96.1%;
+  --color-muted-foreground: 215.4 16.3% 46.9%;
+  
+  --color-accent: 210 40% 96.1%;
+  --color-accent-foreground: 222.2 47.4% 11.2%;
+  
+  --color-popover: 0 0% 100%;
+  --color-popover-foreground: 222.2 84% 4.9%;
+  
+  --color-card: 0 0% 100%;
+  --color-card-foreground: 222.2 84% 4.9%;
+  
+  --color-sidebar: 0 0% 98%;
+  --color-sidebar-foreground: 240 5.3% 26.1%;
+  --color-sidebar-primary: 240 5.9% 10%;
+  --color-sidebar-primary-foreground: 0 0% 98%;
+  --color-sidebar-accent: 240 4.8% 95.9%;
+  --color-sidebar-accent-foreground: 240 5.9% 10%;
+  --color-sidebar-border: 220 13% 91%;
+  --color-sidebar-ring: 217.2 91.2% 59.8%;
+  
+  /* 自定義狀態顏色 */
+  --color-status-processing: #F97316;
+  --color-status-completed: #10B981;
+  --color-status-canceled: #EF4444;
+  
+  /* 邊框圓角 */
+  --radius: 0.5rem;
+}
+
+@utility border-border {
+  border-color: hsl(var(--color-border));
+}
+
+@utility bg-background {
+  background-color: hsl(var(--color-background));
+}
+
+@utility text-foreground {
+  color: hsl(var(--color-foreground));
+}
+
+@utility ring-ring {
+  box-shadow: 0 0 0 3px hsl(var(--color-ring));
+}
+
+@utility border-input {
+  border-color: hsl(var(--color-input));
+}
+
+@utility bg-card {
+  background-color: hsl(var(--color-card));
+}
+
+@utility text-card-foreground {
+  color: hsl(var(--color-card-foreground));
+}
+
+@keyframes accordion-down {
+  from {
+    height: 0;
+  }
+  to {
+    height: var(--radix-accordion-content-height);
+  }
+}
+
+@keyframes accordion-up {
+  from {
+    height: var(--radix-accordion-content-height);
+  }
+  to {
+    height: 0;
+  }
+}
+
+@utility status-badge {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 500;
+  border-radius: 9999px;
+  color: white;
+}
+
+@utility status-processing {
+  background-color: var(--color-status-processing);
+}
+
+@utility status-completed {
+  background-color: var(--color-status-completed);
+}
+
+@utility status-canceled {
+  background-color: var(--color-status-canceled);
 }
 
 
-@layer base {
-  :root {
-    --background: 220 20% 98%; /* Slightly off-white background */
-    --foreground: 222.2 84% 4.9%;
-
-    --card: 0 0% 100%; /* Keep cards white */
-    --card-foreground: 222.2 84% 4.9%;
-
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-
-    --primary: 217 91% 60%; /* A modern blue */
-    --primary-foreground: 210 40% 98%; /* Light text on primary */
-
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 217 91% 60%; /* Match new primary color */
-
-    --radius: 0.5rem;
-
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 240 5.9% 10%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
-  }
-
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-
-    --primary: 217 91% 60%; /* A modern blue for dark mode */
-    --primary-foreground: 210 40% 98%; /* Light text on primary for dark mode */
-
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-  }
-}
+/* Dark mode variants will be handled automatically by Tailwind v4 */
 
 @layer base {
   * {
-    @apply border-border;
+    border-color: hsl(var(--color-border));
   }
 
   body {
-    @apply bg-background text-foreground;
+    background-color: hsl(var(--color-background));
+    color: hsl(var(--color-foreground));
     font-family: 'Noto Sans TC', sans-serif;
-    line-height: 1.6; /* Improved readability */
+    line-height: 1.6;
   }
-}
-
-.status-badge {
-  @apply px-2 py-1 text-xs font-medium rounded-full text-white;
-}
-
-.status-processing {
-  @apply bg-status-processing;
-}
-
-.status-completed {
-  @apply bg-status-completed;
-}
-
-.status-canceled {
-  @apply bg-status-canceled;
 }
 
 @media print {
