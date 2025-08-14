@@ -1,5 +1,6 @@
 import { fromHono } from "chanfana";
 import { Hono } from "hono";
+import { cors } from "hono/cors";
 import { TaskCreate } from "./endpoints/taskCreate";
 import { TaskDelete } from "./endpoints/taskDelete";
 import { TaskFetch } from "./endpoints/taskFetch";
@@ -17,6 +18,20 @@ import { GetAdminDashboard } from './endpoints/getAdminDashboard';
 
 // Start a Hono app
 const app = new Hono<{ Bindings: Env }>();
+
+// 配置 CORS 中間件
+app.use("*", cors({
+	origin: [
+		"https://sheet-order-dashboard-main.pages.dev",
+		"https://lopokao.767780.xyz",
+		"http://localhost:8080",
+		"http://127.0.0.1:8080",
+		"http://0.0.0.0:8080"
+	],
+	allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+	allowHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+	credentials: true
+}));
 
 // Setup OpenAPI registry
 const openapi = fromHono(app, {
