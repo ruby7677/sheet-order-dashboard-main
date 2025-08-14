@@ -524,21 +524,32 @@ export const updateOrderPaymentStatus = async (id: string, paymentStatus: string
   const timestamp = Date.now();
   const nonce = Math.random().toString(36).substring(2, 15);
 
-  // 構建 API 端點和參數
-  const params = new URLSearchParams({
-    _: timestamp.toString(),
-    nonce: nonce
-  });
+  // 使用新的 Workers API 端點，支援 fallback 到 PHP API
+  const workersEndpoint = '/api/orders/payment';
+  const legacyEndpoint = `/api/update_payment_status.php?_=${timestamp}&nonce=${nonce}`;
   
-  const endpoint = `/api/update_payment_status.php?${params.toString()}`;
-
-  const res = await apiCallWithFallback(endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ id, paymentStatus, timestamp, nonce }),
-  });
+  // 優先嘗試 Workers API
+  let res;
+  try {
+    res = await apiCallWithFallback(workersEndpoint, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ id, status: paymentStatus }),
+    });
+  } catch (workersError) {
+    console.log('Workers API 失敗，嘗試 PHP API:', workersError);
+    // Fallback 到 PHP API
+    res = await apiCallWithFallback(legacyEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ id, paymentStatus, timestamp, nonce }),
+    });
+  }
+  
   if (!res.ok) {
     let errorMsg = '更新款項狀態失敗';
     try {
