@@ -19,7 +19,7 @@ export class UpdatePaymentStatus extends OpenAPIRoute {
 					'application/json': {
 						schema: z.object({
 							id: z.string().describe('訂單 ID'),
-							status: z.enum(['未付款', '已付款', '部分付款', '退款']).describe('新的付款狀態')
+							status: z.enum(['', '未收費', '已收費', '待轉帳', '未全款', '特殊']).describe('新的付款狀態')
 						})
 					}
 				}
@@ -66,7 +66,7 @@ export class UpdatePaymentStatus extends OpenAPIRoute {
 		try {
 			// 解析請求體
 			const body = await c.req.json();
-			const { id: rowId, paymentStatus } = body;
+			const { id: rowId, status: paymentStatus } = body;
 
 			// 驗證必要參數
 			if (rowId === null || rowId === undefined || !paymentStatus) {

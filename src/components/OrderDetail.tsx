@@ -20,7 +20,7 @@ import StatusBadge from './StatusBadge';
 import PaymentStatusEditor from './PaymentStatusEditor';
 import OrderItemEditor from './OrderItemEditor';
 import { Order, OrderItem } from '@/types/order';
-import { updateOrderStatus, deleteOrder, updateOrderItems } from '@/services/orderService';
+import { updateOrderStatus, deleteOrder, updateOrderItems, updateOrderPaymentStatus } from '@/services/orderService';
 import { printOrders } from '@/utils/exportUtils';
 import { Trash, Printer, Edit } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -149,13 +149,8 @@ const OrderDetail: React.FC<OrderDetailProps> = ({
     if (!order) return;
     setIsUpdating(true);
     try {
-      const res = await fetch('/api/update_payment_status.php', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: order.id, paymentStatus: newPaymentStatus })
-      });
-      const result = await res.json();
-      if (!result.success) throw new Error(result.message || '更新款項狀態失敗');
+      // 使用 orderService 中的統一 API 呼叫邏輯
+      await updateOrderPaymentStatus(order.id, newPaymentStatus);
       setPaymentStatus(newPaymentStatus);
       toast({
         title: '成功',
@@ -169,7 +164,7 @@ const OrderDetail: React.FC<OrderDetailProps> = ({
       console.error('Failed to update payment status:', error);
       toast({
         title: '錯誤',
-        description: '更新款項狀態失敗',
+        description: error instanceof Error ? error.message : '更新款項狀態失敗',
         variant: 'destructive',
       });
     } finally {
