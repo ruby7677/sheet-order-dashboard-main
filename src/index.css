@@ -46,6 +46,10 @@
   --color-sidebar-border: 220 13% 91%;
   --color-sidebar-ring: 217.2 91.2% 59.8%;
   
+  /* 彈窗遮罩顏色 */
+  --color-overlay: 0 0% 0%;
+  --color-overlay-foreground: 0 0% 100%;
+  
   /* 自定義狀態顏色 */
   --color-status-processing: #F97316;
   --color-status-completed: #10B981;
@@ -83,6 +87,63 @@
   color: hsl(var(--color-card-foreground));
 }
 
+@utility bg-primary {
+  background-color: hsl(var(--color-primary));
+}
+
+@utility text-primary-foreground {
+  color: hsl(var(--color-primary-foreground));
+}
+
+@utility bg-secondary {
+  background-color: hsl(var(--color-secondary));
+}
+
+@utility text-secondary-foreground {
+  color: hsl(var(--color-secondary-foreground));
+}
+
+@utility bg-muted {
+  background-color: hsl(var(--color-muted));
+}
+
+@utility text-muted-foreground {
+  color: hsl(var(--color-muted-foreground));
+}
+
+@utility bg-accent {
+  background-color: hsl(var(--color-accent));
+}
+
+@utility text-accent-foreground {
+  color: hsl(var(--color-accent-foreground));
+}
+
+@utility bg-popover {
+  background-color: hsl(var(--color-popover));
+}
+
+@utility text-popover-foreground {
+  color: hsl(var(--color-popover-foreground));
+}
+
+@utility bg-destructive {
+  background-color: hsl(var(--color-destructive));
+}
+
+@utility text-destructive-foreground {
+  color: hsl(var(--color-destructive-foreground));
+}
+
+/* 彈窗遮罩修復 */
+@utility bg-overlay-80 {
+  background-color: hsl(var(--color-overlay) / 0.8);
+}
+
+@utility bg-overlay {
+  background-color: hsl(var(--color-overlay));
+}
+
 @keyframes accordion-down {
   from {
     height: 0;
@@ -98,6 +159,65 @@
   }
   to {
     height: 0;
+  }
+}
+
+/* Tailwind V4 動畫支援 */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes slideInFromTop {
+  from {
+    transform: translateY(-100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideOutToTop {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-100%);
+  }
+}
+
+@keyframes zoomIn {
+  from {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes zoomOut {
+  from {
+    transform: scale(1);
+    opacity: 1;
+  }
+  to {
+    transform: scale(0.95);
+    opacity: 0;
   }
 }
 
@@ -135,6 +255,21 @@
     color: hsl(var(--color-foreground));
     font-family: 'Noto Sans TC', sans-serif;
     line-height: 1.6;
+  }
+
+  /* 修復預設邊框顏色 */
+  table, th, td {
+    border-color: hsl(var(--color-border));
+  }
+
+  /* 修復按鈕邊框 */
+  button {
+    border-color: hsl(var(--color-border));
+  }
+
+  /* 修復輸入框邊框 */
+  input, textarea, select {
+    border-color: hsl(var(--color-input));
   }
 }
 
