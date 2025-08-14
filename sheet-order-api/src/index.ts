@@ -42,6 +42,17 @@ openapi.post("/api/admin/login", AdminLogin);
 openapi.get("/api/customers/orders", GetCustomerOrders);
 openapi.get("/api/admin/dashboard", GetAdminDashboard);
 
+// PHP 相容性路由 - 支援原有前端代碼
+openapi.get("/api/get_orders_from_sheet.php", GetOrdersFromSheet);
+openapi.get("/api/get_customers_from_sheet.php", GetCustomersFromSheet);
+openapi.post("/api/update_order_status.php", UpdateOrderStatus);
+openapi.post("/api/update_payment_status.php", UpdatePaymentStatus);
+openapi.post("/api/update_order_items.php", UpdateOrderItems);
+openapi.post("/api/delete_order.php", DeleteOrder);
+openapi.post("/api/batch_delete_orders.php", BatchDeleteOrders);
+openapi.post("/api/admin_login.php", AdminLogin);
+openapi.get("/api/get_customer_orders.php", GetCustomerOrders);
+
 // You may also register routes for non OpenAPI directly on Hono
 // app.get('/test', (c) => c.text('Hono!'))
 

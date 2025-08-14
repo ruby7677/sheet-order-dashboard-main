@@ -26,7 +26,23 @@ export class GoogleSheetsService {
 		}
 
 		try {
-			const serviceAccount = JSON.parse(this.serviceAccountKey);
+			// 增加除錯資訊
+			if (!this.serviceAccountKey) {
+				throw new ApiError(500, '環境變數 GOOGLE_SERVICE_ACCOUNT_KEY 未設定', 'ENV_VAR_MISSING');
+			}
+			
+			// 檢查 JSON 格式
+			if (typeof this.serviceAccountKey !== 'string') {
+				throw new ApiError(500, `Service account key 類型錯誤: ${typeof this.serviceAccountKey}`, 'INVALID_KEY_TYPE');
+			}
+			
+			// 嘗試解析 JSON，提供更詳細的錯誤資訊
+			let serviceAccount;
+			try {
+				serviceAccount = JSON.parse(this.serviceAccountKey);
+			} catch (parseError) {
+				throw new ApiError(500, `JSON 解析失敗: ${parseError instanceof Error ? parseError.message : String(parseError)}。Key 長度: ${this.serviceAccountKey.length}，前100字元: ${this.serviceAccountKey.substring(0, 100)}`, 'JSON_PARSE_ERROR');
+			}
 			
 			// 建立 JWT payload
 			const now = Math.floor(Date.now() / 1000);
