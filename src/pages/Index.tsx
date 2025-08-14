@@ -392,7 +392,7 @@ const Index: React.FC = () => {
       <div className="flex-1 flex flex-col min-h-screen">
         {/* 只在非 iframe 模式下顯示頂部工具欄 */}
         {!isInIframe && (
-          <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-30">
+          <header className="border-b bg-card/[0.5] backdrop-blur-sm sticky top-0 z-30">
             <div className="px-6 py-3 flex justify-between items-center">
               <div className="flex items-center gap-3">
                 <h1 className="text-xl font-bold text-foreground">

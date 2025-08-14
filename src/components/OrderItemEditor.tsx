@@ -200,7 +200,7 @@ const OrderItemEditor: React.FC<OrderItemEditorProps> = ({
                 {editedItems.map((item, index) => (
                   <div
                     key={index}
-                    className="flex items-center gap-3 p-3 border rounded-lg bg-muted/20"
+                    className="flex items-center gap-3 p-3 border rounded-lg bg-muted/[0.2]"
                   >
                     <div className="flex-1">
                       <div className="font-medium">{item.product}</div>

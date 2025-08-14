@@ -58,7 +58,7 @@ const CompactControlPanel: React.FC<CompactControlPanelProps> = ({
   return (
     <div className="space-y-2 mb-4">
       {/* 主控制欄 - 更緊湊的設計 */}
-      <Card className="border border-border/50 shadow-sm">
+      <Card className="border border-border/[0.5] shadow-sm">
         <CardContent className="p-2">
           <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-2">
 
@@ -76,7 +76,7 @@ const CompactControlPanel: React.FC<CompactControlPanelProps> = ({
                         "h-7 px-2 text-xs transition-all duration-200",
                         isStatsExpanded
                           ? "bg-blue-100 text-blue-700 border border-blue-200"
-                          : "text-blue-600 hover:bg-blue-50 border border-blue-200/0 hover:border-blue-200"
+                          : "text-blue-600 hover:bg-blue-50 border border-transparent hover:border-blue-200"
                       )}
                     >
                       <BarChart3 className="h-3 w-3 mr-1" />
@@ -99,7 +99,7 @@ const CompactControlPanel: React.FC<CompactControlPanelProps> = ({
                         "h-7 px-2 text-xs transition-all duration-200",
                         isFiltersExpanded
                           ? "bg-purple-100 text-purple-700 border border-purple-200"
-                          : "text-purple-600 hover:bg-purple-50 border border-purple-200/0 hover:border-purple-200"
+                          : "text-purple-600 hover:bg-purple-50 border border-transparent hover:border-purple-200"
                       )}
                     >
                       <Filter className="h-3 w-3 mr-1" />
@@ -143,7 +143,7 @@ const CompactControlPanel: React.FC<CompactControlPanelProps> = ({
       {/* 統計卡片摺疊區域 - 優化設計 */}
       <Collapsible open={isStatsExpanded} onOpenChange={setIsStatsExpanded}>
         <CollapsibleContent className="space-y-1">
-          <Card className="border-blue-200/60 bg-gradient-to-r from-blue-50/50 to-blue-100/30 shadow-sm">
+          <Card className="border-blue-200/[0.6] bg-gradient-to-r from-blue-50/[0.5] to-blue-100/[0.3] shadow-sm">
             <CardContent className="p-3">
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-sm font-medium text-blue-700 flex items-center gap-1">
@@ -160,7 +160,7 @@ const CompactControlPanel: React.FC<CompactControlPanelProps> = ({
       {/* 篩選器摺疊區域 - 優化設計 */}
       <Collapsible open={isFiltersExpanded} onOpenChange={setIsFiltersExpanded}>
         <CollapsibleContent className="space-y-1">
-          <Card className="border-purple-200/60 bg-gradient-to-r from-purple-50/50 to-purple-100/30 shadow-sm">
+          <Card className="border-purple-200/[0.6] bg-gradient-to-r from-purple-50/[0.5] to-purple-100/[0.3] shadow-sm">
             <CardContent className="p-3">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-medium text-purple-700 flex items-center gap-1">

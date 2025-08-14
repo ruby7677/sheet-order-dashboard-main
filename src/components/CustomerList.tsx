@@ -118,7 +118,7 @@ const CustomerList: React.FC<CustomerListProps> = ({
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
-            <tr className="bg-muted/50">
+            <tr className="bg-muted/[0.5]">
               <th className="p-3 font-medium w-10">
                 <Checkbox
                   checked={customers.length > 0 && selected.length === customers.length}
@@ -147,7 +147,7 @@ const CustomerList: React.FC<CustomerListProps> = ({
               customers.map((customer) => (
                 <tr
                   key={customer.id}
-                  className="border-t hover:bg-muted/20 transition-colors cursor-pointer data-[state=selected]:bg-muted"
+                  className="border-t hover:bg-muted/[0.2] transition-colors cursor-pointer data-[state=selected]:bg-muted"
                   onClick={() => onCustomerClick(customer)}
                 >
                   <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>

@@ -182,7 +182,7 @@ const ModernSidebar: React.FC<ModernSidebarProps> = ({
       {isMobileOpen && (
         <div className="lg:hidden fixed inset-0 z-40">
           <div 
-            className="absolute inset-0 bg-black/50" 
+            className="absolute inset-0 bg-overlay-80" 
             onClick={() => setIsMobileOpen(false)}
           />
           <div className="absolute left-0 top-0 h-full w-64 bg-card border-r border-border/50">

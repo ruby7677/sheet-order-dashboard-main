@@ -120,7 +120,7 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customer, open, onClose
             ) : (
               <div className="space-y-4">
                 {orders.map((order, index) => (
-                  <div key={order.id} className="border rounded-lg p-4 bg-muted/20">
+                  <div key={order.id} className="border rounded-lg p-4 bg-muted/[0.2]">
                     <div className="flex justify-between items-start mb-2">
                       <div className="font-semibold">訂單 #{index + 1}</div>
                       <div className="text-sm text-muted-foreground">{formatDate(order.orderTime)}</div>
