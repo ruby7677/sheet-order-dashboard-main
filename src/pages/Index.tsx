@@ -393,12 +393,12 @@ const Index: React.FC = () => {
         {/* 只在非 iframe 模式下顯示頂部工具欄 */}
         {!isInIframe && (
           <header className="border-b bg-card/[0.5] backdrop-blur-sm sticky top-0 z-30">
-            <div className="px-6 py-3 flex justify-between items-center">
+            <div className="px-6 lg:px-6 pl-16 lg:pl-6 py-3 flex justify-between items-center">
               <div className="flex items-center gap-3">
                 <h1 className="text-xl font-bold text-foreground">
                   {pageMode === 'orders' ? '訂單管理' : '客戶資料'}
                 </h1>
-                <div className="text-sm text-muted-foreground">
+                <div className="text-sm text-muted-foreground hidden sm:block">
                   蘿蔔糕訂單系統 - 管理後台
                 </div>
               </div>
