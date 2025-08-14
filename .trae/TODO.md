@@ -1,11 +1,8 @@
 # TODO:
 
-- [x] p1-update-order-items: 開始實作 P1 進階 API - 訂單商品更新 API (updateOrderItems.ts) (priority: High)
-- [x] p1-delete-order: 實作 P1 進階 API - 單筆訂單刪除 API (deleteOrder.ts) (priority: High)
-- [x] p1-batch-delete: 實作 P1 進階 API - 批量刪除訂單 API (batchDeleteOrders.ts) (priority: High)
-- [x] p2-admin-login: 實作 P2 管理 API - 管理員登入 API (adminLogin.ts) (priority: Medium)
-- [x] p2-customer-orders: 實作 P2 管理 API - 客戶訂單歷史 API (getCustomerOrders.ts) (priority: Medium)
-- [x] p2-admin-dashboard: 實作 P2 管理 API - 管理員儀表板 API (getAdminDashboard.ts) (priority: Medium)
-- [ ] cors-security: 完善 CORS 與安全性設置 (priority: Medium)
-- [ ] frontend-error-handling: 設置前端錯誤處理優化 (priority: Medium)
-- [ ] p3-debug-apis: 實作 P3 除錯 API - 快取檢查、API路徑檢查、存取測試 (priority: Low)
+- [x] fix-order-service-api: 修正 orderService.ts 中的 API 端點：將 /api/get_orders_from_sheet.php 改為 /api/orders (priority: High)
+- [x] fix-customer-service-api: 修正 customerService.ts 中的 API 端點：將 /api/get_customers_from_sheet.php 改為 /api/customers (priority: High)
+- [x] update-api-base-logic: 更新 API URL 環境檢測邏輯，移除硬編碼的 Workers URL (priority: High)
+- [x] fix-environment-detection: 修正 index.html 中的環境檢測邏輯，支援多種開發端口 (priority: High)
+- [ ] missing-google-credentials: 缺少 Google Service Account 認證文件 service-account-key2.json，需要用戶提供 (priority: High)
+- [ ] test-api-endpoints: 在獲得認證文件後測試本地和生產環境的 API 端點 (priority: Medium)
