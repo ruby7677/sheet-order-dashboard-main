@@ -1,32 +1,58 @@
 import { Customer, CustomerWithStats, CustomerOrder, CustomerFilterCriteria, CustomerStats } from '@/types/customer';
 import { fetchOrders } from './orderService';
 
-// 根據環境動態設置 API 基礎路徑
-// 使用全局配置或默認值
-const getApiBase = () => {
-  // 檢查是否有全局配置
-  if (window.API_CONFIG && typeof window.API_CONFIG.getApiBase === 'function') {
-    return window.API_CONFIG.getApiBase();
-  }
-
-  // 檢查當前環境（備用方案）
-  const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+// 動態 API 配置系統 (與 orderService 保持一致)
+const getApiConfig = () => {
+  const hostname = window.location.hostname;
   const port = window.location.port;
-
-  // 本地開發環境（localhost:8080 指向 htdocs，需要完整路徑）
-  if (isLocalhost && port === '8080') {
-    return '/sheet-order-dashboard-main/api';
-  }
-
-  // Cloudflare Tunnels 環境（node.767780.xyz 直接指向 sheet-order-dashboard-main 目錄）
-  // 所以 API 路徑就是 /api
-  return '/api';
+  const protocol = window.location.protocol;
+  
+  // 檢查是否在 Cloudflare Pages 環境
+  const isCloudflarePages = hostname.includes('.pages.dev') || 
+                           hostname.includes('lopokao.767780.xyz') ||
+                           hostname.includes('node.767780.xyz');
+  
+  // 本地開發環境
+  const isLocalDev = hostname === 'localhost' || hostname === '127.0.0.1';
+  
+  console.log('🌍 客戶服務環境檢測:', {
+    hostname,
+    port,
+    protocol,
+    isCloudflarePages,
+    isLocalDev
+  });
+  
+  return {
+    isLocalDev,
+    isCloudflarePages,
+    // Workers API 端點 (生產環境)
+    workersApiUrl: 'https://sheet-order-api.ruby7677.workers.dev',
+    // 本地 Workers API (開發時)
+    localWorkersApiUrl: 'http://127.0.0.1:5714',
+    // 傳統 PHP API (後備方案)
+    legacyApiBase: isLocalDev && port === '8080' 
+      ? '/sheet-order-dashboard-main/api' 
+      : '/api'
+  };
 };
 
-const API_BASE = getApiBase();
-
-// 輸出當前使用的 API 路徑，方便調試
-console.log('客戶服務 API 路徑:', API_BASE);
+// 根據環境動態選擇 API 端點
+const getApiEndpoint = (endpoint: string) => {
+  const config = getApiConfig();
+  
+  // 優先嘗試 Workers API
+  if (config.isCloudflarePages || !config.isLocalDev) {
+    // 生產環境或 Cloudflare Pages: 使用生產 Workers API
+    return `${config.workersApiUrl}${endpoint}`;
+  } else if (config.isLocalDev) {
+    // 本地開發: 嘗試本地 Workers API，失敗則降級到傳統 API
+    return `${config.localWorkersApiUrl}${endpoint}`;
+  } else {
+    // 後備方案: 使用傳統 API
+    return `${config.legacyApiBase}${endpoint}`;
+  }
+};
 
 // 客戶資料快取
 let customerCache: {
@@ -110,7 +136,10 @@ export const fetchCustomers = async (filters?: CustomerFilterCriteria): Promise<
 
   try {
     // 主要來源：從 Sheets 的「客戶名單」讀取
-    const resp = await fetch(`${API_BASE}/get_customers_from_sheet.php?nonce=${now}`, {
+    const apiEndpoint = getApiEndpoint('/api/get_customers_from_sheet.php');
+    console.log('📡 客戶資料 API 端點:', apiEndpoint);
+    
+    const resp = await fetch(`${apiEndpoint}?nonce=${now}`, {
       headers: { 'Cache-Control': 'no-cache' },
     });
     const json = await resp.json();
