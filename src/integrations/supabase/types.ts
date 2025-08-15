@@ -489,20 +489,6 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      get_current_admin_profile: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          created_at: string
-          email: string
-          full_name: string
-          id: string
-          is_active: boolean
-          last_login: string
-          role: string
-          updated_at: string
-          username: string
-        }[]
-      }
       gtrgm_compress: {
         Args: { "": unknown }
         Returns: unknown
@@ -522,14 +508,6 @@ export type Database = {
       gtrgm_out: {
         Args: { "": unknown }
         Returns: unknown
-      }
-      is_authenticated_admin: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
-      }
-      is_service_role_request: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
       }
       is_super_admin: {
         Args: Record<PropertyKey, never>
@@ -555,14 +533,6 @@ export type Database = {
         Args: { new_full_name?: string; new_last_login?: string }
         Returns: boolean
       }
-      update_current_admin_profile: {
-        Args: { new_email?: string; new_full_name?: string }
-        Returns: boolean
-      }
-      update_own_admin_profile: {
-        Args: { new_email?: string; new_full_name?: string }
-        Returns: boolean
-      }
       validate_data_integrity: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -571,10 +541,6 @@ export type Database = {
           issue_count: number
           status: string
         }[]
-      }
-      verify_admin_password: {
-        Args: { input_password_hash: string; input_username: string }
-        Returns: boolean
       }
     }
     Enums: {
