@@ -1,20 +1,31 @@
 import React from 'react';
-import { Route, Navigate } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import AdminLoginPage from '../pages/AdminLoginPage';
 import AdminDashboardPage from '../pages/AdminDashboardPage';
+import { useAuth } from '../hooks/useAuth';
 
-const isAuthenticated = () => {
-  return !!localStorage.getItem('admin_token');
+const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+  const { isAuthenticated, isLoading } = useAuth();
+  
+  if (isLoading) {
+    return <div className="min-h-screen flex items-center justify-center">載入中...</div>;
+  }
+  
+  return isAuthenticated ? <>{children}</> : <Navigate to="/admin" />;
 };
 
 const AdminRoutes = [
   {
     path: '/admin',
-    element: isAuthenticated() ? <Navigate to="/admin/dashboard" /> : <AdminLoginPage />,
+    element: <AdminLoginPage />,
   },
   {
     path: '/admin/dashboard',
-    element: isAuthenticated() ? <AdminDashboardPage /> : <Navigate to="/admin" />,
+    element: (
+      <ProtectedRoute>
+        <AdminDashboardPage />
+      </ProtectedRoute>
+    ),
   },
 ];
 
