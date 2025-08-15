@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../hooks/useAuth';
 
 const AdminLoginPage: React.FC = () => {
   const [username, setUsername] = useState('');
@@ -7,40 +8,24 @@ const AdminLoginPage: React.FC = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { login, isAuthenticated } = useAuth();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/admin/dashboard');
+    }
+  }, [isAuthenticated, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
+    
     try {
-      const res = await fetch('https://sheet-order-api.ruby7677.workers.dev/api/admin/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
-      });
-  
-      // 檢查 HTTP 狀態碼
-      if (!res.ok) {
-        throw new Error('伺服器錯誤，請稍後再試');
-      }
-  
-      // 嘗試解析 JSON
-      const text = await res.text();
-      // console.log('raw response:', text); // 移除偵錯日誌
-      let result;
-      try {
-        result = JSON.parse(text);
-      } catch {
-        throw new Error('伺服器回傳格式錯誤');
-      }
-  
+      const result = await login(username, password);
+      
       if (result.success) {
-        if (result.token) {
-          localStorage.setItem('admin_token', result.token);
-          navigate('/admin/dashboard');
-        } else {
-          setError('登入成功，但未收到授權憑證');
-        }
+        navigate('/admin/dashboard');
       } else {
         setError(result.message || '登入失敗');
       }
