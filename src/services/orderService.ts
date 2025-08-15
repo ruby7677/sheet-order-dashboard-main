@@ -1,108 +1,5 @@
-import { Order, OrderStats, OrderItem } from '@/types/order';
-// src/services/orderService.ts
-
-// 動態 API 配置系統
-const getApiConfig = () => {
-  const hostname = window.location.hostname;
-  const port = window.location.port;
-  const protocol = window.location.protocol;
-  
-  // 檢查是否在 Cloudflare Pages 環境
-  const isCloudflarePages = hostname.includes('.pages.dev') || 
-                           hostname.includes('lopokao.767780.xyz') ||
-                           hostname.includes('node.767780.xyz');
-  
-  // 本地開發環境
-  const isLocalDev = hostname === 'localhost' || hostname === '127.0.0.1';
-  
-  console.log('🌍 環境檢測:', {
-    hostname,
-    port,
-    protocol,
-    isCloudflarePages,
-    isLocalDev
-  });
-  
-  return {
-    isLocalDev,
-    isCloudflarePages,
-    // Workers API 端點 (生產環境)
-    workersApiUrl: 'https://sheet-order-api.ruby7677.workers.dev',
-    // 本地 Workers API (開發時)
-    localWorkersApiUrl: 'http://127.0.0.1:5714',
-    // 傳統 PHP API (後備方案)
-    legacyApiBase: isLocalDev && port === '8080' 
-      ? '/sheet-order-dashboard-main/api' 
-      : '/api'
-  };
-};
-
-// 根據環境動態選擇 API 端點
-const getApiEndpoint = (endpoint: string) => {
-  const config = getApiConfig();
-  
-  // 優先嘗試 Workers API
-  if (config.isCloudflarePages || !config.isLocalDev) {
-    // 生產環境或 Cloudflare Pages: 使用生產 Workers API
-    return `${config.workersApiUrl}${endpoint}`;
-  } else if (config.isLocalDev) {
-    // 本地開發: 嘗試本地 Workers API，失敗則降級到傳統 API
-    return `${config.localWorkersApiUrl}${endpoint}`;
-  }
-  
-  // 後備方案: 傳統 PHP API
-  return `${config.legacyApiBase}${endpoint}`;
-};
-
-// 建立一個錯誤處理和重試機制
-const apiCallWithFallback = async (endpoint: string, options: RequestInit = {}) => {
-  const config = getApiConfig();
-  let lastError: Error | null = null;
-  
-  // 嘗試順序: Workers API -> 傳統 API
-  const endpoints = [];
-  
-  if (config.isCloudflarePages || !config.isLocalDev) {
-    endpoints.push(`${config.workersApiUrl}${endpoint}`);
-  } else if (config.isLocalDev) {
-    endpoints.push(`${config.localWorkersApiUrl}${endpoint}`);
-    endpoints.push(`${config.legacyApiBase}${endpoint}`);
-  } else {
-    endpoints.push(`${config.legacyApiBase}${endpoint}`);
-  }
-  
-  console.log('🔗 API 嘗試順序:', endpoints);
-  
-  for (const apiUrl of endpoints) {
-    try {
-      console.log('📡 嘗試 API:', apiUrl);
-      
-      const response = await fetch(apiUrl, {
-        ...options,
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0',
-          ...options.headers
-        }
-      });
-      
-      if (response.ok) {
-        console.log('✅ API 成功:', apiUrl);
-        return response;
-      } else {
-        console.log('❌ API 失敗:', apiUrl, response.status, response.statusText);
-        lastError = new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-    } catch (error) {
-      console.log('❌ API 錯誤:', apiUrl, error);
-      lastError = error instanceof Error ? error : new Error(String(error));
-    }
-  }
-  
-  // 所有端點都失敗
-  throw lastError || new Error('所有 API 端點都無法連接');
-};
+import { Order, OrderStats, OrderItem, PaymentStatus } from '@/types/order';
+import { supabase } from '@/integrations/supabase/client';
 
 // 快取機制 
 interface OrderCache {
@@ -120,7 +17,7 @@ interface OrderCache {
 let orderCache: OrderCache | null = null;
 const CACHE_DURATION = 15000; // 快取有效期 15 秒，降低以提高即時性
 
-// 直接從 Google Sheets API 取得訂單，不再使用 mockOrders
+// 從 Supabase 取得訂單資料
 export const fetchOrders = async (filters?: {
   status?: string;
   deliveryMethod?: string;
@@ -147,166 +44,112 @@ export const fetchOrders = async (filters?: {
     return orderCache.data;
   }
 
-  // 使用新的 API 重試機制
-  const timestamp = Date.now();
-  const nonce = Math.random().toString(36).substring(2, 15);
-  
-  // 構建 API 端點和參數 - 改用 Supabase 端點
-  const endpoint = '/orders';
-  const params = new URLSearchParams({
-    refresh: '1',
-    _: timestamp.toString(),
-    nonce: nonce,
-    v: '1.2' // API 版本號
-  });
-  
-  const fullEndpoint = `${endpoint}?${params.toString()}`;
-  
-  // 使用錯誤處理和重試機制
-  const res = await apiCallWithFallback(fullEndpoint, {
-    method: 'GET'
-  });
-  if (!res.ok) {
-    // 如果 HTTP 狀態碼不是 2xx，嘗試讀取錯誤訊息
-    let errorMsg = '讀取訂單失敗';
-    try {
-      const errorResult = await res.json();
-      errorMsg = errorResult.message || errorMsg;
-    } catch (e) {
-      // 如果回應不是 JSON 或其他錯誤，使用 res.statusText
-      errorMsg = `讀取訂單失敗: ${res.statusText}`;
-    }
-    throw new Error(errorMsg);
-  }
+  try {
+    // 建立查詢
+    let query = supabase
+      .from('orders')
+      .select(`
+        id,
+        order_number,
+        customer_name,
+        customer_phone,
+        customer_address,
+        delivery_method,
+        delivery_address,
+        delivery_time,
+        due_date,
+        delivery_date,
+        total_amount,
+        status,
+        payment_status,
+        payment_method,
+        notes,
+        created_at,
+        updated_at
+      `)
+      .order('created_at', { ascending: false });
 
-  const result = await res.json();
-  if (!result.success) throw new Error(result.message || '讀取訂單失敗');
-  if (!result.data || !Array.isArray(result.data)) {
-    console.warn('API回傳的訂單資料格式不正確，應為陣列:', result.data);
-    return []; // 或者拋出錯誤，視情況而定
-  }
+    const { data: orders, error } = await query;
 
-  // 將 Google Sheets 資料轉換成前端 Order 型別
-  let orders = result.data.map((row: {
-    createdAt?: string;
-    id?: string;
-    orderNumber?: string;
-    customerName?: string;
-    customerPhone?: string;
-    items?: string | Array<{product: string; quantity: number; price: number}>;
-    amount?: number;
-    dueDate?: string;
-    deliveryTime?: string;
-    note?: string;
-    status?: string;
-    deliveryMethod?: string;
-    deliveryAddress?: string;
-    paymentMethod?: string;
-    paymentStatus?: string;
-    備註?: string;
-    訂單時間?: string;
-    款項?: string;
-  }, idx: number) => {
-    const createdAt = String(row['createdAt'] || row['訂單時間'] || row[0] || new Date().toISOString().split('T')[0]);
-    const id = String(row.id || `generated_id_${idx}`); // 提供預設ID以防萬一
-    const orderNumber = String(row.orderNumber || `ORD-${Date.now()}-${idx}`); // 提供預設訂單號
-    const customerName = String(row.customerName || (row as any).customer?.name || row['姓名'] || row[1] || '');
-    const customerPhone = String(row.customerPhone || (row as any).customer?.phone || row['電話'] || row[2] || '');
-
-    let itemsArray: { product: string; quantity: number; price: number; subtotal: number }[] = [];
-    if (typeof row.items === 'string' && row.items.trim() !== '') {
-      const raw = String(row.items).trim();
-      itemsArray = raw.split(/[，,]/).map((itemStr: string) => {
-        const parts = itemStr.trim().split(/\s*[xX×]\s*/);
-        const product = parts[0] ? parts[0].trim() : '未知商品';
-        const quantity = Number(parts[1]) || 1;
-        let price = 0;
-        // 自動對應單價（可依實際品項再擴充）
-        if (product.includes('原味蘿蔔糕')) price = 250;
-        else if (product.includes('芋頭粿')) price = 350;
-        else if (product.includes('台式鹹蘿蔔糕')) price = 350;
-        else if (product.includes('鳳梨豆腐乳')) price = 300;
-        // 如果 Google Sheet 提供單價，則使用提供的單價（第三段）
-        if (parts.length > 2 && parts[2] && !isNaN(Number(parts[2]))) {
-          price = Number(parts[2]);
-        }
-        const safePrice = isNaN(price) || price < 0 ? 0 : price;
-        const safeQty = isNaN(quantity) || quantity < 0 ? 0 : quantity;
-        return {
-          product,
-          quantity: safeQty,
-          price: safePrice,
-          subtotal: safePrice * safeQty,
-        };
-      });
-    } else if (Array.isArray(row.items)) {
-      // 如果 items 已經是陣列格式 (雖然目前邏輯是字串，但增加彈性)
-      itemsArray = row.items.map((item: { product?: string; quantity?: number; price?: number }) => {
-        let price = Number(item.price);
-        let quantity = Number(item.quantity);
-        price = isNaN(price) || price < 0 ? 0 : price;
-        quantity = isNaN(quantity) || quantity < 0 ? 0 : quantity;
-        return {
-          product: String(item.product || '未知商品'),
-          quantity,
-          price,
-          subtotal: price * quantity,
-        };
-      });
+    if (error) {
+      console.error('Supabase 訂單查詢錯誤:', error);
+      throw new Error(`讀取訂單失敗: ${error.message}`);
     }
 
-    // 嘗試將各種日期格式轉換為 YYYY-MM-DD
-    let formattedDueDate = '';
-    if (row.dueDate) {
-      try {
-        const dateObj = new Date(String(row.dueDate).replace(/-/g, '/'));
-        if (!isNaN(dateObj.getTime())) {
-          const year = dateObj.getFullYear();
-          const month = (dateObj.getMonth() + 1).toString().padStart(2, '0');
-          const day = dateObj.getDate().toString().padStart(2, '0');
-          formattedDueDate = `${year}-${month}-${day}`;
-        }
-      } catch (e) {
-        console.warn(`無法解析日期: ${row.dueDate}`);
+    if (!orders) {
+      console.warn('Supabase 回傳空資料');
+      return [];
+    }
+
+    // 獲取訂單商品明細
+    const orderIds = orders.map(order => order.id);
+    let orderItems: any[] = [];
+    
+    if (orderIds.length > 0) {
+      const { data: items, error: itemsError } = await supabase
+        .from('order_items')
+        .select('*')
+        .in('order_id', orderIds);
+
+      if (itemsError) {
+        console.error('訂單商品明細查詢錯誤:', itemsError);
+      } else {
+        orderItems = items || [];
       }
     }
 
-    return {
-      createdAt,
-      id,
-      orderNumber,
-      customer: {
-        name: customerName,
-        phone: customerPhone
-      },
-      items: itemsArray,
-      total: (!isNaN(Number(row.amount)) && Number(row.amount) > 0)
-        ? Number(row.amount)
-        : itemsArray.reduce((sum, i) => sum + i.subtotal, 0),
-      dueDate: formattedDueDate,
-      deliveryTime: String(row.deliveryTime || ''),
-      notes: String(row.note || (row as any).customer?.note || row['note'] || row['備註'] || ''),
-      status: String(row.status || '訂單確認中'), // 提供預設狀態
-      deliveryMethod: String(row.deliveryMethod || ''),
-      deliveryAddress: String(row.deliveryAddress || ''),
-      paymentMethod: String(row.paymentMethod || ''),
-      paymentStatus: String(row.paymentStatus || row['paymentStatus'] || row['款項'] || '')
+    // 將 Supabase 資料轉換成前端 Order 型別
+    const ordersWithItems: Order[] = orders.map((order) => {
+      const items = orderItems
+        .filter(item => item.order_id === order.id)
+        .map(item => ({
+          product: item.product_name || '未知商品',
+          quantity: item.quantity || 0,
+          price: Number(item.unit_price) || 0,
+          subtotal: Number(item.total_price) || 0,
+        }));
+
+      // 確保狀態符合類型定義
+      const validStatus = ['訂單確認中', '已抄單', '已出貨', '取消訂單'].includes(order.status) 
+        ? order.status as '訂單確認中' | '已抄單' | '已出貨' | '取消訂單'
+        : '訂單確認中';
+
+      return {
+        createdAt: order.created_at?.split('T')[0] || '',
+        id: order.id,
+        orderNumber: order.order_number || '',
+        customer: {
+          name: order.customer_name || '',
+          phone: order.customer_phone || ''
+        },
+        items,
+        total: Number(order.total_amount) || 0,
+        dueDate: order.due_date || '',
+        deliveryTime: order.delivery_time || '',
+        notes: order.notes || '',
+        status: validStatus,
+        deliveryMethod: order.delivery_method || '',
+        deliveryAddress: order.delivery_address || order.customer_address || '',
+        paymentMethod: order.payment_method || '',
+        paymentStatus: (order.payment_status as PaymentStatus) || ''
+      };
+    });
+
+    // 更新快取
+    orderCache = {
+      timestamp: now,
+      data: ordersWithItems,
+      filters: filters ? { ...filters } : undefined
     };
-  });
 
-  // 更新快取
-  orderCache = {
-    timestamp: now,
-    data: orders,
-    filters: filters ? { ...filters } : undefined
-  };
-
-  // 有過濾條件時前端進行過濾
-  if (filters) {
-    orders = filterOrdersInMemory(orders, filters);
+    // 有過濾條件時前端進行過濾
+    const filteredOrders = filters ? filterOrdersInMemory(ordersWithItems, filters) : ordersWithItems;
+    
+    return filteredOrders;
+  } catch (error) {
+    console.error('fetchOrders 錯誤:', error);
+    throw error;
   }
-
-  return orders;
 };
 
 // 在記憶體中過濾訂單資料的函數
@@ -466,200 +309,183 @@ export const fetchOrderStats = async (): Promise<OrderStats> => {
   };
 };
 
-// 注意：Google Sheets API 不支援直接修改資料，若需更新請自行設計後端 API 處理
+// 更新訂單狀態
 export const updateOrderStatus = async (id: string, status: '訂單確認中' | '已抄單' | '已出貨' | '取消訂單'): Promise<void> => {
-  // 添加時間戳和隨機數，確保每次請求都是唯一的
-  const timestamp = Date.now();
-  const nonce = Math.random().toString(36).substring(2, 15);
+  try {
+    const { error } = await supabase
+      .from('orders')
+      .update({ 
+        status,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id);
 
-  // 構建 API 端點和參數
-  const params = new URLSearchParams({
-    _: timestamp.toString(),
-    nonce: nonce
-  });
-  
-  const endpoint = `/orders/status?${params.toString()}`;
-
-  const res = await apiCallWithFallback(endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ id, status, timestamp, nonce }),
-  });
-  if (!res.ok) {
-    let errorMsg = '更新訂單狀態失敗';
-    try {
-      const errorResult = await res.json();
-      errorMsg = errorResult.message || errorMsg;
-    } catch (e) {
-      errorMsg = `更新訂單狀態失敗: ${res.statusText}`;
+    if (error) {
+      console.error('更新訂單狀態失敗:', error);
+      throw new Error(`更新訂單狀態失敗: ${error.message}`);
     }
-    throw new Error(errorMsg);
-  }
-  const result = await res.json();
-  if (!result.success) throw new Error(result.message || '更新訂單狀態失敗');
 
-  // 成功更新後清除快取
-  clearOrderCache();
+    clearOrderCache(); // 清除快取，強制重新獲取最新數據
+  } catch (error) {
+    console.error('updateOrderStatus 錯誤:', error);
+    throw error;
+  }
 };
 
 // 批次更新訂單狀態
 export const batchUpdateOrderStatus = async (ids: string[], status: '訂單確認中' | '已抄單' | '已出貨' | '取消訂單'): Promise<void> => {
-  // 使用 Promise.all 實現併發請求，提高批次處理效率
   try {
-    await Promise.all(ids.map(id => updateOrderStatus(id, status)));
+    const { error } = await supabase
+      .from('orders')
+      .update({ 
+        status,
+        updated_at: new Date().toISOString()
+      })
+      .in('id', ids);
 
-    // 批次操作成功後清除快取
+    if (error) {
+      console.error('批次更新訂單狀態失敗:', error);
+      throw new Error(`批次更新訂單狀態失敗: ${error.message}`);
+    }
+
     clearOrderCache();
   } catch (error) {
-    console.error('批次更新訂單狀態失敗:', error);
+    console.error('batchUpdateOrderStatus 錯誤:', error);
+    throw error;
+  }
+};
+
+// 更新款項狀態
+export const updateOrderPaymentStatus = async (id: string, paymentStatus: string): Promise<void> => {
+  try {
+    const { error } = await supabase
+      .from('orders')
+      .update({ 
+        payment_status: paymentStatus,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id);
+
+    if (error) {
+      console.error('更新款項狀態失敗:', error);
+      throw new Error(`更新款項狀態失敗: ${error.message}`);
+    }
+
+    clearOrderCache();
+  } catch (error) {
+    console.error('updateOrderPaymentStatus 錯誤:', error);
     throw error;
   }
 };
 
 // 批次更新款項狀態
-export const updateOrderPaymentStatus = async (id: string, paymentStatus: string): Promise<void> => {
-  // 添加時間戳和隨機數，確保每次請求都是唯一的
-  const timestamp = Date.now();
-  const nonce = Math.random().toString(36).substring(2, 15);
-
-  // 使用新的 Supabase API 端點
-  const workersEndpoint = '/orders/payment';
-  const legacyEndpoint = `/api/update_payment_status.php?_=${timestamp}&nonce=${nonce}`;
-  
-  // 優先嘗試 Workers API
-  let res;
-  try {
-    res = await apiCallWithFallback(workersEndpoint, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ id, status: paymentStatus }),
-    });
-  } catch (workersError) {
-    console.log('Workers API 失敗，嘗試 PHP API:', workersError);
-    // Fallback 到 PHP API
-    res = await apiCallWithFallback(legacyEndpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ id, paymentStatus, timestamp, nonce }),
-    });
-  }
-  
-  if (!res.ok) {
-    let errorMsg = '更新款項狀態失敗';
-    try {
-      const errorResult = await res.json();
-      errorMsg = errorResult.message || errorMsg;
-    } catch (e) {
-      errorMsg = `更新款項狀態失敗: ${res.statusText}`;
-    }
-    throw new Error(errorMsg);
-  }
-  const result = await res.json();
-  if (!result.success) throw new Error(result.message || '更新款項狀態失敗');
-
-  // 成功更新後清除快取
-  clearOrderCache();
-};
-
 export const batchUpdateOrderPaymentStatus = async (ids: string[], paymentStatus: string): Promise<void> => {
-  // 使用 Promise.all 實現併發請求，提高批次處理效率
   try {
-    await Promise.all(ids.map(id => updateOrderPaymentStatus(id, paymentStatus)));
+    const { error } = await supabase
+      .from('orders')
+      .update({ 
+        payment_status: paymentStatus,
+        updated_at: new Date().toISOString()
+      })
+      .in('id', ids);
 
-    // 批次操作成功後清除快取
+    if (error) {
+      console.error('批次更新款項狀態失敗:', error);
+      throw new Error(`批次更新款項狀態失敗: ${error.message}`);
+    }
+
     clearOrderCache();
   } catch (error) {
-    console.error('批次更新款項狀態失敗:', error);
+    console.error('batchUpdateOrderPaymentStatus 錯誤:', error);
     throw error;
   }
 };
 
 // 更新訂單商品
 export const updateOrderItems = async (id: string, items: OrderItem[], total: number): Promise<void> => {
-  // 添加時間戳和隨機數，確保每次請求都是唯一的
-  const timestamp = Date.now();
-  const nonce = Math.random().toString(36).substring(2, 15);
+  try {
+    // 開始事務
+    const { error: deleteError } = await supabase
+      .from('order_items')
+      .delete()
+      .eq('order_id', id);
 
-  // 構建 API 端點和參數
-  const params = new URLSearchParams({
-    _: timestamp.toString(),
-    nonce: nonce
-  });
-  
-  const endpoint = `/orders/items?${params.toString()}`;
-
-  const res = await apiCallWithFallback(endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ id, items, total, timestamp, nonce }),
-  });
-
-  if (!res.ok) {
-    let errorMsg = '更新訂單商品失敗';
-    try {
-      const errorResult = await res.json();
-      errorMsg = errorResult.message || errorMsg;
-    } catch (e) {
-      errorMsg = `更新訂單商品失敗: ${res.statusText}`;
+    if (deleteError) {
+      throw new Error(`刪除舊商品明細失敗: ${deleteError.message}`);
     }
-    throw new Error(errorMsg);
+
+    // 插入新的商品明細
+    if (items.length > 0) {
+      const orderItems = items.map(item => ({
+        order_id: id,
+        product_name: item.product,
+        quantity: item.quantity,
+        unit_price: item.price,
+        total_price: item.subtotal
+      }));
+
+      const { error: insertError } = await supabase
+        .from('order_items')
+        .insert(orderItems);
+
+      if (insertError) {
+        throw new Error(`插入新商品明細失敗: ${insertError.message}`);
+      }
+    }
+
+    // 更新訂單總金額
+    const { error: updateError } = await supabase
+      .from('orders')
+      .update({ 
+        total_amount: total,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id);
+
+    if (updateError) {
+      throw new Error(`更新訂單總金額失敗: ${updateError.message}`);
+    }
+
+    clearOrderCache();
+  } catch (error) {
+    console.error('updateOrderItems 錯誤:', error);
+    throw error;
   }
-
-  const result = await res.json();
-  if (!result.success) throw new Error(result.message || '更新訂單商品失敗');
-
-  // 成功更新後清除快取
-  clearOrderCache();
 };
 
 // 刪除訂單
 export const deleteOrder = async (id: string): Promise<any> => {
-  // 添加時間戳和隨機數，確保每次請求都是唯一的
-  const timestamp = Date.now();
-  const nonce = Math.random().toString(36).substring(2, 15);
+  try {
+    // 先刪除訂單商品明細
+    const { error: deleteItemsError } = await supabase
+      .from('order_items')
+      .delete()
+      .eq('order_id', id);
 
-  // 構建 API 端點和參數
-  const params = new URLSearchParams({
-    _: timestamp.toString(),
-    nonce: nonce
-  });
-  
-  const endpoint = `/orders/delete?${params.toString()}`;
-
-  // 處理刪除訂單的邏輯
-  const res = await apiCallWithFallback(endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ id, timestamp, nonce }),
-  });
-  if (!res.ok) {
-    let errorMsg = '刪除訂單失敗';
-    try {
-      const errorResult = await res.json();
-      errorMsg = errorResult.message || errorMsg;
-    } catch (e) {
-      errorMsg = `刪除訂單失敗: ${res.statusText}`;
+    if (deleteItemsError) {
+      throw new Error(`刪除訂單商品明細失敗: ${deleteItemsError.message}`);
     }
-    throw new Error(errorMsg);
+
+    // 刪除訂單
+    const { error: deleteOrderError } = await supabase
+      .from('orders')
+      .delete()
+      .eq('id', id);
+
+    if (deleteOrderError) {
+      throw new Error(`刪除訂單失敗: ${deleteOrderError.message}`);
+    }
+
+    clearOrderCache();
+
+    return {
+      success: true,
+      message: '訂單刪除成功'
+    };
+  } catch (error) {
+    console.error('deleteOrder 錯誤:', error);
+    throw error;
   }
-  const result = await res.json();
-  if (!result.success) throw new Error(result.message || '刪除訂單失敗');
-
-  // 成功刪除後清除快取
-  clearOrderCache();
-
-  // 返回完整的結果，包含重排序信息
-  return result;
 };
 
 // 批次刪除訂單
@@ -674,46 +500,40 @@ export const batchDeleteOrders = async (ids: string[]): Promise<{
   totalDeleted: number;
   totalFailed: number;
 }> => {
-  // 添加時間戳和隨機數，確保每次請求都是唯一的
-  const timestamp = Date.now();
-  const nonce = Math.random().toString(36).substring(2, 15);
+  try {
+    const results = [];
+    let totalDeleted = 0;
+    let totalFailed = 0;
 
-  // 構建 API 端點和參數
-  const params = new URLSearchParams({
-    _: timestamp.toString(),
-    nonce: nonce
-  });
-  
-  const endpoint = `/orders/batch-delete?${params.toString()}`;
-
-  // 處理批次刪除訂單的邏輯
-  const res = await apiCallWithFallback(endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ ids, timestamp, nonce }),
-  });
-
-  if (!res.ok) {
-    let errorMsg = '批次刪除訂單失敗';
-    try {
-      const errorResult = await res.json();
-      errorMsg = errorResult.message || errorMsg;
-    } catch (e) {
-      errorMsg = `批次刪除訂單失敗: ${res.statusText}`;
+    for (const id of ids) {
+      try {
+        await deleteOrder(id);
+        results.push({
+          id,
+          success: true,
+          message: '刪除成功'
+        });
+        totalDeleted++;
+      } catch (error) {
+        results.push({
+          id,
+          success: false,
+          message: error instanceof Error ? error.message : '刪除失敗'
+        });
+        totalFailed++;
+      }
     }
-    throw new Error(errorMsg);
+
+    return {
+      success: totalDeleted > 0,
+      results,
+      totalDeleted,
+      totalFailed
+    };
+  } catch (error) {
+    console.error('batchDeleteOrders 錯誤:', error);
+    throw error;
   }
-
-  const result = await res.json();
-  if (!result.success) throw new Error(result.message || '批次刪除訂單失敗');
-
-  // 成功刪除後清除快取
-  clearOrderCache();
-
-  // 返回完整的結果
-  return result;
 };
 
 // 重複訂單檢測相關類型定義
@@ -824,27 +644,6 @@ export const generatePrintData = (orders: Order[]): {
 };
 
 export const exportToCsv = (orders: Order[]): string => {
-  // 黑貓宅急便格式標題
-  /*const headers = [
-    '訂單編號',
-    '溫層',
-    '規格',
-    '代收貨款',
-    '收件人-姓名',
-    '收件人-電話',
-    '收件人-地址',
-    '寄件人-姓名',
-    '寄件人-電話',
-    '寄件人-地址',
-    '出貨日期',
-    '希望配達日',
-    '希望配合時段',
-    '品類代碼',
-    '品名',
-    '易碎物品',
-    '備註'
-  ].join(',');*/
-
   // 固定寄件人資訊
   const senderName = '曾炳傑';
   const senderPhone = '0937292815';
@@ -921,12 +720,96 @@ export const exportToCsv = (orders: Order[]): string => {
   });
 
   // 使用標準的Unicode (UTF-8)格式
-  // 1. 不使用BOM標記，採用純UTF-8編碼
-  // 2. 使用Windows標準的CRLF換行符
-  // 3. 確保所有中文字符正確編碼
-  //const BOM = '\uFEFF';
-  const csvContent = rows.join('\r\n');//[headers, ...rows].join('\r\n');
+  const csvContent = rows.join('\r\n');
 
-  // 返回完整的CSV內容，包含BOM
-  return  csvContent;//BOM +csvContent;
+  return csvContent;
+};
+
+// 新增訂單到 Supabase
+export const createOrder = async (orderData: {
+  customerName: string;
+  customerPhone: string;
+  customerAddress?: string;
+  deliveryMethod: string;
+  deliveryAddress?: string;
+  deliveryTime?: string;
+  dueDate?: string;
+  paymentMethod: string;
+  paymentStatus?: string;
+  status?: string;
+  notes?: string;
+  items: OrderItem[];
+  totalAmount: number;
+}): Promise<Order> => {
+  try {
+    // 插入訂單
+    const { data: order, error: orderError } = await supabase
+      .from('orders')
+      .insert({
+        order_number: `ORD-${Date.now()}`,
+        customer_name: orderData.customerName,
+        customer_phone: orderData.customerPhone,
+        customer_address: orderData.customerAddress,
+        delivery_method: orderData.deliveryMethod,
+        delivery_address: orderData.deliveryAddress,
+        delivery_time: orderData.deliveryTime,
+        due_date: orderData.dueDate,
+        payment_method: orderData.paymentMethod,
+        payment_status: orderData.paymentStatus || '未收費',
+        status: orderData.status || '訂單確認中',
+        notes: orderData.notes,
+        total_amount: orderData.totalAmount
+      })
+      .select()
+      .single();
+
+    if (orderError) {
+      throw new Error(`新增訂單失敗: ${orderError.message}`);
+    }
+
+    // 插入訂單商品明細
+    if (orderData.items.length > 0) {
+      const orderItems = orderData.items.map(item => ({
+        order_id: order.id,
+        product_name: item.product,
+        quantity: item.quantity,
+        unit_price: item.price,
+        total_price: item.subtotal
+      }));
+
+      const { error: itemsError } = await supabase
+        .from('order_items')
+        .insert(orderItems);
+
+      if (itemsError) {
+        throw new Error(`新增訂單商品明細失敗: ${itemsError.message}`);
+      }
+    }
+
+    clearOrderCache();
+
+    // 返回格式化的訂單
+    return {
+      createdAt: order.created_at?.split('T')[0] || '',
+      id: order.id,
+      orderNumber: order.order_number || '',
+      customer: {
+        name: order.customer_name || '',
+        phone: order.customer_phone || ''
+      },
+      items: orderData.items,
+      total: orderData.totalAmount,
+      dueDate: order.due_date || '',
+      deliveryTime: order.delivery_time || '',
+      notes: order.notes || '',
+      status: (order.status as '訂單確認中' | '已抄單' | '已出貨' | '取消訂單') || '訂單確認中',
+      deliveryMethod: order.delivery_method || '',
+      deliveryAddress: order.delivery_address || order.customer_address || '',
+      paymentMethod: order.payment_method || '',
+      paymentStatus: (order.payment_status as PaymentStatus) || ''
+    };
+  } catch (error) {
+    console.error('createOrder 錯誤:', error);
+    throw error;
+  }
 };

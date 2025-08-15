@@ -1,58 +1,5 @@
 import { Customer, CustomerWithStats, CustomerOrder, CustomerFilterCriteria, CustomerStats } from '@/types/customer';
-import { fetchOrders } from './orderService';
-
-// 動態 API 配置系統 (與 orderService 保持一致)
-const getApiConfig = () => {
-  const hostname = window.location.hostname;
-  const port = window.location.port;
-  const protocol = window.location.protocol;
-  
-  // 檢查是否在 Cloudflare Pages 環境
-  const isCloudflarePages = hostname.includes('.pages.dev') || 
-                           hostname.includes('lopokao.767780.xyz') ||
-                           hostname.includes('node.767780.xyz');
-  
-  // 本地開發環境
-  const isLocalDev = hostname === 'localhost' || hostname === '127.0.0.1';
-  
-  console.log('🌍 客戶服務環境檢測:', {
-    hostname,
-    port,
-    protocol,
-    isCloudflarePages,
-    isLocalDev
-  });
-  
-  return {
-    isLocalDev,
-    isCloudflarePages,
-    // Workers API 端點 (生產環境)
-    workersApiUrl: 'https://sheet-order-api.ruby7677.workers.dev',
-    // 本地 Workers API (開發時)
-    localWorkersApiUrl: 'http://127.0.0.1:5714',
-    // 傳統 PHP API (後備方案)
-    legacyApiBase: isLocalDev && port === '8080' 
-      ? '/sheet-order-dashboard-main/api' 
-      : '/api'
-  };
-};
-
-// 根據環境動態選擇 API 端點
-const getApiEndpoint = (endpoint: string) => {
-  const config = getApiConfig();
-  
-  // 優先嘗試 Workers API
-  if (config.isCloudflarePages || !config.isLocalDev) {
-    // 生產環境或 Cloudflare Pages: 使用生產 Workers API
-    return `${config.workersApiUrl}${endpoint}`;
-  } else if (config.isLocalDev) {
-    // 本地開發: 嘗試本地 Workers API，失敗則降級到傳統 API
-    return `${config.localWorkersApiUrl}${endpoint}`;
-  } else {
-    // 後備方案: 使用傳統 API
-    return `${config.legacyApiBase}${endpoint}`;
-  }
-};
+import { supabase } from '@/integrations/supabase/client';
 
 // 客戶資料快取
 let customerCache: {
@@ -72,8 +19,7 @@ const customerOrdersCache: {
 // 快取有效期（毫秒）
 const CACHE_DURATION = 15 * 1000; // 15秒
 
-// 從後端 API 獲取客戶資料
-// 從訂單資料推導客戶清單與統計（避免呼叫不存在或失敗的客戶 API）
+// 從 Supabase 獲取客戶資料
 export const fetchCustomers = async (filters?: CustomerFilterCriteria): Promise<CustomerWithStats[]> => {
   // 檢查是否有快取且未過期
   const now = Date.now();
@@ -88,134 +34,38 @@ export const fetchCustomers = async (filters?: CustomerFilterCriteria): Promise<
     return customerCache.data;
   }
 
-  // 從訂單資料推導（備援方案）
-  const deriveFromOrders = async (): Promise<CustomerWithStats[]> => {
-    const orders = await fetchOrders();
-
-    const customersByPhone: { [phone: string]: typeof orders } = {} as any;
-    orders.forEach(o => {
-      const phone = o.customer?.phone?.trim();
-      if (!phone) return;
-      if (!customersByPhone[phone]) customersByPhone[phone] = [] as any;
-      (customersByPhone[phone] as any).push(o);
-    });
-
-    const customersWithStats: CustomerWithStats[] = Object.entries(customersByPhone).map(([phone, group]) => {
-      const latest = group[group.length - 1];
-      const name = latest.customer?.name || '';
-      const address = latest.deliveryAddress || '';
-      const region = extractRegion(address);
-      const deliveryMethod = latest.deliveryMethod || '';
-
-      const purchasedSet = new Set<string>();
-      group.forEach(o => o.items.forEach(i => purchasedSet.add(i.product)));
-      const purchasedItems = Array.from(purchasedSet);
-
-      const itemsStr = latest.items.map(i => `${i.product} x ${i.quantity}`).join('、');
-
-      const c: CustomerWithStats = {
-        id: phone,
-        name,
-        phone,
-        deliveryMethod,
-        address,
-        contactMethod: '',
-        socialId: '',
-        orderTime: latest.createdAt || latest.dueDate || '',
-        items: itemsStr,
-        purchaseCount: group.length,
-        purchasedItems,
-        region,
-      };
-
-      return c;
-    });
-
-    return customersWithStats;
-  };
-
   try {
-    // 主要來源：從 Supabase 的客戶資料讀取
-    const apiEndpoint = getApiEndpoint('/customers');
-    console.log('📡 客戶資料 API 端點:', apiEndpoint);
-    
-    const resp = await fetch(`${apiEndpoint}?nonce=${now}`, {
-      headers: { 'Cache-Control': 'no-cache' },
-    });
-    const json = await resp.json();
+    // 從 Supabase 獲取客戶資料
+    const { data: customers, error } = await supabase
+      .from('customers')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-    if (!json?.success || !Array.isArray(json.data)) {
-      console.warn('客戶名單 API 回傳格式不正確，改用訂單資料推導');
-      const fallback = await deriveFromOrders();
-      customerCache = { timestamp: now, data: fallback, filters: filters ? { ...filters } : undefined };
-      return filters ? filterCustomersInMemory(fallback, filters) : fallback;
+    if (error) {
+      console.error('Supabase 客戶查詢錯誤:', error);
+      throw new Error(`讀取客戶資料失敗: ${error.message}`);
     }
 
-    type RawCustomer = {
-      id?: string | number;
-      name?: string;
-      phone?: string;
-      deliveryMethod?: string;
-      address?: string;
-      contactMethod?: string;
-      socialId?: string;
-      orderTime?: string;
-      items?: string;
-    };
+    if (!customers) {
+      console.warn('Supabase 客戶資料回傳空值');
+      return [];
+    }
 
-    // 以電話為 key 聚合，避免表內重複列
-    const groups: Record<string, CustomerWithStats> = {};
-    (json.data as RawCustomer[]).forEach((row, idx) => {
-      const phone = (row.phone || '').trim();
-      const name = (row.name || '').trim();
-      const address = (row.address || '').trim();
-      const deliveryMethod = (row.deliveryMethod || '').trim();
-      const orderTime = row.orderTime || '';
-      const itemsStr = row.items || '';
-
-      const purchased: string[] = [];
-      if (itemsStr) {
-        // 以常見分隔符拆分，並移除數量（x/X/×）
-        const parts = itemsStr.split(/[,，、\n]/).map(p => p.trim()).filter(Boolean);
-        parts.forEach(p => {
-          const product = p.split(/x|X|×/)[0].trim();
-          if (product) purchased.push(product);
-        });
-      }
-
-      const id = phone || String(row.id ?? idx);
-      const region = extractRegion(address);
-      const key = phone || id;
-
-      if (!groups[key]) {
-        groups[key] = {
-          id,
-          name,
-          phone,
-          deliveryMethod,
-          address,
-          contactMethod: row.contactMethod || '',
-          socialId: row.socialId || '',
-          orderTime,
-          items: itemsStr,
-          purchaseCount: 0,
-          purchasedItems: [],
-          region,
-        };
-      }
-
-      const g = groups[key];
-      g.purchaseCount += 1;
-      g.purchasedItems = Array.from(new Set([...g.purchasedItems, ...purchased]));
-      // 用較新的非空資料覆蓋
-      if (!g.name && name) g.name = name;
-      if (!g.address && address) g.address = address;
-      if (!g.deliveryMethod && deliveryMethod) g.deliveryMethod = deliveryMethod;
-      if (!g.orderTime && orderTime) g.orderTime = orderTime;
-      if (!g.items && itemsStr) g.items = itemsStr;
-    });
-
-    const customersWithStats = Object.values(groups);
+    // 轉換成前端格式並計算統計資料
+    const customersWithStats: CustomerWithStats[] = customers.map(customer => ({
+      id: customer.id,
+      name: customer.name || '',
+      phone: customer.phone || '',
+      deliveryMethod: customer.delivery_method || '',
+      address: customer.address || '',
+      contactMethod: customer.contact_method || '',
+      socialId: customer.social_id || '',
+      orderTime: customer.created_at?.split('T')[0] || '',
+      items: '', // 這個需要從訂單中推導
+      purchaseCount: customer.total_orders || 0,
+      purchasedItems: [], // 這個需要從訂單中推導
+      region: extractRegion(customer.address || ''),
+    }));
 
     // 更新快取
     customerCache = {
@@ -227,10 +77,8 @@ export const fetchCustomers = async (filters?: CustomerFilterCriteria): Promise<
     // 有過濾條件時前端進行過濾
     return filters ? filterCustomersInMemory(customersWithStats, filters) : customersWithStats;
   } catch (err) {
-    console.error('載入客戶名單失敗，改用訂單資料推導:', err);
-    const fallback = await deriveFromOrders();
-    customerCache = { timestamp: now, data: fallback, filters: filters ? { ...filters } : undefined };
-    return filters ? filterCustomersInMemory(fallback, filters) : fallback;
+    console.error('載入客戶資料失敗:', err);
+    throw err;
   }
 };
 
@@ -328,7 +176,6 @@ export const getCustomerStats = (customers: CustomerWithStats[]): CustomerStats 
 };
 
 // 獲取客戶訂單歷史
-// 從訂單資料推導客戶的訂單歷史
 export const fetchCustomerOrders = async (phone: string): Promise<CustomerOrder[]> => {
   // 檢查是否有快取且未過期
   const now = Date.now();
@@ -340,23 +187,48 @@ export const fetchCustomerOrders = async (phone: string): Promise<CustomerOrder[
     return customerOrdersCache[phone].data;
   }
 
-  const allOrders = await fetchOrders();
-  const orders = allOrders
-    .filter(o => o.customer?.phone === phone)
-    .map(o => ({
-      id: o.id,
-      orderTime: o.createdAt || o.dueDate || '',
-      items: o.items.map(i => `${i.product} x ${i.quantity}`).join(', '),
-      name: o.customer?.name,
+  try {
+    // 從 Supabase 獲取該客戶的訂單
+    const { data: orders, error } = await supabase
+      .from('orders')
+      .select(`
+        id,
+        order_number,
+        customer_name,
+        created_at,
+        order_items (
+          product_name,
+          quantity
+        )
+      `)
+      .eq('customer_phone', phone)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('客戶訂單查詢錯誤:', error);
+      throw new Error(`讀取客戶訂單失敗: ${error.message}`);
+    }
+
+    const customerOrders: CustomerOrder[] = (orders || []).map(order => ({
+      id: order.id,
+      orderTime: order.created_at?.split('T')[0] || '',
+      items: (order.order_items || [])
+        .map((item: any) => `${item.product_name} x ${item.quantity}`)
+        .join(', '),
+      name: order.customer_name || ''
     }));
 
-  // 更新快取
-  customerOrdersCache[phone] = {
-    timestamp: now,
-    data: orders,
-  };
+    // 更新快取
+    customerOrdersCache[phone] = {
+      timestamp: now,
+      data: customerOrders,
+    };
 
-  return orders;
+    return customerOrders;
+  } catch (error) {
+    console.error('fetchCustomerOrders 錯誤:', error);
+    throw error;
+  }
 };
 
 // 清除客戶資料快取
@@ -375,5 +247,108 @@ export const clearCustomerOrderCache = (phone?: string) => {
       delete customerOrdersCache[key];
     });
     console.log('已清除所有客戶訂單快取');
+  }
+};
+
+// 新增客戶到 Supabase
+export const createCustomer = async (customerData: {
+  name: string;
+  phone: string;
+  address?: string;
+  deliveryMethod?: string;
+  contactMethod?: string;
+  socialId?: string;
+  notes?: string;
+}): Promise<Customer> => {
+  try {
+    const { data: customer, error } = await supabase
+      .from('customers')
+      .insert({
+        name: customerData.name,
+        phone: customerData.phone,
+        address: customerData.address,
+        delivery_method: customerData.deliveryMethod,
+        contact_method: customerData.contactMethod,
+        social_id: customerData.socialId,
+        notes: customerData.notes
+      })
+      .select()
+      .single();
+
+    if (error) {
+      throw new Error(`新增客戶失敗: ${error.message}`);
+    }
+
+    clearCustomerCache();
+
+    return {
+      id: customer.id,
+      name: customer.name,
+      phone: customer.phone,
+      address: customer.address || '',
+      deliveryMethod: customer.delivery_method || '',
+      contactMethod: customer.contact_method || '',
+      socialId: customer.social_id || ''
+    };
+  } catch (error) {
+    console.error('createCustomer 錯誤:', error);
+    throw error;
+  }
+};
+
+// 更新客戶資料
+export const updateCustomer = async (id: string, customerData: {
+  name?: string;
+  phone?: string;
+  address?: string;
+  deliveryMethod?: string;
+  contactMethod?: string;
+  socialId?: string;
+  notes?: string;
+}): Promise<void> => {
+  try {
+    const updateData: any = {};
+    if (customerData.name !== undefined) updateData.name = customerData.name;
+    if (customerData.phone !== undefined) updateData.phone = customerData.phone;
+    if (customerData.address !== undefined) updateData.address = customerData.address;
+    if (customerData.deliveryMethod !== undefined) updateData.delivery_method = customerData.deliveryMethod;
+    if (customerData.contactMethod !== undefined) updateData.contact_method = customerData.contactMethod;
+    if (customerData.socialId !== undefined) updateData.social_id = customerData.socialId;
+    if (customerData.notes !== undefined) updateData.notes = customerData.notes;
+    
+    updateData.updated_at = new Date().toISOString();
+
+    const { error } = await supabase
+      .from('customers')
+      .update(updateData)
+      .eq('id', id);
+
+    if (error) {
+      throw new Error(`更新客戶資料失敗: ${error.message}`);
+    }
+
+    clearCustomerCache();
+  } catch (error) {
+    console.error('updateCustomer 錯誤:', error);
+    throw error;
+  }
+};
+
+// 刪除客戶
+export const deleteCustomer = async (id: string): Promise<void> => {
+  try {
+    const { error } = await supabase
+      .from('customers')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      throw new Error(`刪除客戶失敗: ${error.message}`);
+    }
+
+    clearCustomerCache();
+  } catch (error) {
+    console.error('deleteCustomer 錯誤:', error);
+    throw error;
   }
 };
