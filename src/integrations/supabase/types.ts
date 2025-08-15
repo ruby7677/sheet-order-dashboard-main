@@ -480,7 +480,42 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      admin_users_safe: {
+        Row: {
+          created_at: string | null
+          email: string | null
+          full_name: string | null
+          id: string | null
+          is_active: boolean | null
+          last_login: string | null
+          role: string | null
+          updated_at: string | null
+          username: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email?: string | null
+          full_name?: string | null
+          id?: string | null
+          is_active?: boolean | null
+          last_login?: string | null
+          role?: string | null
+          updated_at?: string | null
+          username?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string | null
+          full_name?: string | null
+          id?: string | null
+          is_active?: boolean | null
+          last_login?: string | null
+          role?: string | null
+          updated_at?: string | null
+          username?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       gtrgm_compress: {
@@ -503,6 +538,10 @@ export type Database = {
         Args: { "": unknown }
         Returns: unknown
       }
+      is_super_admin: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
       set_limit: {
         Args: { "": number }
         Returns: number
@@ -514,6 +553,14 @@ export type Database = {
       show_trgm: {
         Args: { "": string }
         Returns: string[]
+      }
+      update_admin_password: {
+        Args: { new_password_hash: string }
+        Returns: boolean
+      }
+      update_admin_profile: {
+        Args: { new_full_name?: string; new_last_login?: string }
+        Returns: boolean
       }
       validate_data_integrity: {
         Args: Record<PropertyKey, never>
