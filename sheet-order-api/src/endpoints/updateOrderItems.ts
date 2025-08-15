@@ -1,12 +1,12 @@
 import { OpenAPIRoute } from 'chanfana';
 import { z } from 'zod';
 import { AppContext, ApiResponse, ApiError } from '../types';
-import { GoogleSheetsService } from '../services/GoogleSheetsService';
+import { SupabaseService } from '../services/SupabaseService';
 import { CacheService } from '../services/CacheService';
 
 /**
- * 更新 Google Sheets 訂單商品和金額的 API 端點
- * 接收新的商品清單，重新計算總金額，並更新到 Google Sheets
+ * 更新 Supabase 訂單商品和金額的 API 端點
+ * 接收新的商品清單，重新計算總金額，並更新到 Supabase
  */
 export class UpdateOrderItems extends OpenAPIRoute {
 	// 商品項目的 Zod 驗證結構
@@ -20,7 +20,7 @@ export class UpdateOrderItems extends OpenAPIRoute {
 	schema = {
 		tags: ['Orders'],
 		summary: '更新訂單商品和金額',
-		description: '更新 Google Sheets 中指定訂單的商品清單和總金額',
+		description: '更新 Supabase 中指定訂單的商品清單和總金額',
 		request: {
 			body: {
 				content: {
@@ -125,74 +125,22 @@ export class UpdateOrderItems extends OpenAPIRoute {
 
 			// 初始化服務
 			const env = c.env;
-			const sheetsService = new GoogleSheetsService(
-				env.GOOGLE_SERVICE_ACCOUNT_KEY,
-				env.GOOGLE_SHEET_ID
+			const supabaseService = new SupabaseService(
+				env.SUPABASE_URL,
+				env.SUPABASE_ANON_KEY
 			);
 			const cacheService = new CacheService(
 				env.CACHE_KV,
 				parseInt(env.CACHE_DURATION || '15')
 			);
 
-			// 從 Google Sheets 讀取當前資料（Sheet1 工作表）
-			const sheetData = await sheetsService.getSheetData('Sheet1');
+			// 執行訂單商品更新
+			await supabaseService.updateOrderItems(id, items, total);
 
-			if (!sheetData || sheetData.length === 0) {
-				c.header('X-Response-Time', `${Date.now() - startTime}ms`);
-				return c.json({
-					success: false,
-					message: '無法讀取工作表資料',
-					timestamp: Math.floor(Date.now() / 1000),
-					request_id: requestId
-				}, 500);
-			}
-
-			// 根據原 PHP 邏輯，使用固定的欄位索引
-			// items 在第 8 欄 (索引 8)，amount 在第 9 欄 (索引 9)
-			const itemsCol = 8;  // I欄 - 購買項目
-			const amountCol = 9; // J欄 - 金額
-
-			// 尋找目標訂單行（使用行索引作為 ID）
-			const parsedId = parseInt(id.toString());
-			if (isNaN(parsedId) || parsedId <= 0 || parsedId >= sheetData.length) {
-				c.header('X-Response-Time', `${Date.now() - startTime}ms`);
-				return c.json({
-					success: false,
-					message: '找不到指定訂單',
-					timestamp: Math.floor(Date.now() / 1000),
-					request_id: requestId
-				}, 404);
-			}
-
-			const targetRow = parsedId;
-
-			// 將商品陣列轉換為字串格式 (例如: "原味蘿蔔糕 x 2, 芋頭粿 x 1")
+			// 將商品陣列轉換為字串格式用於回應 (例如: "原味蘿蔔糕 x 2, 芋頭粿 x 1")
 			const itemsString = items.map(item => 
 				`${item.product} x ${item.quantity}`
 			).join(', ');
-
-			// Google Sheets API 使用 1-based 行號，所以需要 +1
-			const sheetRow = targetRow + 1;
-
-			// 準備批次更新資料
-			const updates = [];
-
-			// 更新商品欄位 (I欄)
-			const itemsRange = `Sheet1!${String.fromCharCode(65 + itemsCol)}${sheetRow}`;
-			updates.push({
-				range: itemsRange,
-				values: [[itemsString]]
-			});
-
-			// 更新金額欄位 (J欄)
-			const amountRange = `Sheet1!${String.fromCharCode(65 + amountCol)}${sheetRow}`;
-			updates.push({
-				range: amountRange,
-				values: [[total]]
-			});
-
-			// 執行批次更新
-			await sheetsService.batchUpdateSheetData(updates, 'RAW');
 
 			// 更新成功後清除相關快取（參考原 PHP 邏輯）
 			await this.clearRelatedCache(cacheService);
