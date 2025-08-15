@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useAuth } from '../hooks/useAuth';
+import { useAuth } from '../components/AuthProvider';
 import { MigrationPanel } from '@/components/MigrationPanel';
 
 const AdminDashboardPage: React.FC = () => {

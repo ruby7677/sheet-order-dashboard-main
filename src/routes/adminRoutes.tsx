@@ -2,7 +2,7 @@ import React from 'react';
 import { Navigate } from 'react-router-dom';
 import AdminLoginPage from '../pages/AdminLoginPage';
 import AdminDashboardPage from '../pages/AdminDashboardPage';
-import { useAuth } from '../hooks/useAuth';
+import { useAuth } from '../components/AuthProvider';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated, isLoading } = useAuth();

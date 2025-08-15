@@ -37,19 +37,16 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // 檢查本地存儲中的令牌
     const storedToken = localStorage.getItem('admin_token');
     const storedUser = localStorage.getItem('admin_user');
     
     if (storedToken && storedUser) {
       try {
         const userData = JSON.parse(storedUser);
-        // 驗證令牌是否過期
         if (isTokenValid(storedToken)) {
           setToken(storedToken);
           setUser(userData);
         } else {
-          // 令牌過期，清除存儲
           localStorage.removeItem('admin_token');
           localStorage.removeItem('admin_user');
         }
@@ -79,11 +76,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       if (result.success && result.token && result.user) {
         setToken(result.token);
         setUser(result.user);
-        
-        // 儲存到本地存儲
         localStorage.setItem('admin_token', result.token);
         localStorage.setItem('admin_user', JSON.stringify(result.user));
-        
         return { success: true };
       } else {
         return { success: false, message: result.message || '登入失敗' };
@@ -126,7 +120,6 @@ function isTokenValid(token: string): boolean {
 
     const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
     
-    // 檢查過期時間
     if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
       return false;
     }
