@@ -486,80 +486,23 @@ export type Database = {
       }
     }
     Views: {
-      admin_profiles: {
-        Row: {
-          created_at: string | null
-          email: string | null
-          full_name: string | null
-          id: string | null
-          is_active: boolean | null
-          last_login: string | null
-          role: string | null
-          updated_at: string | null
-          username: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          email?: string | null
-          full_name?: string | null
-          id?: string | null
-          is_active?: boolean | null
-          last_login?: string | null
-          role?: string | null
-          updated_at?: string | null
-          username?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          email?: string | null
-          full_name?: string | null
-          id?: string | null
-          is_active?: boolean | null
-          last_login?: string | null
-          role?: string | null
-          updated_at?: string | null
-          username?: string | null
-        }
-        Relationships: []
-      }
-      safe_admin_profiles: {
-        Row: {
-          created_at: string | null
-          email: string | null
-          full_name: string | null
-          id: string | null
-          is_active: boolean | null
-          last_login: string | null
-          role: string | null
-          updated_at: string | null
-          username: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          email?: string | null
-          full_name?: string | null
-          id?: string | null
-          is_active?: boolean | null
-          last_login?: string | null
-          role?: string | null
-          updated_at?: string | null
-          username?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          email?: string | null
-          full_name?: string | null
-          id?: string | null
-          is_active?: boolean | null
-          last_login?: string | null
-          role?: string | null
-          updated_at?: string | null
-          username?: string | null
-        }
-        Relationships: []
-      }
+      [_ in never]: never
     }
     Functions: {
+      get_current_admin_profile: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          created_at: string
+          email: string
+          full_name: string
+          id: string
+          is_active: boolean
+          last_login: string
+          role: string
+          updated_at: string
+          username: string
+        }[]
+      }
       gtrgm_compress: {
         Args: { "": unknown }
         Returns: unknown
@@ -612,7 +555,7 @@ export type Database = {
         Args: { new_full_name?: string; new_last_login?: string }
         Returns: boolean
       }
-      update_admin_safe_fields: {
+      update_current_admin_profile: {
         Args: { new_email?: string; new_full_name?: string }
         Returns: boolean
       }
