@@ -1,18 +1,18 @@
 import { OpenAPIRoute } from 'chanfana';
 import { z } from 'zod';
 import { AppContext, ApiResponse, ApiError } from '../types';
-import { GoogleSheetsService } from '../services/GoogleSheetsService';
+import { SupabaseService } from '../services/SupabaseService';
 import { CacheService } from '../services/CacheService';
 
 /**
- * 更新 Google Sheets 付款狀態的 API 端點
- * 直接更新指定行的付款狀態欄位（P 欄）
+ * 更新 Supabase 付款狀態的 API 端點
+ * 直接更新指定訂單的付款狀態欄位
  */
 export class UpdatePaymentStatus extends OpenAPIRoute {
 	schema = {
 		tags: ['Orders'],
 		summary: '更新付款狀態',
-		description: '更新 Google Sheets 中指定訂單的付款狀態（款項欄位）',
+		description: '更新 Supabase 中指定訂單的付款狀態（款項欄位）',
 		request: {
 			body: {
 				content: {
@@ -93,23 +93,31 @@ export class UpdatePaymentStatus extends OpenAPIRoute {
 
 			// 初始化服務
 			const env = c.env;
-			const sheetsService = new GoogleSheetsService(
-				env.GOOGLE_SERVICE_ACCOUNT_KEY,
-				env.GOOGLE_SHEET_ID
+			const supabaseService = new SupabaseService(
+				env.SUPABASE_URL,
+				env.SUPABASE_ANON_KEY
 			);
 			const cacheService = new CacheService(
 				env.CACHE_KV,
 				parseInt(env.CACHE_DURATION || '15')
 			);
 
-			// 計算要更新的儲存格範圍
-			// 參考原 PHP 邏輯：款項在 P 欄（index 15），rowId 對應實際行號（+1 因為有標題列）
-			const actualRowNumber = parsedRowId + 1; // 加上標題行
-			const rangeToUpdate = `Sheet1!P${actualRowNumber}`; // P 欄是付款狀態欄位
-
-			// 更新 Google Sheets 中的付款狀態
-			// 使用 USER_ENTERED 模式（參考原 PHP 檔案）
-			await sheetsService.updateSheetData(rangeToUpdate, [[paymentStatus]], 'USER_ENTERED');
+			// 直接更新 Supabase 中的付款狀態
+			// 由於前端可能傳入的是行索引，我們需要轉換為實際的訂單 ID
+			try {
+				await supabaseService.updatePaymentStatus(rowId.toString(), paymentStatus);
+			} catch (error) {
+				if (error instanceof Error && error.message.includes('找不到')) {
+					c.header('X-Response-Time', `${Date.now() - startTime}ms`);
+					return c.json({
+						success: false,
+						message: '找不到指定訂單',
+						timestamp: Math.floor(Date.now() / 1000),
+						request_id: requestId
+					}, 404);
+				}
+				throw error;
+			}
 
 			// 更新成功後清除相關快取（參考原 PHP 邏輯）
 			await this.clearRelatedCache(cacheService);

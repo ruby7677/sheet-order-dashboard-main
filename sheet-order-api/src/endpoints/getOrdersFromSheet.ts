@@ -1,18 +1,18 @@
 import { OpenAPIRoute } from 'chanfana';
 import { z } from 'zod';
 import { AppContext, Order, ApiResponse, ApiError } from '../types';
-import { GoogleSheetsService } from '../services/GoogleSheetsService';
+import { SupabaseService } from '../services/SupabaseService';
 import { CacheService } from '../services/CacheService';
 
 /**
- * 從 Google Sheets 讀取訂單資料的 API 端點
+ * 從 Supabase 讀取訂單資料的 API 端點
  * 支援快取機制和強制刷新功能
  */
 export class GetOrdersFromSheet extends OpenAPIRoute {
 	schema = {
 		tags: ['Orders'],
-		summary: '從 Google Sheets 讀取訂單資料',
-		description: '讀取 Google Sheets 中的所有訂單資料，支援 15 秒快取和強制刷新',
+		summary: '從 Supabase 讀取訂單資料',
+		description: '讀取 Supabase 中的所有訂單資料，支援 15 秒快取和強制刷新',
 		request: {
 			query: z.object({
 				refresh: z.string().optional().describe('強制刷新快取 (設為 "1" 啟用)'),
@@ -74,9 +74,9 @@ export class GetOrdersFromSheet extends OpenAPIRoute {
 
 			// 初始化服務
 			const env = c.env;
-			const sheetsService = new GoogleSheetsService(
-				env.GOOGLE_SERVICE_ACCOUNT_KEY,
-				env.GOOGLE_SHEET_ID
+			const supabaseService = new SupabaseService(
+				env.SUPABASE_URL,
+				env.SUPABASE_ANON_KEY
 			);
 			const cacheService = new CacheService(
 				env.CACHE_KV,
@@ -105,16 +105,16 @@ export class GetOrdersFromSheet extends OpenAPIRoute {
 				}
 			}
 
-			// 快取未命中或強制刷新，從 Google Sheets 獲取資料
+			// 快取未命中或強制刷新，從 Supabase 獲取資料
 			c.header('X-Cache', 'MISS');
 			if (forceRefresh) {
 				c.header('X-Cache-Refresh', 'Forced');
 			}
 
-			// 從 Google Sheets 讀取資料
-			const sheetData = await sheetsService.getSheetData('Sheet1');
+			// 從 Supabase 讀取資料
+			const supabaseData = await supabaseService.getOrders();
 
-			if (!sheetData || sheetData.length === 0) {
+			if (!supabaseData || supabaseData.length === 0) {
 				const emptyResponse = {
 					success: true,
 					data: [],
@@ -128,8 +128,8 @@ export class GetOrdersFromSheet extends OpenAPIRoute {
 				return c.json(emptyResponse);
 			}
 
-			// 處理資料轉換（參考原 PHP 邏輯）
-			const orders = this.transformSheetDataToOrders(sheetData);
+			// 處理資料轉換
+			const orders = this.transformSupabaseDataToOrders(supabaseData);
 
 			const response = {
 				success: true,
@@ -160,57 +160,52 @@ export class GetOrdersFromSheet extends OpenAPIRoute {
 	}
 
 	/**
-	 * 將 Google Sheets 原始資料轉換為訂單物件陣列
-	 * 參考原始 PHP 檔案的轉換邏輯
+	 * 將 Supabase 原始資料轉換為訂單物件陣列
+	 * 保持與原有 API 格式的兼容性
 	 */
-	private transformSheetDataToOrders(sheetData: any[][]): any[] {
-		if (sheetData.length === 0) return [];
+	private transformSupabaseDataToOrders(supabaseData: any[]): any[] {
+		if (!supabaseData || supabaseData.length === 0) return [];
 
-		// 第一列為標題，跳過
-		const orders = [];
-		for (let idx = 1; idx < sheetData.length; idx++) {
-			const row = sheetData[idx];
+		return supabaseData.map((order: any, index: number) => {
+			// 處理商品明細
+			let itemsText = '';
+			if (order.order_items && order.order_items.length > 0) {
+				itemsText = order.order_items.map((item: any) => 
+					`${item.product_name} x${item.quantity}`
+				).join(', ');
+			}
 
-			// 跳過空白列（已刪除訂單或空白）
-			if (!row[1] || row[1].toString().trim() === '') continue;
-
-			// 轉換到貨日期格式
-			const rawDate = row[5] || '';
+			// 轉換日期格式
 			let dueDate = '';
-			if (rawDate) {
+			if (order.due_date) {
 				try {
-					const dt = new Date(rawDate);
+					const dt = new Date(order.due_date);
 					if (!isNaN(dt.getTime())) {
 						dueDate = dt.toISOString().split('T')[0]; // YYYY-MM-DD 格式
-					} else {
-						dueDate = rawDate.toString();
 					}
 				} catch {
-					dueDate = rawDate.toString();
+					dueDate = order.due_date.toString();
 				}
 			}
 
-			// 建立訂單物件（對應原 PHP 的欄位映射）
-			orders.push({
-				createdAt: row[0] || '', // A欄 訂單時間
-				id: idx, // 使用當前行索引作為 ID
-				orderNumber: `ORD-${idx.toString().padStart(3, '0')}`, // 生成格式化的訂單編號
-				customerName: row[1] || '', // B欄 客戶姓名
-				customerPhone: row[2] || '', // C欄 客戶電話
-				items: row[8] || '', // I欄 訂購商品
-				amount: row[9] || '', // J欄 訂單金額
-				dueDate: dueDate, // F欄 到貨日期 (已轉為 YYYY-MM-DD)
-				deliveryTime: row[6] || '', // G欄 宅配時段
-				note: row[7] || '', // H欄 備註
-				status: row[14] || '', // O欄 訂單狀態
-				deliveryMethod: row[3] || '', // D欄 配送方式
-				deliveryAddress: row[4] || '', // E欄 配送地址
-				paymentMethod: row[12] || '', // M欄 付款方式
-				paymentStatus: row[15] || '' // P欄 款項狀態
-			});
-		}
-
-		return orders;
+			return {
+				createdAt: order.created_at || '',
+				id: index + 1, // 使用序號作為 ID 以保持與原有系統兼容
+				orderNumber: order.order_number || `ORD-${(index + 1).toString().padStart(3, '0')}`,
+				customerName: order.customer_name || '',
+				customerPhone: order.customer_phone || '',
+				items: itemsText,
+				amount: order.total_amount?.toString() || '0',
+				dueDate: dueDate,
+				deliveryTime: order.delivery_time || '',
+				note: order.notes || '',
+				status: order.status || '',
+				deliveryMethod: order.delivery_method || '',
+				deliveryAddress: order.delivery_address || '',
+				paymentMethod: order.payment_method || '',
+				paymentStatus: order.payment_status || ''
+			};
+		});
 	}
 
 	/**
