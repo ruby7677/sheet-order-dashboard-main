@@ -271,7 +271,9 @@ export type Database = {
           customer_id: string | null
           customer_name: string
           customer_phone: string
+          delivery_address: string | null
           delivery_date: string | null
+          delivery_method: string | null
           delivery_time: string | null
           due_date: string | null
           google_sheet_id: number | null
@@ -292,7 +294,9 @@ export type Database = {
           customer_id?: string | null
           customer_name: string
           customer_phone: string
+          delivery_address?: string | null
           delivery_date?: string | null
+          delivery_method?: string | null
           delivery_time?: string | null
           due_date?: string | null
           google_sheet_id?: number | null
@@ -313,7 +317,9 @@ export type Database = {
           customer_id?: string | null
           customer_name?: string
           customer_phone?: string
+          delivery_address?: string | null
           delivery_date?: string | null
+          delivery_method?: string | null
           delivery_time?: string | null
           due_date?: string | null
           google_sheet_id?: number | null
