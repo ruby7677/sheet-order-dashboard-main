@@ -1,7 +1,7 @@
 import { OpenAPIRoute } from 'chanfana';
 import { z } from 'zod';
 import { AppContext, ApiResponse, ApiError } from '../types';
-import { SupabaseService } from '../services/SupabaseService';
+import { GoogleSheetsService } from '../services/GoogleSheetsService';
 import { CacheService } from '../services/CacheService';
 
 /**
@@ -81,9 +81,9 @@ export class GetCustomerOrders extends OpenAPIRoute {
 
 			// 初始化服務
 			const env = c.env;
-			const supabaseService = new SupabaseService(
-				env.SUPABASE_URL,
-				env.SUPABASE_ANON_KEY
+			const sheetsService = new GoogleSheetsService(
+				env.GOOGLE_SERVICE_ACCOUNT_KEY,
+				env.GOOGLE_SHEET_ID
 			);
 			const cacheService = new CacheService(
 				env.CACHE_KV,
@@ -113,8 +113,11 @@ export class GetCustomerOrders extends OpenAPIRoute {
 				c.header('X-Cache-Refresh', 'Forced');
 			}
 
-			// 從 Supabase 獲取客戶訂單資料
-			const customerData = await supabaseService.getCustomerOrders(phone);
+			// 從 Google Sheets 獲取客戶名單資料
+			const customerData = await this.getCustomerOrdersFromSheet(
+				sheetsService,
+				phone
+			);
 
 			// 準備回應資料
 			const response = {
@@ -135,7 +138,7 @@ export class GetCustomerOrders extends OpenAPIRoute {
 
 			const errorResponse = {
 				success: false,
-				message: error instanceof ApiError ? error.message : '無法從 Supabase 獲取客戶訂單資料',
+				message: error instanceof ApiError ? error.message : '無法從 Google Sheets 獲取客戶訂單資料',
 				error: error instanceof Error ? error.message : String(error),
 				timestamp: Math.floor(Date.now() / 1000),
 				request_id: requestId
@@ -147,7 +150,157 @@ export class GetCustomerOrders extends OpenAPIRoute {
 		}
 	}
 
-	// 這些方法不再需要，因為 SupabaseService 直接處理客戶訂單查詢
+	/**
+	 * 從 Google Sheets 獲取客戶訂單歷史
+	 * @param sheetsService Google Sheets 服務實例
+	 * @param phone 客戶電話號碼
+	 */
+	private async getCustomerOrdersFromSheet(
+		sheetsService: GoogleSheetsService,
+		phone: string
+	): Promise<any[]> {
+		try {
+			// 從客戶名單工作表獲取資料
+			const sheetName = '客戶名單';
+			const sheetData = await sheetsService.getSheetData(sheetName);
+
+			if (!sheetData || sheetData.length === 0) {
+				return [];
+			}
+
+			// 第一行是標題
+			const header = sheetData[0];
+			const rows = sheetData.slice(1);
+
+			// 建立標題映射
+			const headerMap = this.buildHeaderMap(header);
+
+			// 確保必要的欄位存在
+			if (!headerMap.phone || !headerMap.orderTime || !headerMap.items) {
+				throw new ApiError(500, '客戶名單工作表缺少必要欄位', 'MISSING_REQUIRED_FIELDS');
+			}
+
+			// 查找匹配的訂單
+			const matchingOrders = this.findMatchingOrders(rows, headerMap, phone);
+
+			// 根據列數排序（列數越小的為最早訂購的資訊）
+			matchingOrders.sort((a, b) => a.id - b.id);
+
+			return matchingOrders;
+
+		} catch (error) {
+			if (error instanceof ApiError) throw error;
+			throw new ApiError(500, `獲取客戶訂單資料失敗: ${error instanceof Error ? error.message : String(error)}`, 'SHEET_ACCESS_ERROR');
+		}
+	}
+
+	/**
+	 * 建立標題欄位映射
+	 * @param header 標題行資料
+	 */
+	private buildHeaderMap(header: any[]): { [key: string]: number } {
+		const headerMap: { [key: string]: number } = {};
+
+		header.forEach((title, idx) => {
+			switch (title) {
+				case '姓名':
+					headerMap.name = idx;
+					break;
+				case '電話':
+					headerMap.phone = idx;
+					break;
+				case '取貨方式':
+					headerMap.deliveryMethod = idx;
+					break;
+				case '地址':
+					headerMap.address = idx;
+					break;
+				case '透過什麼聯繫賣家':
+					headerMap.contactMethod = idx;
+					break;
+				case '社交軟體名字':
+					headerMap.socialId = idx;
+					break;
+				case '訂單時間':
+					headerMap.orderTime = idx;
+					break;
+				case '購買項目':
+					headerMap.items = idx;
+					break;
+				default:
+					// 其他欄位使用小寫作為鍵
+					headerMap[title.toLowerCase()] = idx;
+					break;
+			}
+		});
+
+		return headerMap;
+	}
+
+	/**
+	 * 查找匹配的訂單記錄
+	 * @param rows 資料行
+	 * @param headerMap 標題映射
+	 * @param phone 查詢的電話號碼
+	 */
+	private findMatchingOrders(
+		rows: any[][],
+		headerMap: { [key: string]: number },
+		phone: string
+	): any[] {
+		const matchingOrders: any[] = [];
+
+		rows.forEach((row, idx) => {
+			// 確保資料完整性
+			if (!row || row.length === 0) return;
+			if (!row[headerMap.phone]) return;
+
+			// 檢查電話是否匹配
+			const rowPhone = row[headerMap.phone];
+
+			// 使用電話號碼標準化比對
+			if (this.isPhoneMatch(phone, rowPhone)) {
+				// 獲取訂單時間和購買項目
+				const orderTime = row[headerMap.orderTime] || '';
+				const items = row[headerMap.items] || '';
+
+				// 只有當訂單時間或購買項目不為空時才加入結果
+				if (orderTime || items) {
+					matchingOrders.push({
+						id: idx, // 行索引作為 ID
+						orderTime: orderTime,
+						items: items,
+						name: row[headerMap.name] || ''
+					});
+				}
+			}
+		});
+
+		return matchingOrders;
+	}
+
+	/**
+	 * 電話號碼匹配檢查
+	 * 標準化電話號碼並比較後九碼
+	 * @param queryPhone 查詢的電話號碼
+	 * @param rowPhone 資料行中的電話號碼
+	 */
+	private isPhoneMatch(queryPhone: string, rowPhone: string): boolean {
+		// 標準化電話號碼，只保留數字
+		const normalizedQueryPhone = queryPhone.replace(/[^0-9]/g, '');
+		const normalizedRowPhone = rowPhone.replace(/[^0-9]/g, '');
+
+		// 取得後九碼進行比較（如果電話號碼長度大於9）
+		const lastNineQuery = normalizedQueryPhone.length >= 9 
+			? normalizedQueryPhone.slice(-9) 
+			: normalizedQueryPhone;
+		const lastNineRow = normalizedRowPhone.length >= 9 
+			? normalizedRowPhone.slice(-9) 
+			: normalizedRowPhone;
+
+		// 比較電話號碼的後九碼
+		return lastNineQuery === lastNineRow;
+	}
 
 	/**
 	 * 生成請求 ID

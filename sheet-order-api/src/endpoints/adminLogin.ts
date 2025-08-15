@@ -1,11 +1,10 @@
 import { OpenAPIRoute } from 'chanfana';
 import { z } from 'zod';
 import { AppContext, ApiResponse, ApiError } from '../types';
-import { SupabaseService } from '../services/SupabaseService';
 
 /**
  * 管理員登入 API 端點
- * 使用 Supabase 進行管理員驗證
+ * 提供簡單的硬編碼認證機制，驗證成功後返回存取權杖
  */
 export class AdminLogin extends OpenAPIRoute {
 	schema = {
@@ -86,17 +85,11 @@ export class AdminLogin extends OpenAPIRoute {
 				}, 400);
 			}
 
-			// 初始化 Supabase 服務
-			const env = c.env;
-			const supabaseService = new SupabaseService(
-				env.SUPABASE_URL,
-				env.SUPABASE_ANON_KEY
-			);
-
 			// 驗證帳號密碼
-			const isValidCredentials = await supabaseService.validateAdminLogin(
+			const isValidCredentials = this.validateCredentials(
 				username.toString().trim(),
-				password.toString().trim()
+				password.toString().trim(),
+				c.env
 			);
 
 			if (!isValidCredentials) {
@@ -138,7 +131,21 @@ export class AdminLogin extends OpenAPIRoute {
 		}
 	}
 
-	// 驗證邏輯已移到 SupabaseService
+	/**
+	 * 驗證管理員帳號密碼
+	 * 支援環境變數配置或硬編碼預設值
+	 * @param username 使用者名稱
+	 * @param password 密碼
+	 * @param env 環境變數
+	 */
+	private validateCredentials(username: string, password: string, env: any): boolean {
+		// 優先使用環境變數中的管理員帳號密碼
+		const validUsername = env.ADMIN_USERNAME || 'admin';
+		const validPassword = env.ADMIN_PASSWORD || 'admin123';
+
+		// 進行帳號密碼比對
+		return username === validUsername && password === validPassword;
+	}
 
 	/**
 	 * 生成存取權杖

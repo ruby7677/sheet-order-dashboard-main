@@ -1,18 +1,18 @@
 import { OpenAPIRoute } from 'chanfana';
 import { z } from 'zod';
 import { AppContext, Customer, ApiResponse, ApiError } from '../types';
-import { SupabaseService } from '../services/SupabaseService';
+import { GoogleSheetsService } from '../services/GoogleSheetsService';
 import { CacheService } from '../services/CacheService';
 
 /**
- * 從 Supabase 讀取客戶資料的 API 端點
+ * 從 Google Sheets 讀取客戶資料的 API 端點
  * 支援快取機制和強制刷新功能
  */
 export class GetCustomersFromSheet extends OpenAPIRoute {
 	schema = {
 		tags: ['Customers'],
-		summary: '從 Supabase 讀取客戶資料',
-		description: '讀取 Supabase 中的所有客戶資料，支援 15 秒快取和強制刷新',
+		summary: '從 Google Sheets 讀取客戶資料',
+		description: '讀取 Google Sheets 中的所有客戶資料，支援 15 秒快取和強制刷新',
 		request: {
 			query: z.object({
 				refresh: z.string().optional().describe('強制刷新快取 (設為 "1" 啟用)'),
@@ -71,9 +71,9 @@ export class GetCustomersFromSheet extends OpenAPIRoute {
 
 			// 初始化服務
 			const env = c.env;
-			const supabaseService = new SupabaseService(
-				env.SUPABASE_URL,
-				env.SUPABASE_ANON_KEY
+			const sheetsService = new GoogleSheetsService(
+				env.GOOGLE_SERVICE_ACCOUNT_KEY,
+				env.GOOGLE_SHEET_ID
 			);
 			const cacheService = new CacheService(
 				env.CACHE_KV,
@@ -102,16 +102,16 @@ export class GetCustomersFromSheet extends OpenAPIRoute {
 				}
 			}
 
-			// 快取未命中或強制刷新，從 Supabase 獲取資料
+			// 快取未命中或強制刷新，從 Google Sheets 獲取資料
 			c.header('X-Cache', 'MISS');
 			if (forceRefresh) {
 				c.header('X-Cache-Refresh', 'Forced');
 			}
 
-			// 從 Supabase 讀取資料
-			const supabaseData = await supabaseService.getCustomers();
+			// 從 Google Sheets 讀取資料（客戶名單工作表）
+			const sheetData = await sheetsService.getSheetData('客戶名單');
 
-			if (!supabaseData || supabaseData.length === 0) {
+			if (!sheetData || sheetData.length === 0) {
 				const emptyResponse = {
 					success: true,
 					data: [],
@@ -125,8 +125,8 @@ export class GetCustomersFromSheet extends OpenAPIRoute {
 				return c.json(emptyResponse);
 			}
 
-			// 處理資料轉換
-			const customers = this.transformSupabaseDataToCustomers(supabaseData);
+			// 處理資料轉換（參考原 PHP 邏輯）
+			const customers = this.transformSheetDataToCustomers(sheetData);
 
 			const response = {
 				success: true,
@@ -146,7 +146,7 @@ export class GetCustomersFromSheet extends OpenAPIRoute {
 
 			const errorResponse = {
 				success: false,
-				message: error instanceof ApiError ? error.message : '無法從 Supabase 獲取客戶資料',
+				message: error instanceof ApiError ? error.message : '無法從 Google Sheets 獲取客戶資料',
 				error: error instanceof ApiError ? undefined : (error instanceof Error ? error.message : String(error)),
 				timestamp: Math.floor(Date.now() / 1000),
 				request_id: requestId
@@ -159,25 +159,79 @@ export class GetCustomersFromSheet extends OpenAPIRoute {
 	}
 
 	/**
-	 * 將 Supabase 原始資料轉換為客戶物件陣列
-	 * 保持與原有 API 格式的兼容性
+	 * 將 Google Sheets 原始資料轉換為客戶物件陣列
+	 * 參考原始 PHP 檔案的轉換邏輯，支援動態標題映射
 	 */
-	private transformSupabaseDataToCustomers(supabaseData: any[]): any[] {
-		if (!supabaseData || supabaseData.length === 0) return [];
+	private transformSheetDataToCustomers(sheetData: any[][]): any[] {
+		if (sheetData.length === 0) return [];
 
-		return supabaseData.map((customer: any, index: number) => ({
-			id: index, // 使用索引作為 ID 以保持兼容性
-			name: customer.name || '',
-			phone: customer.phone || '',
-			address: customer.address || '',
-			createdAt: customer.created_at || '',
-			// 額外欄位
-			deliveryMethod: customer.delivery_method || '',
-			contactMethod: customer.contact_method || '',
-			socialId: customer.social_id || '',
-			orderTime: customer.created_at || '', // 使用 created_at 作為 orderTime
-			items: '' // Supabase 客戶表中沒有直接的商品字段，留空
-		}));
+		// 第一行是標題
+		const header = sheetData[0];
+		const dataRows = sheetData.slice(1);
+
+		// 建立標題映射（參考原 PHP 邏輯）
+		const headerMap: { [key: string]: number } = {};
+		header.forEach((title: string, idx: number) => {
+			switch (title) {
+				case '姓名':
+					headerMap['name'] = idx;
+					break;
+				case '電話':
+					headerMap['phone'] = idx;
+					break;
+				case '取貨方式':
+					headerMap['deliveryMethod'] = idx;
+					break;
+				case '地址':
+					headerMap['address'] = idx;
+					break;
+				case '透過什麼聯繫賣家':
+					headerMap['contactMethod'] = idx;
+					break;
+				case '社交軟體名字':
+					headerMap['socialId'] = idx;
+					break;
+				case '訂單時間':
+					headerMap['orderTime'] = idx;
+					break;
+				case '購買項目':
+					headerMap['items'] = idx;
+					break;
+				default:
+					// 其他欄位，使用小寫作為鍵
+					headerMap[title.toLowerCase()] = idx;
+					break;
+			}
+		});
+
+		const customers = [];
+		dataRows.forEach((row: any[], idx: number) => {
+			// 確保資料完整性
+			if (!row || row.length === 0) return;
+			
+			// 檢查必要欄位
+			if (!headerMap.hasOwnProperty('name') || !row[headerMap['name']] ||
+				!headerMap.hasOwnProperty('phone') || !row[headerMap['phone']]) {
+				return;
+			}
+
+			// 建立客戶物件
+			customers.push({
+				id: idx,
+				name: row[headerMap['name']] || '',
+				phone: row[headerMap['phone']] || '',
+				address: (headerMap['address'] !== undefined && row[headerMap['address']]) ? row[headerMap['address']] : '',
+				createdAt: (headerMap['orderTime'] !== undefined && row[headerMap['orderTime']]) ? row[headerMap['orderTime']] : '',
+				// 額外欄位
+				deliveryMethod: (headerMap['deliveryMethod'] !== undefined && row[headerMap['deliveryMethod']]) ? row[headerMap['deliveryMethod']] : '',
+				contactMethod: (headerMap['contactMethod'] !== undefined && row[headerMap['contactMethod']]) ? row[headerMap['contactMethod']] : '',
+				socialId: (headerMap['socialId'] !== undefined && row[headerMap['socialId']]) ? row[headerMap['socialId']] : '',
+				orderTime: (headerMap['orderTime'] !== undefined && row[headerMap['orderTime']]) ? row[headerMap['orderTime']] : '',
+				items: (headerMap['items'] !== undefined && row[headerMap['items']]) ? row[headerMap['items']] : ''
+			});
+		});
+
+		return customers;
 	}
 
 	/**

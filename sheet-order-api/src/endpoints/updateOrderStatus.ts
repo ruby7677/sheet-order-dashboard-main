@@ -1,18 +1,18 @@
 import { OpenAPIRoute } from 'chanfana';
 import { z } from 'zod';
 import { AppContext, ApiResponse, ApiError } from '../types';
-import { SupabaseService } from '../services/SupabaseService';
+import { GoogleSheetsService } from '../services/GoogleSheetsService';
 import { CacheService } from '../services/CacheService';
 
 /**
- * 更新 Supabase 訂單狀態的 API 端點
+ * 更新 Google Sheets 訂單狀態的 API 端點
  * 支援四種合法狀態更新並自動清除相關快取
  */
 export class UpdateOrderStatus extends OpenAPIRoute {
 	schema = {
 		tags: ['Orders'],
 		summary: '更新訂單狀態',
-		description: '更新 Supabase 中指定訂單的狀態，僅允許四種合法狀態值',
+		description: '更新 Google Sheets 中指定訂單的狀態，僅允許四種合法狀態值',
 		request: {
 			body: {
 				content: {
@@ -103,34 +103,69 @@ export class UpdateOrderStatus extends OpenAPIRoute {
 
 			// 初始化服務
 			const env = c.env;
-			const supabaseService = new SupabaseService(
-				env.SUPABASE_URL,
-				env.SUPABASE_ANON_KEY
+			const sheetsService = new GoogleSheetsService(
+				env.GOOGLE_SERVICE_ACCOUNT_KEY,
+				env.GOOGLE_SHEET_ID
 			);
 			const cacheService = new CacheService(
 				env.CACHE_KV,
 				parseInt(env.CACHE_DURATION || '15')
 			);
 
-			// 直接更新 Supabase 中的訂單狀態
-			// 由於前端傳入的 id 可能是索引值，我們需要先轉換為實際的訂單 ID
-			// 為了保持兼容性，我們可以使用 order_number 或其他方式來識別訂單
-			try {
-				await supabaseService.updateOrderStatus(id, status);
-			} catch (error) {
-				// 如果直接用 ID 失敗，可能是因為 ID 格式問題
-				// 這種情況下返回錯誤
-				if (error instanceof Error && error.message.includes('找不到')) {
-					c.header('X-Response-Time', `${Date.now() - startTime}ms`);
-					return c.json({
-						success: false,
-						message: '找不到指定訂單',
-						timestamp: Math.floor(Date.now() / 1000),
-						request_id: requestId
-					}, 404);
-				}
-				throw error;
+			// 從 Google Sheets 讀取當前資料（Sheet1 工作表）
+			const sheetData = await sheetsService.getSheetData('Sheet1');
+
+			if (!sheetData || sheetData.length === 0) {
+				c.header('X-Response-Time', `${Date.now() - startTime}ms`);
+				return c.json({
+					success: false,
+					message: '無法讀取工作表資料',
+					timestamp: Math.floor(Date.now() / 1000),
+					request_id: requestId
+				}, 500);
 			}
+
+			// 尋找標題行中的 id 和 status 欄位索引
+			const header = sheetData[0];
+			const idCol = header.indexOf('id');
+			const statusCol = header.indexOf('status');
+
+			if (idCol === -1 || statusCol === -1) {
+				c.header('X-Response-Time', `${Date.now() - startTime}ms`);
+				return c.json({
+					success: false,
+					message: '找不到 id 或 status 欄位',
+					timestamp: Math.floor(Date.now() / 1000),
+					request_id: requestId
+				}, 500);
+			}
+
+			// 尋找目標訂單行
+			let targetRow = -1;
+			for (let i = 1; i < sheetData.length; i++) {
+				const row = sheetData[i];
+				if (row && row[idCol] && row[idCol].toString() === id.toString()) {
+					targetRow = i + 1; // Google Sheets API 使用 1-based 索引
+					break;
+				}
+			}
+
+			if (targetRow === -1) {
+				c.header('X-Response-Time', `${Date.now() - startTime}ms`);
+				return c.json({
+					success: false,
+					message: '找不到指定訂單',
+					timestamp: Math.floor(Date.now() / 1000),
+					request_id: requestId
+				}, 404);
+			}
+
+			// 計算要更新的儲存格範圍（參考原 PHP 邏輯）
+			const columnLetter = String.fromCharCode(65 + statusCol); // A=65, B=66, ...
+			const rangeToUpdate = `Sheet1!${columnLetter}${targetRow}`;
+
+			// 更新 Google Sheets 中的狀態
+			await sheetsService.updateSheetData(rangeToUpdate, [[status]]);
 
 			// 更新成功後清除相關快取（參考原 PHP 邏輯）
 			await this.clearRelatedCache(cacheService);
