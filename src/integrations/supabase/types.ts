@@ -522,6 +522,42 @@ export type Database = {
         }
         Relationships: []
       }
+      safe_admin_profiles: {
+        Row: {
+          created_at: string | null
+          email: string | null
+          full_name: string | null
+          id: string | null
+          is_active: boolean | null
+          last_login: string | null
+          role: string | null
+          updated_at: string | null
+          username: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email?: string | null
+          full_name?: string | null
+          id?: string | null
+          is_active?: boolean | null
+          last_login?: string | null
+          role?: string | null
+          updated_at?: string | null
+          username?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string | null
+          full_name?: string | null
+          id?: string | null
+          is_active?: boolean | null
+          last_login?: string | null
+          role?: string | null
+          updated_at?: string | null
+          username?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       gtrgm_compress: {
@@ -574,6 +610,10 @@ export type Database = {
       }
       update_admin_profile: {
         Args: { new_full_name?: string; new_last_login?: string }
+        Returns: boolean
+      }
+      update_admin_safe_fields: {
+        Args: { new_email?: string; new_full_name?: string }
         Returns: boolean
       }
       update_own_admin_profile: {
