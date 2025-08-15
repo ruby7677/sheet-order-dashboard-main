@@ -326,28 +326,22 @@ Deno.serve(async (req) => {
     // 獲取 Google Sheets 存取權杖
     const accessToken = await getAccessToken(googleServiceAccountKey);
 
-    // 讀取各個工作表的資料
-    const [ordersData, customersData] = await Promise.all([
-      getGoogleSheetsData(sheetId, 'Sheet1', accessToken),
-      getGoogleSheetsData(sheetId, '客戶名單', accessToken)
-    ]);
+    // 只讀取訂單資料
+    const ordersData = await getGoogleSheetsData(sheetId, 'Sheet1', accessToken);
 
-    console.log(`讀取到 ${ordersData.length} 行訂單資料, ${customersData.length} 行客戶資料`);
+    console.log(`讀取到 ${ordersData.length} 行訂單資料`);
 
-    // 執行遷移
-    const [customersResult, ordersResult] = await Promise.all([
-      migrateCustomers(supabase, customersData, dryRun, skipExisting),
-      migrateOrders(supabase, ordersData, dryRun, skipExisting)
-    ]);
+    // 只執行訂單遷移
+    const ordersResult = await migrateOrders(supabase, ordersData, dryRun, skipExisting);
 
     const result: MigrationResult = {
       success: true,
       message: dryRun ? '試運行完成' : '資料遷移完成',
       stats: {
         ordersProcessed: ordersResult.processed,
-        customersProcessed: customersResult.processed,
+        customersProcessed: 0, // 已移除客戶遷移
         productsProcessed: 0, // 暫時不處理商品資料
-        errors: [...customersResult.errors, ...ordersResult.errors]
+        errors: ordersResult.errors
       }
     };
 
