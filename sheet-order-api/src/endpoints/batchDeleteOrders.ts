@@ -1,18 +1,18 @@
 import { OpenAPIRoute } from 'chanfana';
 import { z } from 'zod';
 import { AppContext, ApiResponse, ApiError } from '../types';
-import { GoogleSheetsService } from '../services/GoogleSheetsService';
+import { SupabaseService } from '../services/SupabaseService';
 import { CacheService } from '../services/CacheService';
 
 /**
- * 批量刪除 Google Sheets 訂單的 API 端點
- * 支援一次刪除多個訂單，並自動重新排序後續訂單的 ID
+ * 批量刪除 Supabase 訂單的 API 端點
+ * 支援一次刪除多個訂單
  */
 export class BatchDeleteOrders extends OpenAPIRoute {
 	schema = {
 		tags: ['Orders'],
 		summary: '批量刪除訂單',
-		description: '從 Google Sheets 中批量刪除指定訂單，並重新排序所有訂單的 ID',
+		description: '從 Supabase 中批量刪除指定訂單',
 		request: {
 			body: {
 				content: {
@@ -101,71 +101,27 @@ export class BatchDeleteOrders extends OpenAPIRoute {
 
 			// 初始化服務
 			const env = c.env;
-			const sheetsService = new GoogleSheetsService(
-				env.GOOGLE_SERVICE_ACCOUNT_KEY,
-				env.GOOGLE_SHEET_ID
+			const supabaseService = new SupabaseService(
+				env.SUPABASE_URL,
+				env.SUPABASE_ANON_KEY
 			);
 			const cacheService = new CacheService(
 				env.CACHE_KV,
 				parseInt(env.CACHE_DURATION || '15')
 			);
 
-			// 從 Google Sheets 讀取當前資料（Sheet1 工作表）
-			const sheetData = await sheetsService.getSheetData('Sheet1');
-
-			if (!sheetData || sheetData.length === 0) {
-				c.header('X-Response-Time', `${Date.now() - startTime}ms`);
-				return c.json({
-					success: false,
-					message: '工作表中沒有資料',
-					timestamp: Math.floor(Date.now() / 1000),
-					request_id: requestId
-				}, 500);
-			}
-
-			// 驗證所有要刪除的 ID 是否有效
-			const validationResult = this.validateOrderIds(ids, sheetData);
-			
-			if (validationResult.invalidIds.length > 0) {
-				c.header('X-Response-Time', `${Date.now() - startTime}ms`);
-				return c.json({
-					success: false,
-					message: `以下訂單ID無效：${validationResult.invalidIds.join(', ')}`,
-					timestamp: Math.floor(Date.now() / 1000),
-					request_id: requestId
-				}, 404);
-			}
-
-			// 獲取工作表 ID
-			const sheetId = await this.getSheetId(sheetsService, 'Sheet1');
-
 			// 執行批量刪除
-			const deleteResults = await this.batchDeleteRows(
-				sheetsService,
-				sheetId,
-				validationResult.validIds,
-				validationResult.orderNumbers
-			);
-
-			// 重新排序訂單 ID（只有在有成功刪除的情況下才執行）
-			let reorderResult = null;
-			if (deleteResults.deletedCount > 0) {
-				reorderResult = await this.reorderOrderIdsAfterBatchDelete(
-					sheetsService,
-					'Sheet1'
-				);
-			}
+			const deleteResults = await supabaseService.batchDeleteOrders(ids);
 
 			// 刪除成功後清除相關快取
 			await this.clearRelatedCache(cacheService);
 
 			const response = {
 				success: true,
-				message: `批次刪除完成：成功 ${deleteResults.deletedCount} 筆，失敗 ${deleteResults.failedCount} 筆`,
+				message: `批次刪除完成：成功 ${deleteResults.success} 筆，失敗 ${deleteResults.failed} 筆`,
 				results: deleteResults.results,
-				totalDeleted: deleteResults.deletedCount,
-				totalFailed: deleteResults.failedCount,
-				reorder_result: reorderResult,
+				totalDeleted: deleteResults.success,
+				totalFailed: deleteResults.failed,
 				timestamp: Math.floor(Date.now() / 1000),
 				request_id: requestId
 			};
@@ -186,187 +142,6 @@ export class BatchDeleteOrders extends OpenAPIRoute {
 			const statusCode = error instanceof ApiError ? error.statusCode : 500;
 			c.header('X-Response-Time', `${Date.now() - startTime}ms`);
 			return c.json(errorResponse, statusCode as any);
-		}
-	}
-
-	/**
-	 * 驗證訂單 ID 的有效性
-	 * @param ids 要驗證的 ID 陣列
-	 * @param sheetData 工作表資料
-	 */
-	private validateOrderIds(ids: string[], sheetData: any[][]) {
-		const validIds: number[] = [];
-		const invalidIds: string[] = [];
-		const orderNumbers: { [key: number]: string } = {};
-
-		for (const id of ids) {
-			const targetRowIndex = parseInt(id.toString());
-			
-			// 檢查目標行是否存在（跳過標題行，索引從 1 開始）
-			if (isNaN(targetRowIndex) || targetRowIndex < 1 || targetRowIndex >= sheetData.length) {
-				invalidIds.push(id);
-			} else {
-				validIds.push(targetRowIndex);
-				// 嘗試獲取訂單編號（假設在第 B 欄，索引 1）
-				const orderNumber = sheetData[targetRowIndex] && sheetData[targetRowIndex][1] 
-					? sheetData[targetRowIndex][1] 
-					: `訂單${id}`;
-				orderNumbers[targetRowIndex] = orderNumber;
-			}
-		}
-
-		return { validIds, invalidIds, orderNumbers };
-	}
-
-	/**
-	 * 獲取工作表 ID
-	 * @param sheetsService Google Sheets 服務實例
-	 * @param sheetName 工作表名稱
-	 */
-	private async getSheetId(sheetsService: GoogleSheetsService, sheetName: string): Promise<number> {
-		try {
-			// 獲取工作表資訊
-			const spreadsheetInfo = await sheetsService.getSpreadsheetInfo();
-			
-			// 尋找指定名稱的工作表
-			const sheet = spreadsheetInfo.sheets?.find((s: any) => 
-				s.properties?.title === sheetName
-			);
-			
-			if (!sheet) {
-				throw new ApiError(404, `找不到工作表: ${sheetName}`, 'SHEET_NOT_FOUND');
-			}
-			
-			return sheet.properties.sheetId;
-		} catch (error) {
-			if (error instanceof ApiError) throw error;
-			throw new ApiError(500, `獲取工作表 ID 失敗: ${error instanceof Error ? error.message : String(error)}`, 'SHEET_ID_ERROR');
-		}
-	}
-
-	/**
-	 * 批量刪除行
-	 * @param sheetsService Google Sheets 服務實例
-	 * @param sheetId 工作表 ID
-	 * @param validIds 有效的行索引陣列
-	 * @param orderNumbers 訂單編號對應表
-	 */
-	private async batchDeleteRows(
-		sheetsService: GoogleSheetsService,
-		sheetId: number,
-		validIds: number[],
-		orderNumbers: { [key: number]: string }
-	) {
-		// 按照行號從大到小排序，這樣刪除時不會影響其他行的索引
-		const sortedIds = [...validIds].sort((a, b) => b - a);
-		
-		const results: any[] = [];
-		let deletedCount = 0;
-		let failedCount = 0;
-
-		// 逐一刪除每一行
-		for (const targetRowIndex of sortedIds) {
-			try {
-				// 準備刪除行的請求
-				const deleteRequest = {
-					deleteDimension: {
-						range: {
-							sheetId: sheetId,
-							dimension: 'ROWS',
-							startIndex: targetRowIndex, // 0-based index
-							endIndex: targetRowIndex + 1 // 刪除一行
-						}
-					}
-				};
-
-				// 執行刪除操作
-				await sheetsService.batchUpdate([deleteRequest]);
-
-				results.push({
-					id: targetRowIndex.toString(),
-					success: true,
-					message: '刪除成功',
-					orderNumber: orderNumbers[targetRowIndex] || `訂單${targetRowIndex}`
-				});
-				deletedCount++;
-
-			} catch (error) {
-				results.push({
-					id: targetRowIndex.toString(),
-					success: false,
-					message: `刪除失敗：${error instanceof Error ? error.message : String(error)}`,
-					orderNumber: orderNumbers[targetRowIndex] || `訂單${targetRowIndex}`
-				});
-				failedCount++;
-			}
-		}
-
-		return { results, deletedCount, failedCount };
-	}
-
-	/**
-	 * 批量刪除後重新排序訂單 ID
-	 * 重新獲取所有資料並重新分配連續的 ID
-	 * @param sheetsService Google Sheets 服務實例
-	 * @param sheetName 工作表名稱
-	 */
-	private async reorderOrderIdsAfterBatchDelete(
-		sheetsService: GoogleSheetsService,
-		sheetName: string
-	): Promise<{ success: boolean; message: string; updated_rows: number }> {
-		try {
-			// 重新獲取所有資料
-			const rows = await sheetsService.getSheetData(sheetName);
-
-			if (!rows || rows.length <= 1) {
-				return {
-					success: true,
-					message: '沒有需要重新排序的資料',
-					updated_rows: 0
-				};
-			}
-
-			// 準備批量更新的資料
-			const updates = [];
-			let updatedCount = 0;
-
-			// 從第二行開始（跳過標題行），重新分配 ID
-			for (let i = 1; i < rows.length; i++) {
-				// 檢查該行是否有資料（避免更新空白行）
-				if (!rows[i] || !rows[i][1] || String(rows[i][1]).trim() === '') {
-					continue;
-				}
-
-				// 新的 ID 應該是當前行索引
-				const newId = i;
-
-				// 準備更新資料（假設 ID 在第 N 欄，索引 13）
-				const range = `${sheetName}!N${i + 1}`; // N欄，行號+1（因為 Google Sheets 是 1-based）
-				updates.push({
-					range: range,
-					values: [[newId]]
-				});
-
-				updatedCount++;
-			}
-
-			// 如果有資料需要更新，執行批量更新
-			if (updates.length > 0) {
-				await sheetsService.batchUpdateSheetData(updates, 'USER_ENTERED');
-			}
-
-			return {
-				success: true,
-				message: `成功重新排序 ${updatedCount} 個訂單的ID`,
-				updated_rows: updatedCount
-			};
-
-		} catch (error) {
-			return {
-				success: false,
-				message: `重新排序ID時發生錯誤：${error instanceof Error ? error.message : String(error)}`,
-				updated_rows: 0
-			};
 		}
 	}
 
