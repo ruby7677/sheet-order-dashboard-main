@@ -98,42 +98,84 @@ export type Database = {
       customers: {
         Row: {
           address: string | null
+          contact_method: string | null
           created_at: string | null
+          delivery_method: string | null
           id: string
           last_order_date: string | null
           name: string
           notes: string | null
           phone: string
           region: string | null
+          social_id: string | null
           total_amount: number | null
           total_orders: number | null
           updated_at: string | null
         }
         Insert: {
           address?: string | null
+          contact_method?: string | null
           created_at?: string | null
+          delivery_method?: string | null
           id?: string
           last_order_date?: string | null
           name: string
           notes?: string | null
           phone: string
           region?: string | null
+          social_id?: string | null
           total_amount?: number | null
           total_orders?: number | null
           updated_at?: string | null
         }
         Update: {
           address?: string | null
+          contact_method?: string | null
           created_at?: string | null
+          delivery_method?: string | null
           id?: string
           last_order_date?: string | null
           name?: string
           notes?: string | null
           phone?: string
           region?: string | null
+          social_id?: string | null
           total_amount?: number | null
           total_orders?: number | null
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      delivery_date_settings: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          end_date: string
+          id: string
+          is_active: boolean | null
+          start_date: string
+          updated_at: string | null
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          end_date: string
+          id?: string
+          is_active?: boolean | null
+          start_date: string
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          end_date?: string
+          id?: string
+          is_active?: boolean | null
+          start_date?: string
+          updated_at?: string | null
+          updated_by?: string | null
         }
         Relationships: []
       }
@@ -223,52 +265,64 @@ export type Database = {
       }
       orders: {
         Row: {
+          contact_method: string | null
           created_at: string | null
           customer_address: string | null
           customer_id: string | null
           customer_name: string
           customer_phone: string
           delivery_date: string | null
+          delivery_time: string | null
           due_date: string | null
+          google_sheet_id: number | null
           id: string
           notes: string | null
           order_number: string
           payment_method: string | null
           payment_status: string | null
+          social_id: string | null
           status: string | null
           total_amount: number
           updated_at: string | null
         }
         Insert: {
+          contact_method?: string | null
           created_at?: string | null
           customer_address?: string | null
           customer_id?: string | null
           customer_name: string
           customer_phone: string
           delivery_date?: string | null
+          delivery_time?: string | null
           due_date?: string | null
+          google_sheet_id?: number | null
           id?: string
           notes?: string | null
           order_number: string
           payment_method?: string | null
           payment_status?: string | null
+          social_id?: string | null
           status?: string | null
           total_amount?: number
           updated_at?: string | null
         }
         Update: {
+          contact_method?: string | null
           created_at?: string | null
           customer_address?: string | null
           customer_id?: string | null
           customer_name?: string
           customer_phone?: string
           delivery_date?: string | null
+          delivery_time?: string | null
           due_date?: string | null
+          google_sheet_id?: number | null
           id?: string
           notes?: string | null
           order_number?: string
           payment_method?: string | null
           payment_status?: string | null
+          social_id?: string | null
           status?: string | null
           total_amount?: number
           updated_at?: string | null
@@ -298,8 +352,10 @@ export type Database = {
           price: number
           product_id: string
           shipping_note: string | null
+          sort_order: number | null
           stock_quantity: number | null
           stock_status: string | null
+          unit: string | null
           updated_at: string | null
           weight: number | null
         }
@@ -317,8 +373,10 @@ export type Database = {
           price: number
           product_id: string
           shipping_note?: string | null
+          sort_order?: number | null
           stock_quantity?: number | null
           stock_status?: string | null
+          unit?: string | null
           updated_at?: string | null
           weight?: number | null
         }
@@ -336,8 +394,10 @@ export type Database = {
           price?: number
           product_id?: string
           shipping_note?: string | null
+          sort_order?: number | null
           stock_quantity?: number | null
           stock_status?: string | null
+          unit?: string | null
           updated_at?: string | null
           weight?: number | null
         }
