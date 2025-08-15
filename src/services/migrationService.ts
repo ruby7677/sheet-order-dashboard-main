@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import SecureApiService from './secureApiService';
 
 export interface MigrationOptions {
   sheetId: string;
@@ -24,18 +25,20 @@ export interface MigrationResult {
  */
 export async function migrateGoogleSheetsData(options: MigrationOptions): Promise<MigrationResult> {
   try {
-    const { data, error } = await supabase.functions.invoke('migrate-sheets-data', {
-      body: options
-    });
-
-    if (error) {
-      throw error;
+    // 驗證 Sheet ID 格式
+    if (!SecureApiService.validateSheetId(options.sheetId)) {
+      throw new Error('無效的 Google Sheets ID 格式');
     }
 
-    return data as MigrationResult;
-  } catch (error) {
-    console.error('資料遷移失敗:', error);
-    throw new Error(error instanceof Error ? error.message : '資料遷移失敗');
+    const apiService = new SecureApiService();
+    const result = await apiService.migrateGoogleSheetsData(options.sheetId, {
+      dryRun: options.dryRun || false,
+      skipExisting: options.skipExisting || true
+    });
+    
+    return result as MigrationResult;
+  } catch (error: any) {
+    throw new Error(`資料遷移失敗: ${error.message}`);
   }
 }
 

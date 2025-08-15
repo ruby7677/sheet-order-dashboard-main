@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
+import { useAuth } from '../hooks/useAuth';
 import { MigrationPanel } from '@/components/MigrationPanel';
 
 const AdminDashboardPage: React.FC = () => {
   const [showMigration, setShowMigration] = useState(false);
+  const { user, logout } = useAuth();
+  
   const handleLogout = () => {
-    localStorage.removeItem('admin_token');
+    logout();
     window.location.href = '/admin';
   };
 
@@ -19,7 +22,12 @@ const AdminDashboardPage: React.FC = () => {
         {/* 頁面標題 */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
           <div className="flex justify-between items-center">
-            <h1 className="text-3xl font-bold text-gray-800">管理後台 Dashboard</h1>
+            <div>
+              <h1 className="text-3xl font-bold text-gray-800">管理後台 Dashboard</h1>
+              {user && (
+                <p className="text-sm text-gray-600 mt-1">歡迎，{user.full_name || user.username} ({user.role})</p>
+              )}
+            </div>
             <button
               onClick={handleLogout}
               className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-md transition-colors"
