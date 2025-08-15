@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { MigrationPanel } from '@/components/MigrationPanel';
 
 const AdminDashboardPage: React.FC = () => {
+  const [showMigration, setShowMigration] = useState(false);
   const handleLogout = () => {
     localStorage.removeItem('admin_token');
     window.location.href = '/admin';
@@ -64,6 +66,25 @@ const AdminDashboardPage: React.FC = () => {
             </button>
           </div>
 
+          {/* 資料遷移卡片 */}
+          <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
+            <div className="flex items-center mb-4">
+              <div className="bg-orange-100 p-3 rounded-full">
+                <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-semibold text-gray-800 ml-3">資料遷移</h3>
+            </div>
+            <p className="text-gray-600 mb-4">從 Google Sheets 遷移資料到 Supabase</p>
+            <button 
+              onClick={() => setShowMigration(!showMigration)}
+              className="w-full bg-orange-500 hover:bg-orange-600 text-white py-2 px-4 rounded-md transition-colors"
+            >
+              {showMigration ? '隱藏遷移面板' : '開啟遷移面板'}
+            </button>
+          </div>
+
           {/* 系統設定卡片 */}
           <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
             <div className="flex items-center mb-4">
@@ -81,6 +102,13 @@ const AdminDashboardPage: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {/* 資料遷移面板 */}
+        {showMigration && (
+          <div className="mt-6">
+            <MigrationPanel />
+          </div>
+        )}
 
         {/* 快速統計區域 */}
         <div className="mt-6 bg-white rounded-lg shadow-md p-6">
