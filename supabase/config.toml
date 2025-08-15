@@ -1,4 +1,10 @@
 project_id = "skcdapfynyszxyqqsvib"
 
+[functions.admin-auth]
+verify_jwt = false
+
+[functions.migrate-sheets-data]
+verify_jwt = true
+
 [functions.migrate-sheets-data]
 verify_jwt = false
