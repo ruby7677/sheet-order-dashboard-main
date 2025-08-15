@@ -13,7 +13,7 @@ const AdminLoginPage: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('/api/admin_login.php', {
+      const res = await fetch('https://sheet-order-api.ruby7677.workers.dev/api/admin/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password })
