@@ -135,8 +135,8 @@ export const fetchCustomers = async (filters?: CustomerFilterCriteria): Promise<
   };
 
   try {
-    // 主要來源：從 Sheets 的「客戶名單」讀取
-    const apiEndpoint = getApiEndpoint('/api/get_customers_from_sheet.php');
+    // 主要來源：從 Supabase 的客戶資料讀取
+    const apiEndpoint = getApiEndpoint('/customers');
     console.log('📡 客戶資料 API 端點:', apiEndpoint);
     
     const resp = await fetch(`${apiEndpoint}?nonce=${now}`, {

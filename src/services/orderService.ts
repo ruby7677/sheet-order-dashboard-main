@@ -151,8 +151,8 @@ export const fetchOrders = async (filters?: {
   const timestamp = Date.now();
   const nonce = Math.random().toString(36).substring(2, 15);
   
-  // 構建 API 端點和參數
-  const endpoint = '/api/get_orders_from_sheet.php';
+  // 構建 API 端點和參數 - 改用 Supabase 端點
+  const endpoint = '/orders';
   const params = new URLSearchParams({
     refresh: '1',
     _: timestamp.toString(),
@@ -478,7 +478,7 @@ export const updateOrderStatus = async (id: string, status: '訂單確認中' | 
     nonce: nonce
   });
   
-  const endpoint = `/api/update_order_status.php?${params.toString()}`;
+  const endpoint = `/orders/status?${params.toString()}`;
 
   const res = await apiCallWithFallback(endpoint, {
     method: 'POST',
@@ -524,8 +524,8 @@ export const updateOrderPaymentStatus = async (id: string, paymentStatus: string
   const timestamp = Date.now();
   const nonce = Math.random().toString(36).substring(2, 15);
 
-  // 使用新的 Workers API 端點，支援 fallback 到 PHP API
-  const workersEndpoint = '/api/orders/payment';
+  // 使用新的 Supabase API 端點
+  const workersEndpoint = '/orders/payment';
   const legacyEndpoint = `/api/update_payment_status.php?_=${timestamp}&nonce=${nonce}`;
   
   // 優先嘗試 Workers API
@@ -592,7 +592,7 @@ export const updateOrderItems = async (id: string, items: OrderItem[], total: nu
     nonce: nonce
   });
   
-  const endpoint = `/api/update_order_items.php?${params.toString()}`;
+  const endpoint = `/orders/items?${params.toString()}`;
 
   const res = await apiCallWithFallback(endpoint, {
     method: 'POST',
@@ -632,7 +632,7 @@ export const deleteOrder = async (id: string): Promise<any> => {
     nonce: nonce
   });
   
-  const endpoint = `/api/delete_order.php?${params.toString()}`;
+  const endpoint = `/orders/delete?${params.toString()}`;
 
   // 處理刪除訂單的邏輯
   const res = await apiCallWithFallback(endpoint, {
@@ -684,7 +684,7 @@ export const batchDeleteOrders = async (ids: string[]): Promise<{
     nonce: nonce
   });
   
-  const endpoint = `/api/batch_delete_orders.php?${params.toString()}`;
+  const endpoint = `/orders/batch-delete?${params.toString()}`;
 
   // 處理批次刪除訂單的邏輯
   const res = await apiCallWithFallback(endpoint, {
