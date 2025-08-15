@@ -509,6 +509,14 @@ export type Database = {
         Args: { "": unknown }
         Returns: unknown
       }
+      is_authenticated_admin: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
+      is_service_role_request: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
       is_super_admin: {
         Args: Record<PropertyKey, never>
         Returns: boolean

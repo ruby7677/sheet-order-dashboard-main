@@ -160,8 +160,12 @@ async function generateJWT(payload: any): Promise<string> {
   const encodedPayload = btoa(JSON.stringify(payload)).replace(/=/g, '');
   const signingInput = `${encodedHeader}.${encodedPayload}`;
 
-  // Use a secure secret for JWT signing (should be in environment variables)
-  const secret = Deno.env.get('JWT_SECRET') || 'your-secret-key-change-in-production';
+  // Use a secure secret for JWT signing - MUST be set in environment variables
+  const secret = Deno.env.get('JWT_SECRET');
+  
+  if (!secret) {
+    throw new Error('JWT_SECRET environment variable is required for security');
+  }
   const key = await crypto.subtle.importKey(
     'raw',
     new TextEncoder().encode(secret),
