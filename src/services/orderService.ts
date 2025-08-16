@@ -126,6 +126,10 @@ export const fetchOrders = async (filters?: {
   deliveryMethod?: string;
   search?: string;
   date?: string;
+  dateRange?: {
+    startDate?: string;
+    endDate?: string;
+  };
   paymentStatus?: string;
 }): Promise<Order[]> => {
   // 檢查是否有快取且未過期
@@ -151,20 +155,45 @@ export const fetchOrders = async (filters?: {
   const timestamp = Date.now();
   const nonce = Math.random().toString(36).substring(2, 15);
   
-  // 構建 API 端點和參數
-  const endpoint = '/api/get_orders_from_sheet.php';
+  // 構建 Supabase 邊緣函數端點
+  const endpoint = '/orders';
   const params = new URLSearchParams({
-    refresh: '1',
     _: timestamp.toString(),
-    nonce: nonce,
-    v: '1.2' // API 版本號
+    nonce: nonce
   });
+  
+  // 添加篩選參數
+  if (filters?.status && filters.status !== '所有狀態') {
+    params.append('status', filters.status);
+  }
+  if (filters?.deliveryMethod && filters.deliveryMethod !== '所有配送方式') {
+    params.append('deliveryMethod', filters.deliveryMethod);
+  }
+  if (filters?.paymentStatus && filters.paymentStatus !== '所有付款狀態') {
+    params.append('paymentStatus', filters.paymentStatus);
+  }
+  if (filters?.search) {
+    params.append('search', filters.search);
+  }
+  if (filters?.dateRange?.startDate) {
+    params.append('startDate', filters.dateRange.startDate);
+  }
+  if (filters?.dateRange?.endDate) {
+    params.append('endDate', filters.dateRange.endDate);
+  } else if (filters?.date) {
+    params.append('startDate', filters.date);
+  }
   
   const fullEndpoint = `${endpoint}?${params.toString()}`;
   
-  // 使用錯誤處理和重試機制
-  const res = await apiCallWithFallback(fullEndpoint, {
-    method: 'GET'
+  // 使用 Supabase 邊緣函數
+  const res = await fetch(`https://skcdapfynyszxyqqsvib.supabase.co/functions/v1${fullEndpoint}`, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNrY2RhcGZ5bnlzenh5cXFzdmliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ5NzQzMzQsImV4cCI6MjA3MDU1MDMzNH0.BilWvEh4djyQAYb5QWkuiju9teOVHlmk9zG0JVgMZbQ`,
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Content-Type': 'application/json'
+    }
   });
   if (!res.ok) {
     // 如果 HTTP 狀態碼不是 2xx，嘗試讀取錯誤訊息
@@ -186,113 +215,8 @@ export const fetchOrders = async (filters?: {
     return []; // 或者拋出錯誤，視情況而定
   }
 
-  // 將 Google Sheets 資料轉換成前端 Order 型別
-  let orders = result.data.map((row: {
-    createdAt?: string;
-    id?: string;
-    orderNumber?: string;
-    customerName?: string;
-    customerPhone?: string;
-    items?: string | Array<{product: string; quantity: number; price: number}>;
-    amount?: number;
-    dueDate?: string;
-    deliveryTime?: string;
-    note?: string;
-    status?: string;
-    deliveryMethod?: string;
-    deliveryAddress?: string;
-    paymentMethod?: string;
-    paymentStatus?: string;
-    備註?: string;
-    訂單時間?: string;
-    款項?: string;
-  }, idx: number) => {
-    const createdAt = String(row['createdAt'] || row['訂單時間'] || row[0] || new Date().toISOString().split('T')[0]);
-    const id = String(row.id || `generated_id_${idx}`); // 提供預設ID以防萬一
-    const orderNumber = String(row.orderNumber || `ORD-${Date.now()}-${idx}`); // 提供預設訂單號
-    const customerName = String(row.customerName || (row as any).customer?.name || row['姓名'] || row[1] || '');
-    const customerPhone = String(row.customerPhone || (row as any).customer?.phone || row['電話'] || row[2] || '');
-
-    let itemsArray: { product: string; quantity: number; price: number; subtotal: number }[] = [];
-    if (typeof row.items === 'string' && row.items.trim() !== '') {
-      const raw = String(row.items).trim();
-      itemsArray = raw.split(/[，,]/).map((itemStr: string) => {
-        const parts = itemStr.trim().split(/\s*[xX×]\s*/);
-        const product = parts[0] ? parts[0].trim() : '未知商品';
-        const quantity = Number(parts[1]) || 1;
-        let price = 0;
-        // 自動對應單價（可依實際品項再擴充）
-        if (product.includes('原味蘿蔔糕')) price = 250;
-        else if (product.includes('芋頭粿')) price = 350;
-        else if (product.includes('台式鹹蘿蔔糕')) price = 350;
-        else if (product.includes('鳳梨豆腐乳')) price = 300;
-        // 如果 Google Sheet 提供單價，則使用提供的單價（第三段）
-        if (parts.length > 2 && parts[2] && !isNaN(Number(parts[2]))) {
-          price = Number(parts[2]);
-        }
-        const safePrice = isNaN(price) || price < 0 ? 0 : price;
-        const safeQty = isNaN(quantity) || quantity < 0 ? 0 : quantity;
-        return {
-          product,
-          quantity: safeQty,
-          price: safePrice,
-          subtotal: safePrice * safeQty,
-        };
-      });
-    } else if (Array.isArray(row.items)) {
-      // 如果 items 已經是陣列格式 (雖然目前邏輯是字串，但增加彈性)
-      itemsArray = row.items.map((item: { product?: string; quantity?: number; price?: number }) => {
-        let price = Number(item.price);
-        let quantity = Number(item.quantity);
-        price = isNaN(price) || price < 0 ? 0 : price;
-        quantity = isNaN(quantity) || quantity < 0 ? 0 : quantity;
-        return {
-          product: String(item.product || '未知商品'),
-          quantity,
-          price,
-          subtotal: price * quantity,
-        };
-      });
-    }
-
-    // 嘗試將各種日期格式轉換為 YYYY-MM-DD
-    let formattedDueDate = '';
-    if (row.dueDate) {
-      try {
-        const dateObj = new Date(String(row.dueDate).replace(/-/g, '/'));
-        if (!isNaN(dateObj.getTime())) {
-          const year = dateObj.getFullYear();
-          const month = (dateObj.getMonth() + 1).toString().padStart(2, '0');
-          const day = dateObj.getDate().toString().padStart(2, '0');
-          formattedDueDate = `${year}-${month}-${day}`;
-        }
-      } catch (e) {
-        console.warn(`無法解析日期: ${row.dueDate}`);
-      }
-    }
-
-    return {
-      createdAt,
-      id,
-      orderNumber,
-      customer: {
-        name: customerName,
-        phone: customerPhone
-      },
-      items: itemsArray,
-      total: (!isNaN(Number(row.amount)) && Number(row.amount) > 0)
-        ? Number(row.amount)
-        : itemsArray.reduce((sum, i) => sum + i.subtotal, 0),
-      dueDate: formattedDueDate,
-      deliveryTime: String(row.deliveryTime || ''),
-      notes: String(row.note || (row as any).customer?.note || row['note'] || row['備註'] || ''),
-      status: String(row.status || '訂單確認中'), // 提供預設狀態
-      deliveryMethod: String(row.deliveryMethod || ''),
-      deliveryAddress: String(row.deliveryAddress || ''),
-      paymentMethod: String(row.paymentMethod || ''),
-      paymentStatus: String(row.paymentStatus || row['paymentStatus'] || row['款項'] || '')
-    };
-  });
+  // Supabase 邊緣函數已經返回正確格式的資料
+  let orders = result.data;
 
   // 更新快取
   orderCache = {
@@ -478,14 +402,15 @@ export const updateOrderStatus = async (id: string, status: '訂單確認中' | 
     nonce: nonce
   });
   
-  const endpoint = `/api/update_order_status.php?${params.toString()}`;
+  const endpoint = `/orders/status`;
 
-  const res = await apiCallWithFallback(endpoint, {
+  const res = await fetch(`https://skcdapfynyszxyqqsvib.supabase.co/functions/v1${endpoint}`, {
     method: 'POST',
     headers: {
+      'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNrY2RhcGZ5bnlzenh5cXFzdmliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ5NzQzMzQsImV4cCI6MjA3MDU1MDMzNH0.BilWvEh4djyQAYb5QWkuiju9teOVHlmk9zG0JVgMZbQ`,
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({ id, status, timestamp, nonce }),
+    body: JSON.stringify({ id, status }),
   });
   if (!res.ok) {
     let errorMsg = '更新訂單狀態失敗';
