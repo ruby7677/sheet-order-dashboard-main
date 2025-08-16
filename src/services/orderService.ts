@@ -537,50 +537,62 @@ export const batchUpdateOrderStatus = async (ids: string[], status: '訂單確�
   }
 };
 
-// 批次更新款項狀態
+// 更新款項狀態
 export const updateOrderPaymentStatus = async (id: string, paymentStatus: string): Promise<void> => {
-  // 添加時間戳和隨機數，確保每次請求都是唯一的
   const timestamp = Date.now();
   const nonce = Math.random().toString(36).substring(2, 15);
 
-  // 使用新的 Workers API 端點，支援 fallback 到 PHP API
-  const workersEndpoint = '/api/orders/payment';
-  const legacyEndpoint = `/api/update_payment_status.php?_=${timestamp}&nonce=${nonce}`;
-  
-  // 優先嘗試 Workers API
-  let res;
+  const endpoint = `/orders/payment`;
+
   try {
-    res = await apiCallWithFallback(workersEndpoint, {
-      method: 'PUT',
+    // 優先使用 Supabase 邊緣函數
+    const res = await fetch(`https://skcdapfynyszxyqqsvib.supabase.co/functions/v1${endpoint}`, {
+      method: 'POST',
       headers: {
+        'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNrY2RhcGZ5bnlzenh5cXFzdmliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ5NzQzMzQsImV4cCI6MjA3MDU1MDMzNH0.BilWvEh4djyQAYb5QWkuiju9teOVHlmk9zG0JVgMZbQ`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ id, status: paymentStatus }),
+      body: JSON.stringify({ id, paymentStatus }),
     });
-  } catch (workersError) {
-    console.log('Workers API 失敗，嘗試 PHP API:', workersError);
-    // Fallback 到 PHP API
-    res = await apiCallWithFallback(legacyEndpoint, {
+    
+    if (!res.ok) {
+      throw new Error(`Supabase API 失敗: ${res.statusText}`);
+    }
+    
+    const result = await res.json();
+    if (!result.success) throw new Error(result.message || '更新付款狀態失敗');
+    
+    console.log('✅ Supabase 付款狀態更新成功');
+    
+  } catch (supabaseError) {
+    console.warn('🟡 Supabase API 失敗，嘗試 Google Sheets 降級:', supabaseError);
+    
+    // 降級到 Google Sheets API
+    const legacyEndpoint = `/api/update_payment_status.php?_=${timestamp}&nonce=${nonce}`;
+    const res = await apiCallWithFallback(legacyEndpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({ id, paymentStatus, timestamp, nonce }),
     });
-  }
-  
-  if (!res.ok) {
-    let errorMsg = '更新款項狀態失敗';
-    try {
-      const errorResult = await res.json();
-      errorMsg = errorResult.message || errorMsg;
-    } catch (e) {
-      errorMsg = `更新款項狀態失敗: ${res.statusText}`;
+    
+    if (!res.ok) {
+      let errorMsg = '更新付款狀態失敗';
+      try {
+        const errorResult = await res.json();
+        errorMsg = errorResult.message || errorMsg;
+      } catch (e) {
+        errorMsg = `更新付款狀態失敗: ${res.statusText}`;
+      }
+      throw new Error(errorMsg);
     }
-    throw new Error(errorMsg);
+    
+    const result = await res.json();
+    if (!result.success) throw new Error(result.message || '更新付款狀態失敗');
+    
+    console.log('✅ Google Sheets 付款狀態降級更新成功');
   }
-  const result = await res.json();
-  if (!result.success) throw new Error(result.message || '更新款項狀態失敗');
 
   // 成功更新後清除快取
   clearOrderCache();
@@ -593,47 +605,69 @@ export const batchUpdateOrderPaymentStatus = async (ids: string[], paymentStatus
 
     // 批次操作成功後清除快取
     clearOrderCache();
+    console.log('✅ 批次更新付款狀態成功');
   } catch (error) {
-    console.error('批次更新款項狀態失敗:', error);
+    console.error('❌ 批次更新付款狀態失敗:', error);
     throw error;
   }
 };
 
 // 更新訂單商品
 export const updateOrderItems = async (id: string, items: OrderItem[], total: number): Promise<void> => {
-  // 添加時間戳和隨機數，確保每次請求都是唯一的
   const timestamp = Date.now();
   const nonce = Math.random().toString(36).substring(2, 15);
 
-  // 構建 API 端點和參數
-  const params = new URLSearchParams({
-    _: timestamp.toString(),
-    nonce: nonce
-  });
-  
-  const endpoint = `/api/update_order_items.php?${params.toString()}`;
+  const endpoint = `/orders/items`;
 
-  const res = await apiCallWithFallback(endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ id, items, total, timestamp, nonce }),
-  });
+  try {
+    // 優先使用 Supabase 邊緣函數
+    const res = await fetch(`https://skcdapfynyszxyqqsvib.supabase.co/functions/v1${endpoint}`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNrY2RhcGZ5bnlzenh5cXFzdmliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ5NzQzMzQsImV4cCI6MjA3MDU1MDMzNH0.BilWvEh4djyQAYb5QWkuiju9teOVHlmk9zG0JVgMZbQ`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ orderId: id, items }),
+    });
 
-  if (!res.ok) {
-    let errorMsg = '更新訂單商品失敗';
-    try {
-      const errorResult = await res.json();
-      errorMsg = errorResult.message || errorMsg;
-    } catch (e) {
-      errorMsg = `更新訂單商品失敗: ${res.statusText}`;
+    if (!res.ok) {
+      throw new Error(`Supabase API 失敗: ${res.statusText}`);
     }
-    throw new Error(errorMsg);
-  }
 
-  const result = await res.json();
-  if (!result.success) throw new Error(result.message || '更新訂單商品失敗');
+    const result = await res.json();
+    if (!result.success) throw new Error(result.message || '更新訂單項目失敗');
+
+    console.log('✅ Supabase 訂單項目更新成功');
+    
+  } catch (supabaseError) {
+    console.warn('🟡 Supabase API 失敗，嘗試 Google Sheets 降級:', supabaseError);
+    
+    // 降級到 Google Sheets API
+    const legacyEndpoint = `/api/update_order_items.php?_=${timestamp}&nonce=${nonce}`;
+    const res = await apiCallWithFallback(legacyEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ id, items, total, timestamp, nonce }),
+    });
+
+    if (!res.ok) {
+      let errorMsg = '更新訂單商品失敗';
+      try {
+        const errorResult = await res.json();
+        errorMsg = errorResult.message || errorMsg;
+      } catch (e) {
+        errorMsg = `更新訂單商品失敗: ${res.statusText}`;
+      }
+      throw new Error(errorMsg);
+    }
+
+    const result = await res.json();
+    if (!result.success) throw new Error(result.message || '更新訂單商品失敗');
+    
+    console.log('✅ Google Sheets 訂單項目降級更新成功');
+  }
 
   // 成功更新後清除快取
   clearOrderCache();
@@ -641,44 +675,67 @@ export const updateOrderItems = async (id: string, items: OrderItem[], total: nu
 
 // 刪除訂單
 export const deleteOrder = async (id: string): Promise<any> => {
-  // 添加時間戳和隨機數，確保每次請求都是唯一的
   const timestamp = Date.now();
   const nonce = Math.random().toString(36).substring(2, 15);
 
-  // 構建 API 端點和參數
-  const params = new URLSearchParams({
-    _: timestamp.toString(),
-    nonce: nonce
-  });
-  
-  const endpoint = `/api/delete_order.php?${params.toString()}`;
+  try {
+    // 優先使用 Supabase 邊緣函數
+    const res = await fetch(`https://skcdapfynyszxyqqsvib.supabase.co/functions/v1/orders?id=${id}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNrY2RhcGZ5bnlzenh5cXFzdmliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ5NzQzMzQsImV4cCI6MjA3MDU1MDMzNH0.BilWvEh4djyQAYb5QWkuiju9teOVHlmk9zG0JVgMZbQ`,
+        'Content-Type': 'application/json'
+      }
+    });
 
-  // 處理刪除訂單的邏輯
-  const res = await apiCallWithFallback(endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ id, timestamp, nonce }),
-  });
-  if (!res.ok) {
-    let errorMsg = '刪除訂單失敗';
-    try {
-      const errorResult = await res.json();
-      errorMsg = errorResult.message || errorMsg;
-    } catch (e) {
-      errorMsg = `刪除訂單失敗: ${res.statusText}`;
+    if (!res.ok) {
+      throw new Error(`Supabase API 失敗: ${res.statusText}`);
     }
-    throw new Error(errorMsg);
+
+    const result = await res.json();
+    if (!result.success) throw new Error(result.message || '刪除訂單失敗');
+
+    console.log('✅ Supabase 訂單刪除成功');
+    
+    // 成功刪除後清除快取
+    clearOrderCache();
+
+    return result;
+    
+  } catch (supabaseError) {
+    console.warn('🟡 Supabase API 失敗，嘗試 Google Sheets 降級:', supabaseError);
+    
+    // 降級到 Google Sheets API
+    const legacyEndpoint = `/api/delete_order.php?_=${timestamp}&nonce=${nonce}`;
+    const res = await apiCallWithFallback(legacyEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ id, timestamp, nonce }),
+    });
+    
+    if (!res.ok) {
+      let errorMsg = '刪除訂單失敗';
+      try {
+        const errorResult = await res.json();
+        errorMsg = errorResult.message || errorMsg;
+      } catch (e) {
+        errorMsg = `刪除訂單失敗: ${res.statusText}`;
+      }
+      throw new Error(errorMsg);
+    }
+    
+    const result = await res.json();
+    if (!result.success) throw new Error(result.message || '刪除訂單失敗');
+
+    console.log('✅ Google Sheets 訂單刪除降級成功');
+    
+    // 成功刪除後清除快取
+    clearOrderCache();
+
+    return result;
   }
-  const result = await res.json();
-  if (!result.success) throw new Error(result.message || '刪除訂單失敗');
-
-  // 成功刪除後清除快取
-  clearOrderCache();
-
-  // 返回完整的結果，包含重排序信息
-  return result;
 };
 
 // 批次刪除訂單
@@ -693,46 +750,79 @@ export const batchDeleteOrders = async (ids: string[]): Promise<{
   totalDeleted: number;
   totalFailed: number;
 }> => {
-  // 添加時間戳和隨機數，確保每次請求都是唯一的
   const timestamp = Date.now();
   const nonce = Math.random().toString(36).substring(2, 15);
 
-  // 構建 API 端點和參數
-  const params = new URLSearchParams({
-    _: timestamp.toString(),
-    nonce: nonce
-  });
-  
-  const endpoint = `/api/batch_delete_orders.php?${params.toString()}`;
+  try {
+    // 優先使用 Supabase 邊緣函數
+    const res = await fetch(`https://skcdapfynyszxyqqsvib.supabase.co/functions/v1/orders/batch-delete`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNrY2RhcGZ5bnlzenh5cXFzdmliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ5NzQzMzQsImV4cCI6MjA3MDU1MDMzNH0.BilWvEh4djyQAYb5QWkuiju9teOVHlmk9zG0JVgMZbQ`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ orderIds: ids }),
+    });
 
-  // 處理批次刪除訂單的邏輯
-  const res = await apiCallWithFallback(endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ ids, timestamp, nonce }),
-  });
-
-  if (!res.ok) {
-    let errorMsg = '批次刪除訂單失敗';
-    try {
-      const errorResult = await res.json();
-      errorMsg = errorResult.message || errorMsg;
-    } catch (e) {
-      errorMsg = `批次刪除訂單失敗: ${res.statusText}`;
+    if (!res.ok) {
+      throw new Error(`Supabase API 失敗: ${res.statusText}`);
     }
-    throw new Error(errorMsg);
+
+    const result = await res.json();
+    if (!result.success) throw new Error(result.message || '批次刪除訂單失敗');
+
+    console.log('✅ Supabase 批次刪除成功');
+    
+    // 成功刪除後清除快取
+    clearOrderCache();
+
+    // 轉換為預期的格式
+    return {
+      success: true,
+      results: ids.map(id => ({
+        id,
+        success: true,
+        message: '刪除成功',
+        orderNumber: `ID:${id}`
+      })),
+      totalDeleted: ids.length,
+      totalFailed: 0
+    };
+    
+  } catch (supabaseError) {
+    console.warn('🟡 Supabase API 失敗，嘗試 Google Sheets 降級:', supabaseError);
+    
+    // 降級到 Google Sheets API
+    const legacyEndpoint = `/api/batch_delete_orders.php?_=${timestamp}&nonce=${nonce}`;
+    const res = await apiCallWithFallback(legacyEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ ids, timestamp, nonce }),
+    });
+
+    if (!res.ok) {
+      let errorMsg = '批次刪除訂單失敗';
+      try {
+        const errorResult = await res.json();
+        errorMsg = errorResult.message || errorMsg;
+      } catch (e) {
+        errorMsg = `批次刪除訂單失敗: ${res.statusText}`;
+      }
+      throw new Error(errorMsg);
+    }
+
+    const result = await res.json();
+    if (!result.success) throw new Error(result.message || '批次刪除訂單失敗');
+
+    console.log('✅ Google Sheets 批次刪除降級成功');
+    
+    // 成功刪除後清除快取
+    clearOrderCache();
+
+    return result;
   }
-
-  const result = await res.json();
-  if (!result.success) throw new Error(result.message || '批次刪除訂單失敗');
-
-  // 成功刪除後清除快取
-  clearOrderCache();
-
-  // 返回完整的結果
-  return result;
 };
 
 // 重複訂單檢測相關類型定義
