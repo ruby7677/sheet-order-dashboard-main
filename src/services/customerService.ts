@@ -135,9 +135,9 @@ export const fetchCustomers = async (filters?: CustomerFilterCriteria): Promise<
   };
 
   try {
-    // 主要來源：從 Supabase 邊緣函數讀取
+    // 優先使用 Supabase 邊緣函數
     const apiEndpoint = 'https://skcdapfynyszxyqqsvib.supabase.co/functions/v1/customers';
-    console.log('📡 客戶資料 API 端點:', apiEndpoint);
+    console.log('🔗 使用 Supabase 客戶 API:', apiEndpoint);
     
     const resp = await fetch(`${apiEndpoint}?nonce=${now}`, {
       headers: { 
@@ -146,14 +146,18 @@ export const fetchCustomers = async (filters?: CustomerFilterCriteria): Promise<
         'Content-Type': 'application/json'
       },
     });
+    
+    if (!resp.ok) {
+      throw new Error(`Supabase API 失敗: ${resp.statusText}`);
+    }
+    
     const json = await resp.json();
 
     if (!json?.success || !Array.isArray(json.data)) {
-      console.warn('客戶名單 API 回傳格式不正確，改用訂單資料推導');
-      const fallback = await deriveFromOrders();
-      customerCache = { timestamp: now, data: fallback, filters: filters ? { ...filters } : undefined };
-      return filters ? filterCustomersInMemory(fallback, filters) : fallback;
+      throw new Error('Supabase API 回傳格式不正確');
     }
+
+    console.log('✅ Supabase 客戶資料獲取成功，數量:', json.data.length);
 
     type RawCustomer = {
       id?: string | number;
@@ -230,11 +234,69 @@ export const fetchCustomers = async (filters?: CustomerFilterCriteria): Promise<
 
     // 有過濾條件時前端進行過濾
     return filters ? filterCustomersInMemory(customersWithStats, filters) : customersWithStats;
-  } catch (err) {
-    console.error('載入客戶名單失敗，改用訂單資料推導:', err);
-    const fallback = await deriveFromOrders();
-    customerCache = { timestamp: now, data: fallback, filters: filters ? { ...filters } : undefined };
-    return filters ? filterCustomersInMemory(fallback, filters) : fallback;
+    
+  } catch (supabaseError) {
+    console.warn('🟡 Supabase 客戶 API 失敗，嘗試 Google Sheets 降級:', supabaseError);
+    
+    // 降級到 Google Sheets API
+    try {
+      const legacyEndpoint = `/api/get_customers_from_sheet.php?nonce=${now}`;
+      const config = getApiConfig();
+      
+      // 構建降級 API URL
+      let fallbackApiUrl;
+      if (config.isCloudflarePages || !config.isLocalDev) {
+        fallbackApiUrl = `${config.workersApiUrl}${legacyEndpoint}`;
+      } else {
+        fallbackApiUrl = `${config.legacyApiBase}${legacyEndpoint}`;
+      }
+      
+      console.log('🔗 嘗試 Google Sheets 降級 API:', fallbackApiUrl);
+      const fallbackResp = await fetch(fallbackApiUrl, {
+        headers: { 'Cache-Control': 'no-cache' }
+      });
+      
+      if (fallbackResp.ok) {
+        const fallbackJson = await fallbackResp.json();
+        if (fallbackJson?.success && Array.isArray(fallbackJson.data)) {
+          console.log('✅ Google Sheets 降級成功，客戶數量:', fallbackJson.data.length);
+          
+          // 處理 Google Sheets 回傳的資料格式
+          const fallbackCustomers = fallbackJson.data.map((row: any, idx: number) => {
+            const phone = (row.phone || '').trim();
+            const name = (row.name || '').trim();
+            const address = (row.address || '').trim();
+            const region = extractRegion(address);
+            
+            return {
+              id: phone || String(idx),
+              name,
+              phone,
+              deliveryMethod: row.deliveryMethod || '',
+              address,
+              contactMethod: row.contactMethod || '',
+              socialId: row.socialId || '',
+              orderTime: row.orderTime || '',
+              items: row.items || '',
+              purchaseCount: 1,
+              purchasedItems: row.items ? [row.items] : [],
+              region,
+            };
+          });
+          
+          customerCache = { timestamp: now, data: fallbackCustomers, filters: filters ? { ...filters } : undefined };
+          return filters ? filterCustomersInMemory(fallbackCustomers, filters) : fallbackCustomers;
+        }
+      }
+      
+      throw new Error('Google Sheets API 也失敗');
+      
+    } catch (fallbackError) {
+      console.error('❌ Google Sheets 降級也失敗，使用訂單資料推導:', fallbackError);
+      const fallback = await deriveFromOrders();
+      customerCache = { timestamp: now, data: fallback, filters: filters ? { ...filters } : undefined };
+      return filters ? filterCustomersInMemory(fallback, filters) : fallback;
+    }
   }
 };
 

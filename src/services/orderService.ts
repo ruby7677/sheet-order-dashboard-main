@@ -377,51 +377,81 @@ export const clearOrderCache = () => {
 };
 
 export const fetchOrderStats = async (): Promise<OrderStats> => {
-  const orders = await fetchOrders();
-
-  // 計算未收費訂單數量（款項狀態為空、未收費或未全款）
-  const unpaidOrders = orders.filter(order =>
-    !order.paymentStatus ||
-    order.paymentStatus === '未收費' ||
-    order.paymentStatus === '未全款'
-  );
-
-  // 計算所有訂單總金額
-  const totalAmount = orders.reduce((sum, order) => sum + (order.total || 0), 0);
-
-  // 計算各商品總數量
-  let totalRadishCake = 0;
-  let totalTaroCake = 0;
-  let totalHKRadishCake = 0;
-  let totaltest = 0;
-
-  orders.forEach(order => {
-    order.items.forEach(item => {
-      if (item.product.includes('原味蘿蔔糕')) {
-        totalRadishCake += item.quantity;
-      } else if (item.product.includes('芋頭粿')) {
-        totalTaroCake += item.quantity;
-      } else if (item.product.includes('台式鹹蘿蔔糕')) {
-        totalHKRadishCake += item.quantity;
-      } else if (item.product.includes('鳳梨豆腐乳')) {
-        totaltest += item.quantity;
+  try {
+    // 優先使用 Supabase 統計邊緣函數
+    console.log('🔗 使用 Supabase 統計 API');
+    const res = await fetch('https://skcdapfynyszxyqqsvib.supabase.co/functions/v1/dashboard-stats', {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNrY2RhcGZ5bnlzenh5cXFzdmliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ5NzQzMzQsImV4cCI6MjA3MDU1MDMzNH0.BilWvEh4djyQAYb5QWkuiju9teOVHlmk9zG0JVgMZbQ`,
+        'Cache-Control': 'no-cache',
+        'Content-Type': 'application/json'
       }
     });
-  });
 
-  return {
-    total: orders.length,
-    pending: orders.filter(order => order.status === '訂單確認中').length,
-    processing: orders.filter(order => order.status === '已抄單').length,
-    completed: orders.filter(order => order.status === '已出貨').length,
-    canceled: orders.filter(order => order.status === '取消訂單').length,
-    unpaid: unpaidOrders.length,
-    totalAmount: totalAmount,
-    totalRadishCake,
-    totalTaroCake,
-    totalHKRadishCake,
-    totaltest
-  };
+    if (!res.ok) {
+      throw new Error(`Supabase 統計 API 失敗: ${res.statusText}`);
+    }
+
+    const result = await res.json();
+    if (!result.success) throw new Error(result.message || '統計查詢失敗');
+
+    console.log('✅ Supabase 統計查詢成功');
+    return result.data;
+
+  } catch (supabaseError) {
+    console.warn('🟡 Supabase 統計 API 失敗，使用客戶端計算降級:', supabaseError);
+    
+    // 降級到客戶端計算
+    const orders = await fetchOrders();
+
+    // 計算未收費訂單數量（款項狀態為空、未收費或未全款）
+    const unpaidOrders = orders.filter(order =>
+      !order.paymentStatus ||
+      order.paymentStatus === '未收費' ||
+      order.paymentStatus === '未全款'
+    );
+
+    // 計算所有訂單總金額
+    const totalAmount = orders.reduce((sum, order) => sum + (order.total || 0), 0);
+
+    // 計算各商品總數量
+    let totalRadishCake = 0;
+    let totalTaroCake = 0;
+    let totalHKRadishCake = 0;
+    let totaltest = 0;
+
+    orders.forEach(order => {
+      order.items.forEach(item => {
+        if (item.product.includes('原味蘿蔔糕')) {
+          totalRadishCake += item.quantity;
+        } else if (item.product.includes('芋頭粿')) {
+          totalTaroCake += item.quantity;
+        } else if (item.product.includes('台式鹹蘿蔔糕')) {
+          totalHKRadishCake += item.quantity;
+        } else if (item.product.includes('鳳梨豆腐乳')) {
+          totaltest += item.quantity;
+        }
+      });
+    });
+
+    const fallbackStats = {
+      total: orders.length,
+      pending: orders.filter(order => order.status === '訂單確認中').length,
+      processing: orders.filter(order => order.status === '已抄單').length,
+      completed: orders.filter(order => order.status === '已出貨').length,
+      canceled: orders.filter(order => order.status === '取消訂單').length,
+      unpaid: unpaidOrders.length,
+      totalAmount: totalAmount,
+      totalRadishCake,
+      totalTaroCake,
+      totalHKRadishCake,
+      totaltest
+    };
+
+    console.log('✅ 客戶端統計計算完成');
+    return fallbackStats;
+  }
 };
 
 // 注意：Google Sheets API 不支援直接修改資料，若需更新請自行設計後端 API 處理
