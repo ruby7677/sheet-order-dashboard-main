@@ -20,7 +20,7 @@ class SheetsApiHandler {
     private $ipCache = [];
     private $ipCacheExpiry = 60; // 秒
     private $twilioSid = 'AC2e0ed31bb0213acdfa9e5322932659a0';
-    private $twilioToken = '85e6d1c814833d9ac9def8d80f5c0ac4';
+    private $twilioToken = '';
     private $twilioFrom = '+18592517209'; // 你的 Twilio 電話號碼
 
 
