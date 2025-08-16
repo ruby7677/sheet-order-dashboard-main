@@ -186,51 +186,85 @@ export const fetchOrders = async (filters?: {
   
   const fullEndpoint = `${endpoint}?${params.toString()}`;
   
-  // 使用 Supabase 邊緣函數
-  const res = await fetch(`https://skcdapfynyszxyqqsvib.supabase.co/functions/v1${fullEndpoint}`, {
-    method: 'GET',
-    headers: {
-      'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNrY2RhcGZ5bnlzenh5cXFzdmliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ5NzQzMzQsImV4cCI6MjA3MDU1MDMzNH0.BilWvEh4djyQAYb5QWkuiju9teOVHlmk9zG0JVgMZbQ`,
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'Content-Type': 'application/json'
+  try {
+    // 優先使用 Supabase 邊緣函數
+    console.log('🔗 使用 Supabase 邊緣函數:', fullEndpoint);
+    const res = await fetch(`https://skcdapfynyszxyqqsvib.supabase.co/functions/v1${fullEndpoint}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNrY2RhcGZ5bnlzenh5cXFzdmliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ5NzQzMzQsImV4cCI6MjA3MDU1MDMzNH0.BilWvEh4djyQAYb5QWkuiju9teOVHlmk9zG0JVgMZbQ`,
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!res.ok) {
+      throw new Error(`Supabase API 失敗: ${res.statusText}`);
     }
-  });
-  if (!res.ok) {
-    // 如果 HTTP 狀態碼不是 2xx，嘗試讀取錯誤訊息
-    let errorMsg = '讀取訂單失敗';
+
+    const result = await res.json();
+    if (!result.success) throw new Error(result.message || '讀取訂單失敗');
+    if (!result.data || !Array.isArray(result.data)) {
+      console.warn('Supabase API回傳的訂單資料格式不正確，應為陣列:', result.data);
+      return []; 
+    }
+
+    // Supabase 邊緣函數已經返回正確格式的資料
+    let orders = result.data;
+    console.log('✅ Supabase 訂單資料獲取成功，數量:', orders.length);
+
+    // 更新快取
+    orderCache = {
+      timestamp: now,
+      data: orders,
+      filters: filters ? { ...filters } : undefined
+    };
+
+    return orders;
+
+  } catch (supabaseError) {
+    console.warn('🟡 Supabase API 失敗，嘗試 Google Sheets 降級:', supabaseError);
+    
+    // 降級到 Google Sheets API
     try {
-      const errorResult = await res.json();
-      errorMsg = errorResult.message || errorMsg;
-    } catch (e) {
-      // 如果回應不是 JSON 或其他錯誤，使用 res.statusText
-      errorMsg = `讀取訂單失敗: ${res.statusText}`;
+      const legacyEndpoint = `/api/get_orders_from_sheet.php?${params.toString()}`;
+      const res = await apiCallWithFallback(legacyEndpoint);
+      
+      if (!res.ok) {
+        let errorMsg = '讀取訂單失敗';
+        try {
+          const errorResult = await res.json();
+          errorMsg = errorResult.message || errorMsg;
+        } catch (e) {
+          errorMsg = `讀取訂單失敗: ${res.statusText}`;
+        }
+        throw new Error(errorMsg);
+      }
+
+      const result = await res.json();
+      if (!result.success) throw new Error(result.message || '讀取訂單失敗');
+      if (!result.data || !Array.isArray(result.data)) {
+        console.warn('Google Sheets API回傳的訂單資料格式不正確，應為陣列:', result.data);
+        return []; 
+      }
+
+      let orders = result.data;
+      console.log('✅ Google Sheets 降級成功，訂單數量:', orders.length);
+
+      // 更新快取
+      orderCache = {
+        timestamp: now,
+        data: orders,
+        filters: filters ? { ...filters } : undefined
+      };
+
+      return orders;
+      
+    } catch (fallbackError) {
+      console.error('❌ Google Sheets 降級也失敗:', fallbackError);
+      throw new Error(`所有數據源都失敗 - Supabase: ${supabaseError instanceof Error ? supabaseError.message : supabaseError}, Google Sheets: ${fallbackError instanceof Error ? fallbackError.message : fallbackError}`);
     }
-    throw new Error(errorMsg);
   }
-
-  const result = await res.json();
-  if (!result.success) throw new Error(result.message || '讀取訂單失敗');
-  if (!result.data || !Array.isArray(result.data)) {
-    console.warn('API回傳的訂單資料格式不正確，應為陣列:', result.data);
-    return []; // 或者拋出錯誤，視情況而定
-  }
-
-  // Supabase 邊緣函數已經返回正確格式的資料
-  let orders = result.data;
-
-  // 更新快取
-  orderCache = {
-    timestamp: now,
-    data: orders,
-    filters: filters ? { ...filters } : undefined
-  };
-
-  // 有過濾條件時前端進行過濾
-  if (filters) {
-    orders = filterOrdersInMemory(orders, filters);
-  }
-
-  return orders;
 };
 
 // 在記憶體中過濾訂單資料的函數
@@ -404,26 +438,55 @@ export const updateOrderStatus = async (id: string, status: '訂單確認中' | 
   
   const endpoint = `/orders/status`;
 
-  const res = await fetch(`https://skcdapfynyszxyqqsvib.supabase.co/functions/v1${endpoint}`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNrY2RhcGZ5bnlzenh5cXFzdmliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ5NzQzMzQsImV4cCI6MjA3MDU1MDMzNH0.BilWvEh4djyQAYb5QWkuiju9teOVHlmk9zG0JVgMZbQ`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ id, status }),
-  });
-  if (!res.ok) {
-    let errorMsg = '更新訂單狀態失敗';
-    try {
-      const errorResult = await res.json();
-      errorMsg = errorResult.message || errorMsg;
-    } catch (e) {
-      errorMsg = `更新訂單狀態失敗: ${res.statusText}`;
+  try {
+    // 優先使用 Supabase 邊緣函數
+    const res = await fetch(`https://skcdapfynyszxyqqsvib.supabase.co/functions/v1${endpoint}`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNrY2RhcGZ5bnlzenh5cXFzdmliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ5NzQzMzQsImV4cCI6MjA3MDU1MDMzNH0.BilWvEh4djyQAYb5QWkuiju9teOVHlmk9zG0JVgMZbQ`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ id, status }),
+    });
+    
+    if (!res.ok) {
+      throw new Error(`Supabase API 失敗: ${res.statusText}`);
     }
-    throw new Error(errorMsg);
+    
+    const result = await res.json();
+    if (!result.success) throw new Error(result.message || '更新訂單狀態失敗');
+    
+    console.log('✅ Supabase 訂單狀態更新成功');
+    
+  } catch (supabaseError) {
+    console.warn('🟡 Supabase API 失敗，嘗試 Google Sheets 降級:', supabaseError);
+    
+    // 降級到 Google Sheets API
+    const legacyEndpoint = `/api/update_order_status.php?_=${timestamp}&nonce=${nonce}`;
+    const res = await apiCallWithFallback(legacyEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ id, status, timestamp, nonce }),
+    });
+    
+    if (!res.ok) {
+      let errorMsg = '更新訂單狀態失敗';
+      try {
+        const errorResult = await res.json();
+        errorMsg = errorResult.message || errorMsg;
+      } catch (e) {
+        errorMsg = `更新訂單狀態失敗: ${res.statusText}`;
+      }
+      throw new Error(errorMsg);
+    }
+    
+    const result = await res.json();
+    if (!result.success) throw new Error(result.message || '更新訂單狀態失敗');
+    
+    console.log('✅ Google Sheets 降級更新成功');
   }
-  const result = await res.json();
-  if (!result.success) throw new Error(result.message || '更新訂單狀態失敗');
 
   // 成功更新後清除快取
   clearOrderCache();
@@ -437,8 +500,9 @@ export const batchUpdateOrderStatus = async (ids: string[], status: '訂單確�
 
     // 批次操作成功後清除快取
     clearOrderCache();
+    console.log('✅ 批次更新訂單狀態成功');
   } catch (error) {
-    console.error('批次更新訂單狀態失敗:', error);
+    console.error('❌ 批次更新訂單狀態失敗:', error);
     throw error;
   }
 };
