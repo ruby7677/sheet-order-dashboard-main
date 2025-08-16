@@ -37,12 +37,3 @@ verify_jwt = false
 
 [functions.migrate-sheets-data]
 verify_jwt = false
-
-[functions.orders]
-verify_jwt = false
-
-[functions.customers]
-verify_jwt = false
-
-[functions.dashboard-stats]
-verify_jwt = false
