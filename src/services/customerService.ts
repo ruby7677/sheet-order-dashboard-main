@@ -135,12 +135,16 @@ export const fetchCustomers = async (filters?: CustomerFilterCriteria): Promise<
   };
 
   try {
-    // 主要來源：從 Sheets 的「客戶名單」讀取
-    const apiEndpoint = getApiEndpoint('/api/get_customers_from_sheet.php');
+    // 主要來源：從 Supabase 邊緣函數讀取
+    const apiEndpoint = 'https://skcdapfynyszxyqqsvib.supabase.co/functions/v1/customers';
     console.log('📡 客戶資料 API 端點:', apiEndpoint);
     
     const resp = await fetch(`${apiEndpoint}?nonce=${now}`, {
-      headers: { 'Cache-Control': 'no-cache' },
+      headers: { 
+        'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNrY2RhcGZ5bnlzenh5cXFzdmliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ5NzQzMzQsImV4cCI6MjA3MDU1MDMzNH0.BilWvEh4djyQAYb5QWkuiju9teOVHlmk9zG0JVgMZbQ`,
+        'Cache-Control': 'no-cache',
+        'Content-Type': 'application/json'
+      },
     });
     const json = await resp.json();
 
