@@ -125,7 +125,7 @@ const Index: React.FC = () => {
 
   // 開啟到貨日設定頁面
   const openDeliverySettings = () => {
-    window.open('http://210.62.183.9/lopokao/admin-delivery-settings.php', '_blank', 'width=800,height=900,scrollbars=yes,resizable=yes');
+    window.open('http://lopokao.767780.xyz/admin-delivery-settings.php', '_blank', 'width=800,height=900,scrollbars=yes,resizable=yes');
   };
 
   useEffect(() => {
