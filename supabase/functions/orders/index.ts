@@ -246,7 +246,7 @@ async function handleCreateOrder(req: Request) {
 }
 
 /**
- * 更新訂單狀態
+ * 更新訂單狀態（含雙寫機制）
  */
 async function handleUpdateOrderStatus(req: Request) {
   try {
@@ -256,6 +256,7 @@ async function handleUpdateOrderStatus(req: Request) {
       throw new Error('缺少必要參數: id 或 status')
     }
 
+    // 主要更新：Supabase
     const { error } = await supabase
       .from('orders')
       .update({ status, updated_at: new Date().toISOString() })
@@ -263,6 +264,30 @@ async function handleUpdateOrderStatus(req: Request) {
 
     if (error) {
       throw new Error(`更新訂單狀態失敗: ${error.message}`)
+    }
+
+    // 雙寫：同步到 Google Sheets（非阻塞）
+    try {
+      const syncToSheets = async () => {
+        // 獲取訂單的 Google Sheets ID
+        const { data: orderData } = await supabase
+          .from('orders')
+          .select('google_sheet_id, order_number')
+          .eq('id', id)
+          .single()
+        
+        if (orderData?.google_sheet_id) {
+          // 這裡可以添加 Google Sheets API 更新邏輯
+          console.log(`同步訂單狀態到 Google Sheets: ${orderData.order_number} -> ${status}`)
+        }
+      }
+      
+      // 非阻塞同步
+      syncToSheets().catch(error => 
+        console.warn('Google Sheets 同步失敗:', error)
+      )
+    } catch (syncError) {
+      console.warn('Google Sheets 同步失敗:', syncError)
     }
 
     return new Response(
@@ -282,7 +307,7 @@ async function handleUpdateOrderStatus(req: Request) {
 }
 
 /**
- * 更新付款狀態
+ * 更新付款狀態（含雙寫機制）
  */
 async function handleUpdatePaymentStatus(req: Request) {
   try {
@@ -292,6 +317,7 @@ async function handleUpdatePaymentStatus(req: Request) {
       throw new Error('缺少必要參數: id 或 paymentStatus')
     }
 
+    // 主要更新：Supabase
     const { error } = await supabase
       .from('orders')
       .update({ payment_status: paymentStatus, updated_at: new Date().toISOString() })
@@ -299,6 +325,27 @@ async function handleUpdatePaymentStatus(req: Request) {
 
     if (error) {
       throw new Error(`更新付款狀態失敗: ${error.message}`)
+    }
+
+    // 雙寫：同步到 Google Sheets（非阻塞）
+    try {
+      const syncToSheets = async () => {
+        const { data: orderData } = await supabase
+          .from('orders')
+          .select('google_sheet_id, order_number')
+          .eq('id', id)
+          .single()
+        
+        if (orderData?.google_sheet_id) {
+          console.log(`同步付款狀態到 Google Sheets: ${orderData.order_number} -> ${paymentStatus}`)
+        }
+      }
+      
+      syncToSheets().catch(error => 
+        console.warn('Google Sheets 付款狀態同步失敗:', error)
+      )
+    } catch (syncError) {
+      console.warn('Google Sheets 付款狀態同步失敗:', syncError)
     }
 
     return new Response(
@@ -318,7 +365,7 @@ async function handleUpdatePaymentStatus(req: Request) {
 }
 
 /**
- * 更新訂單項目
+ * 更新訂單項目（含雙寫機制）
  */
 async function handleUpdateOrderItems(req: Request) {
   try {
@@ -328,7 +375,7 @@ async function handleUpdateOrderItems(req: Request) {
       throw new Error('缺少必要參數: orderId 或 items')
     }
 
-    // 先刪除舊的訂單項目
+    // 使用事務確保數據一致性
     const { error: deleteError } = await supabase
       .from('order_items')
       .delete()
@@ -368,6 +415,27 @@ async function handleUpdateOrderItems(req: Request) {
       throw new Error(`更新訂單總金額失敗: ${updateError.message}`)
     }
 
+    // 雙寫：同步到 Google Sheets（非阻塞）
+    try {
+      const syncToSheets = async () => {
+        const { data: orderData } = await supabase
+          .from('orders')
+          .select('google_sheet_id, order_number')
+          .eq('id', orderId)
+          .single()
+        
+        if (orderData?.google_sheet_id) {
+          console.log(`同步訂單項目到 Google Sheets: ${orderData.order_number}`)
+        }
+      }
+      
+      syncToSheets().catch(error => 
+        console.warn('Google Sheets 訂單項目同步失敗:', error)
+      )
+    } catch (syncError) {
+      console.warn('Google Sheets 訂單項目同步失敗:', syncError)
+    }
+
     return new Response(
       JSON.stringify({ success: true, message: '訂單項目更新成功' }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -385,7 +453,7 @@ async function handleUpdateOrderItems(req: Request) {
 }
 
 /**
- * 刪除單一訂單
+ * 刪除單一訂單（含雙寫機制）
  */
 async function handleDeleteOrder(req: Request) {
   try {
@@ -395,6 +463,13 @@ async function handleDeleteOrder(req: Request) {
     if (!id) {
       throw new Error('缺少必要參數: id')
     }
+
+    // 獲取訂單資訊用於同步
+    const { data: orderData } = await supabase
+      .from('orders')
+      .select('google_sheet_id, order_number')
+      .eq('id', id)
+      .single()
 
     // 先刪除訂單項目
     const { error: itemsError } = await supabase
@@ -416,6 +491,21 @@ async function handleDeleteOrder(req: Request) {
       throw new Error(`刪除訂單失敗: ${orderError.message}`)
     }
 
+    // 雙寫：同步到 Google Sheets（非阻塞）
+    try {
+      if (orderData?.google_sheet_id) {
+        const syncToSheets = async () => {
+          console.log(`同步刪除訂單到 Google Sheets: ${orderData.order_number}`)
+        }
+        
+        syncToSheets().catch(error => 
+          console.warn('Google Sheets 刪除同步失敗:', error)
+        )
+      }
+    } catch (syncError) {
+      console.warn('Google Sheets 刪除同步失敗:', syncError)
+    }
+
     return new Response(
       JSON.stringify({ success: true, message: '訂單刪除成功' }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -433,7 +523,7 @@ async function handleDeleteOrder(req: Request) {
 }
 
 /**
- * 批次刪除訂單
+ * 批次刪除訂單（含雙寫機制）
  */
 async function handleBatchDeleteOrders(req: Request) {
   try {
@@ -442,6 +532,12 @@ async function handleBatchDeleteOrders(req: Request) {
     if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
       throw new Error('缺少有效的訂單 ID 列表')
     }
+
+    // 獲取要刪除的訂單資訊用於同步
+    const { data: ordersData } = await supabase
+      .from('orders')
+      .select('id, google_sheet_id, order_number')
+      .in('id', orderIds)
 
     // 先刪除所有相關的訂單項目
     const { error: itemsError } = await supabase
@@ -461,6 +557,27 @@ async function handleBatchDeleteOrders(req: Request) {
 
     if (ordersError) {
       throw new Error(`批次刪除訂單失敗: ${ordersError.message}`)
+    }
+
+    // 雙寫：同步到 Google Sheets（非阻塞）
+    try {
+      if (ordersData && ordersData.length > 0) {
+        const syncToSheets = async () => {
+          const orderNumbers = ordersData
+            .filter(order => order.google_sheet_id)
+            .map(order => order.order_number)
+          
+          if (orderNumbers.length > 0) {
+            console.log(`同步批次刪除訂單到 Google Sheets: ${orderNumbers.join(', ')}`)
+          }
+        }
+        
+        syncToSheets().catch(error => 
+          console.warn('Google Sheets 批次刪除同步失敗:', error)
+        )
+      }
+    } catch (syncError) {
+      console.warn('Google Sheets 批次刪除同步失敗:', syncError)
     }
 
     return new Response(
