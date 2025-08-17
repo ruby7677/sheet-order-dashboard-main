@@ -10,7 +10,13 @@ export class GoogleSheetsService {
 	private accessToken: string | null = null;
 	private tokenExpiry: number = 0;
 
-	constructor(serviceAccountKey: string, spreadsheetId: string) {
+	constructor(serviceAccountKey: string | undefined, spreadsheetId: string | undefined) {
+		if (!serviceAccountKey) {
+			throw new Error('Google Service Account Key is required but not provided');
+		}
+		if (!spreadsheetId) {
+			throw new Error('Google Spreadsheet ID is required but not provided');
+		}
 		this.serviceAccountKey = serviceAccountKey;
 		this.spreadsheetId = spreadsheetId;
 	}
