@@ -9,9 +9,9 @@
 		"resolveJsonModule": true,
 		"moduleDetection": "force",
 		/* Strictness */
-		"noImplicitAny": false,
+		"noImplicitAny": true,
 		"noImplicitThis": true,
-		"strictNullChecks": false,
+		"strictNullChecks": true,
 		"strict": true,
 		"noUncheckedIndexedAccess": true,
 		/* If NOT transpiling with TypeScript: */
