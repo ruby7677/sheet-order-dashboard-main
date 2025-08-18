@@ -37,9 +37,8 @@ export async function migrateGoogleSheetsData(options: MigrationOptions): Promis
     });
     
     return result as MigrationResult;
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : '資料遷移失敗';
-    throw new Error(`資料遷移失敗: ${message}`);
+  } catch (error: any) {
+    throw new Error(`資料遷移失敗: ${error.message}`);
   }
 }
 
@@ -71,9 +70,8 @@ export async function validateMigrationData(): Promise<{
       productsCount: productsResult.count || 0,
       issues
     };
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : '資料驗證失敗';
-    throw new Error(message);
+  } catch (error) {
+    throw new Error(error instanceof Error ? error.message : '資料驗證失敗');
   }
 }
 
@@ -88,8 +86,7 @@ export async function clearExistingData(): Promise<void> {
     await supabase.from('customers').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     
     console.log('現有資料已清空');
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : '清空資料失敗';
-    throw new Error(message);
+  } catch (error) {
+    throw new Error(error instanceof Error ? error.message : '清空資料失敗');
   }
 }

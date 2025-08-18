@@ -1,6 +1,5 @@
 import { Customer, CustomerWithStats, CustomerOrder, CustomerFilterCriteria, CustomerStats } from '@/types/customer';
 import { fetchOrders } from './orderService';
-import { Order } from '@/types/order';
 
 // 動態 API 配置系統 (與 orderService 保持一致)
 const getApiConfig = () => {
@@ -93,12 +92,12 @@ export const fetchCustomers = async (filters?: CustomerFilterCriteria): Promise<
   const deriveFromOrders = async (): Promise<CustomerWithStats[]> => {
     const orders = await fetchOrders();
 
-    const customersByPhone: Record<string, Order[]> = {};
+    const customersByPhone: { [phone: string]: typeof orders } = {} as any;
     orders.forEach(o => {
       const phone = o.customer?.phone?.trim();
       if (!phone) return;
-      if (!customersByPhone[phone]) customersByPhone[phone] = [];
-      customersByPhone[phone].push(o);
+      if (!customersByPhone[phone]) customersByPhone[phone] = [] as any;
+      (customersByPhone[phone] as any).push(o);
     });
 
     const customersWithStats: CustomerWithStats[] = Object.entries(customersByPhone).map(([phone, group]) => {
