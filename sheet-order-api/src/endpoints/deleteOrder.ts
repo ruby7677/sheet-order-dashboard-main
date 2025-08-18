@@ -196,7 +196,7 @@ export class DeleteOrder extends OpenAPIRoute {
 			
 			return sheet.properties.sheetId;
 		} catch (error) {
-			if (error instanceof ApiError) throw error;
+			if (error instanceof ApiError) {throw error;}
 			throw new ApiError(500, `獲取工作表 ID 失敗: ${error instanceof Error ? error.message : String(error)}`, 'SHEET_ID_ERROR');
 		}
 	}
@@ -228,7 +228,7 @@ export class DeleteOrder extends OpenAPIRoute {
 			// 執行刪除行操作
 			await sheetsService.batchUpdate([deleteRequest]);
 		} catch (error) {
-			if (error instanceof ApiError) throw error;
+			if (error instanceof ApiError) {throw error;}
 			throw new ApiError(500, `刪除行失敗: ${error instanceof Error ? error.message : String(error)}`, 'DELETE_ROW_ERROR');
 		}
 	}
@@ -275,7 +275,7 @@ export class DeleteOrder extends OpenAPIRoute {
 
 			// 從被刪除位置開始，重新分配 ID
 			for (let i = startUpdateIndex; i < totalRows; i++) {
-				if (i === 0) continue; // 跳過標題行
+				if (i === 0) {continue;} // 跳過標題行
 
 				// 檢查該行是否有資料（避免更新空白行）
 				if (!rows[i] || !rows[i][1] || String(rows[i][1]).trim() === '') {

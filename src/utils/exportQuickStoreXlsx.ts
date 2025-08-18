@@ -45,7 +45,7 @@ export async function downloadQuickStoreXlsx(orders: Order[], filename = '快速
     // 門市編號：配送地址最後6碼數字
     let storeCode = '';
     const match = (order.deliveryAddress || '').match(/(\d{6})$/);
-    if (match) storeCode = match[1];
+    if (match) {storeCode = match[1];}
     // 匯款帳戶後五碼
     const bankCode = cod ? '' : '';
     // 列印張數

@@ -120,7 +120,7 @@ function base64UrlEncode(data: string | Uint8Array): string {
 }
 
 function parseDate(dateStr: string): string | null {
-  if (!dateStr) return null;
+  if (!dateStr) {return null;}
   
   try {
     const date = new Date(dateStr);
@@ -135,7 +135,7 @@ function parseDate(dateStr: string): string | null {
 }
 
 async function migrateCustomers(supabase: any, customersData: any[][], dryRun: boolean, skipExisting: boolean) {
-  if (customersData.length === 0) return { processed: 0, errors: [] };
+  if (customersData.length === 0) {return { processed: 0, errors: [] };}
   
   const header = customersData[0];
   const rows = customersData.slice(1);
@@ -212,7 +212,7 @@ async function migrateCustomers(supabase: any, customersData: any[][], dryRun: b
 }
 
 async function migrateOrders(supabase: any, ordersData: any[][], dryRun: boolean, skipExisting: boolean) {
-  if (ordersData.length === 0) return { processed: 0, errors: [] };
+  if (ordersData.length === 0) {return { processed: 0, errors: [] };}
   
   const rows = ordersData.slice(1); // 跳過標題行
   const errors: string[] = [];
@@ -222,7 +222,7 @@ async function migrateOrders(supabase: any, ordersData: any[][], dryRun: boolean
     const row = rows[i];
     
     // 跳過空白行
-    if (!row[1] || row[1].toString().trim() === '') continue;
+    if (!row[1] || row[1].toString().trim() === '') {continue;}
 
     try {
       const orderData = {
@@ -380,7 +380,7 @@ Deno.serve(async (req) => {
 async function validateJWT(token: string): Promise<boolean> {
   try {
     const parts = token.split('.');
-    if (parts.length !== 3) return false;
+    if (parts.length !== 3) {return false;}
 
     const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
     

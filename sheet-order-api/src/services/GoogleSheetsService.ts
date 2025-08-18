@@ -86,7 +86,7 @@ export class GoogleSheetsService {
 
 			return this.accessToken;
 		} catch (error) {
-			if (error instanceof ApiError) throw error;
+			if (error instanceof ApiError) {throw error;}
 			throw new ApiError(500, `取得存取權杖失敗: ${error instanceof Error ? error.message : String(error)}`, 'TOKEN_ERROR');
 		}
 	}
@@ -194,7 +194,7 @@ export class GoogleSheetsService {
 			} catch (error) {
 				if (error instanceof ApiError) {
 					// 如果是最後一次嘗試，直接拋出錯誤
-					if (attempt === retryCount) throw error;
+					if (attempt === retryCount) {throw error;}
 					
 					// 如果不是認證錯誤，等待後重試
 					if (error.statusCode !== 401) {
@@ -255,7 +255,7 @@ export class GoogleSheetsService {
 				return; // 成功更新
 			} catch (error) {
 				if (error instanceof ApiError) {
-					if (attempt === retryCount) throw error;
+					if (attempt === retryCount) {throw error;}
 					if (error.statusCode !== 401) {
 						await this.delay(Math.pow(2, attempt) * 1000);
 					}
@@ -324,7 +324,7 @@ export class GoogleSheetsService {
 				return; // 成功更新
 			} catch (error) {
 				if (error instanceof ApiError) {
-					if (attempt === retryCount) throw error;
+					if (attempt === retryCount) {throw error;}
 					if (error.statusCode !== 401) {
 						await this.delay(Math.pow(2, attempt) * 1000);
 					}
@@ -389,7 +389,7 @@ export class GoogleSheetsService {
 				return result;
 			} catch (error) {
 				if (error instanceof ApiError) {
-					if (attempt === retryCount) throw error;
+					if (attempt === retryCount) {throw error;}
 					if (error.statusCode !== 401) {
 						await this.delay(Math.pow(2, attempt) * 1000);
 					}
@@ -442,7 +442,7 @@ export class GoogleSheetsService {
 				return data;
 			} catch (error) {
 				if (error instanceof ApiError) {
-					if (attempt === retryCount) throw error;
+					if (attempt === retryCount) {throw error;}
 					if (error.statusCode !== 401) {
 						await this.delay(Math.pow(2, attempt) * 1000);
 					}

@@ -46,12 +46,12 @@ const OrderFilters = forwardRef<OrderFiltersRef, OrderFiltersProps>(({ onFilterC
     search: string;
   }>) => {
     // 更新本地狀態
-    if (updates.status !== undefined) setStatus(updates.status);
-    if (updates.deliveryMethod !== undefined) setDeliveryMethod(updates.deliveryMethod);
-    if (updates.paymentStatus !== undefined) setPaymentStatus(updates.paymentStatus);
-    if (updates.startDate !== undefined) setStartDate(updates.startDate);
-    if (updates.endDate !== undefined) setEndDate(updates.endDate);
-    if (updates.search !== undefined) setSearch(updates.search);
+    if (updates.status !== undefined) {setStatus(updates.status);}
+    if (updates.deliveryMethod !== undefined) {setDeliveryMethod(updates.deliveryMethod);}
+    if (updates.paymentStatus !== undefined) {setPaymentStatus(updates.paymentStatus);}
+    if (updates.startDate !== undefined) {setStartDate(updates.startDate);}
+    if (updates.endDate !== undefined) {setEndDate(updates.endDate);}
+    if (updates.search !== undefined) {setSearch(updates.search);}
 
     // 計算最新的篩選條件
     const newStatus = updates.status !== undefined ? updates.status : status;

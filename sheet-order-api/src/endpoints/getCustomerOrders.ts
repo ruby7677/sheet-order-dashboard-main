@@ -189,7 +189,7 @@ export class GetCustomerOrders extends OpenAPIRoute {
 			return matchingOrders;
 
 		} catch (error) {
-			if (error instanceof ApiError) throw error;
+			if (error instanceof ApiError) {throw error;}
 			throw new ApiError(500, `獲取客戶訂單資料失敗: ${error instanceof Error ? error.message : String(error)}`, 'SHEET_ACCESS_ERROR');
 		}
 	}
@@ -252,8 +252,8 @@ export class GetCustomerOrders extends OpenAPIRoute {
 
 		rows.forEach((row, idx) => {
 			// 確保資料完整性
-			if (!row || row.length === 0) return;
-			if (!row[headerMap.phone]) return;
+			if (!row || row.length === 0) {return;}
+			if (!row[headerMap.phone]) {return;}
 
 			// 檢查電話是否匹配
 			const rowPhone = row[headerMap.phone];

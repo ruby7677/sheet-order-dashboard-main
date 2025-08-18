@@ -116,7 +116,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 function isTokenValid(token: string): boolean {
   try {
     const parts = token.split('.');
-    if (parts.length !== 3) return false;
+    if (parts.length !== 3) {return false;}
 
     const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
     

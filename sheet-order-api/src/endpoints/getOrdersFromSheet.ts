@@ -164,7 +164,7 @@ export class GetOrdersFromSheet extends OpenAPIRoute {
 	 * 參考原始 PHP 檔案的轉換邏輯
 	 */
 	private transformSheetDataToOrders(sheetData: any[][]): any[] {
-		if (sheetData.length === 0) return [];
+		if (sheetData.length === 0) {return [];}
 
 		// 第一列為標題，跳過
 		const orders = [];
@@ -172,7 +172,7 @@ export class GetOrdersFromSheet extends OpenAPIRoute {
 			const row = sheetData[idx];
 
 			// 跳過空白列（已刪除訂單或空白）
-			if (!row[1] || row[1].toString().trim() === '') continue;
+			if (!row[1] || row[1].toString().trim() === '') {continue;}
 
 			// 轉換到貨日期格式
 			const rawDate = row[5] || '';

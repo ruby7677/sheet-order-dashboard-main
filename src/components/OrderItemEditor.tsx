@@ -70,7 +70,7 @@ const OrderItemEditor: React.FC<OrderItemEditorProps> = ({
    * 更新商品數量
    */
   const updateQuantity = (index: number, newQuantity: number) => {
-    if (newQuantity < 1) return;
+    if (newQuantity < 1) {return;}
 
     const updatedItems = [...editedItems];
     updatedItems[index] = {

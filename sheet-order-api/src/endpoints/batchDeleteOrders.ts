@@ -239,7 +239,7 @@ export class BatchDeleteOrders extends OpenAPIRoute {
 			
 			return sheet.properties.sheetId;
 		} catch (error) {
-			if (error instanceof ApiError) throw error;
+			if (error instanceof ApiError) {throw error;}
 			throw new ApiError(500, `獲取工作表 ID 失敗: ${error instanceof Error ? error.message : String(error)}`, 'SHEET_ID_ERROR');
 		}
 	}

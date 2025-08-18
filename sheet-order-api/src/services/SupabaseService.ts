@@ -83,8 +83,8 @@ export class SupabaseService {
   constructor(env: SupabaseEnv) {
     const url = env.SUPABASE_URL
     const key = env.SUPABASE_SERVICE_ROLE_KEY
-    if (!url) throw new ApiError(500, 'SUPABASE_URL 未設定', 'ENV_MISSING')
-    if (!key) throw new ApiError(500, 'SUPABASE_SERVICE_ROLE_KEY 未設定', 'ENV_MISSING')
+    if (!url) {throw new ApiError(500, 'SUPABASE_URL 未設定', 'ENV_MISSING')}
+    if (!key) {throw new ApiError(500, 'SUPABASE_SERVICE_ROLE_KEY 未設定', 'ENV_MISSING')}
 
     this.client = createClient(url, key, {
       auth: { persistSession: false },
@@ -103,17 +103,17 @@ export class SupabaseService {
       .from('orders')
       .select('*', { count: 'exact' })
 
-    if (query.status) q = q.eq('status', query.status)
-    if (query.paymentStatus) q = q.eq('payment_status', query.paymentStatus)
-    if (query.deliveryMethod) q = q.eq('delivery_method', query.deliveryMethod)
+    if (query.status) {q = q.eq('status', query.status)}
+    if (query.paymentStatus) {q = q.eq('payment_status', query.paymentStatus)}
+    if (query.deliveryMethod) {q = q.eq('delivery_method', query.deliveryMethod)}
     if (query.search) {
       // 以 ilike 搜姓名/電話/訂單號
       q = q.or(
         `customer_name.ilike.%${query.search}%,customer_phone.ilike.%${query.search}%,order_number.ilike.%${query.search}%`
       )
     }
-    if (query.dateRange?.startDate) q = q.gte('due_date', query.dateRange.startDate)
-    if (query.dateRange?.endDate) q = q.lte('due_date', query.dateRange.endDate)
+    if (query.dateRange?.startDate) {q = q.gte('due_date', query.dateRange.startDate)}
+    if (query.dateRange?.endDate) {q = q.lte('due_date', query.dateRange.endDate)}
 
     // 排序
     if (query.sort?.column) {
@@ -128,7 +128,7 @@ export class SupabaseService {
     q = q.range(from, to)
 
     const { data, error, count } = await q
-    if (error) throw new ApiError(500, `查詢訂單失敗: ${error.message}`, 'DB_QUERY_ERROR')
+    if (error) {throw new ApiError(500, `查詢訂單失敗: ${error.message}`, 'DB_QUERY_ERROR')}
 
     return {
       data: (data ?? []) as OrderRecord[],
@@ -147,7 +147,7 @@ export class SupabaseService {
       .from('customers')
       .select('*', { count: 'exact' })
 
-    if (query.region) q = q.eq('region', query.region)
+    if (query.region) {q = q.eq('region', query.region)}
     if (query.search) {
       q = q.or(`name.ilike.%${query.search}%,phone.ilike.%${query.search}%`)
     }
@@ -163,7 +163,7 @@ export class SupabaseService {
     q = q.range(from, to)
 
     const { data, error, count } = await q
-    if (error) throw new ApiError(500, `查詢客戶失敗: ${error.message}`, 'DB_QUERY_ERROR')
+    if (error) {throw new ApiError(500, `查詢客戶失敗: ${error.message}`, 'DB_QUERY_ERROR')}
 
     return {
       data: (data ?? []) as CustomerRecord[],
@@ -176,7 +176,7 @@ export class SupabaseService {
   // 更新訂單狀態
   async updateOrderStatus(id: string, status: string): Promise<void> {
     const { error } = await this.client.from('orders').update({ status }).eq('id', id)
-    if (error) throw new ApiError(500, `更新訂單狀態失敗: ${error.message}`, 'DB_UPDATE_ERROR')
+    if (error) {throw new ApiError(500, `更新訂單狀態失敗: ${error.message}`, 'DB_UPDATE_ERROR')}
   }
 
   // 更新付款狀態
@@ -185,7 +185,7 @@ export class SupabaseService {
       .from('orders')
       .update({ payment_status: paymentStatus })
       .eq('id', id)
-    if (error) throw new ApiError(500, `更新付款狀態失敗: ${error.message}`, 'DB_UPDATE_ERROR')
+    if (error) {throw new ApiError(500, `更新付款狀態失敗: ${error.message}`, 'DB_UPDATE_ERROR')}
   }
 
   // 更新訂單項目（示意：實際可改為透過 order_items 表維護）
@@ -195,25 +195,25 @@ export class SupabaseService {
     totalAmount?: number
   ): Promise<void> {
     const payload: Record<string, unknown> = { notes: itemsJson }
-    if (typeof totalAmount === 'number') payload.total_amount = totalAmount
+    if (typeof totalAmount === 'number') {payload.total_amount = totalAmount}
     const { error } = await this.client.from('orders').update(payload).eq('id', id)
-    if (error) throw new ApiError(500, `更新訂單項目失敗: ${error.message}`, 'DB_UPDATE_ERROR')
+    if (error) {throw new ApiError(500, `更新訂單項目失敗: ${error.message}`, 'DB_UPDATE_ERROR')}
   }
 
   // 刪除訂單
   async deleteOrder(id: string): Promise<void> {
     const { error } = await this.client.from('orders').delete().eq('id', id)
-    if (error) throw new ApiError(500, `刪除訂單失敗: ${error.message}`, 'DB_DELETE_ERROR')
+    if (error) {throw new ApiError(500, `刪除訂單失敗: ${error.message}`, 'DB_DELETE_ERROR')}
   }
 
   // 批次刪除
   async batchDeleteOrders(ids: string[]): Promise<number> {
-    if (!ids.length) return 0
+    if (!ids.length) {return 0}
     const { error, count } = await this.client
       .from('orders')
       .delete({ count: 'exact' })
       .in('id', ids)
-    if (error) throw new ApiError(500, `批次刪除訂單失敗: ${error.message}`, 'DB_DELETE_ERROR')
+    if (error) {throw new ApiError(500, `批次刪除訂單失敗: ${error.message}`, 'DB_DELETE_ERROR')}
     return count ?? 0
   }
 }
