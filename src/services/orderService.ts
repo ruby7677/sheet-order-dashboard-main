@@ -127,7 +127,7 @@ export const fetchOrders = async (filters?: {
   search?: string;
   date?: string;
   paymentStatus?: string;
-}): Promise<Order[]> => {
+}, options?: { forceRefresh?: boolean }): Promise<Order[]> => {
   // 檢查是否有快取且未過期
   const now = Date.now();
 
@@ -151,14 +151,19 @@ export const fetchOrders = async (filters?: {
   const timestamp = Date.now();
   const nonce = Math.random().toString(36).substring(2, 15);
   
-  // 構建 API 端點和參數
+  // 構建 API 端點和參數（僅在需要即時一致時才強制刷新）
   const endpoint = '/api/get_orders_from_sheet.php';
   const params = new URLSearchParams({
-    refresh: '1',
-    _: timestamp.toString(),
-    nonce: nonce,
     v: '1.2' // API 版本號
   });
+
+  if (options?.forceRefresh) {
+    params.set('refresh', '1');
+    params.set('_', timestamp.toString());
+    params.set('nonce', nonce);
+    // 若透過 Cloudflare，搭配後端 realtime=1 才會觸發強制刷新
+    params.set('realtime', '1');
+  }
   
   const fullEndpoint = `${endpoint}?${params.toString()}`;
   

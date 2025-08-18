@@ -24,10 +24,13 @@ $timestamp = isset($_GET['_']) ? $_GET['_'] : time();
 $requestId = md5($timestamp . rand(1000, 9999));
 header('X-Request-ID: ' . $requestId);
 
-// 如果是通過 Cloudflare 訪問，始終強制刷新
+// 若為 Cloudflare 代理請求，僅在帶上 realtime=1 時才強制刷新
 if (isset($_SERVER['HTTP_CF_CONNECTING_IP']) || isset($_SERVER['HTTP_CF_VISITOR'])) {
-    $forceRefresh = true;
     header('X-CF-Detected: Yes');
+    if (isset($_GET['realtime']) && $_GET['realtime'] === '1') {
+        $forceRefresh = true;
+        header('X-Cache-Realtime', '1');
+    }
 }
 
 // 檢查快取是否存在且未過期且不是強制刷新
