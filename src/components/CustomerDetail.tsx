@@ -48,14 +48,14 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customer, open, onClose
     }
   };
 
-  if (!customer) return null;
+  if (!customer) {return null;}
 
   // 格式化日期
   const formatDate = (dateStr: string) => {
-    if (!dateStr) return '';
+    if (!dateStr) {return '';}
     try {
       const date = new Date(dateStr);
-      if (isNaN(date.getTime())) return dateStr;
+      if (isNaN(date.getTime())) {return dateStr;}
       return date.toLocaleDateString('zh-TW');
     } catch (e) {
       return dateStr;

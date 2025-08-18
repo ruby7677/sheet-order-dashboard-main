@@ -84,7 +84,7 @@ export const fetchCustomers = async (filters?: CustomerFilterCriteria): Promise<
     (!filters || (!filters.region && !filters.purchaseCount && !filters.purchasedItem && !filters.search))
   ) {
     console.log('使用快取的客戶資料');
-    if (filters) return filterCustomersInMemory(customerCache.data, filters);
+    if (filters) {return filterCustomersInMemory(customerCache.data, filters);}
     return customerCache.data;
   }
 
@@ -95,8 +95,8 @@ export const fetchCustomers = async (filters?: CustomerFilterCriteria): Promise<
     const customersByPhone: { [phone: string]: typeof orders } = {} as any;
     orders.forEach(o => {
       const phone = o.customer?.phone?.trim();
-      if (!phone) return;
-      if (!customersByPhone[phone]) customersByPhone[phone] = [] as any;
+      if (!phone) {return;}
+      if (!customersByPhone[phone]) {customersByPhone[phone] = [] as any;}
       (customersByPhone[phone] as any).push(o);
     });
 
@@ -179,7 +179,7 @@ export const fetchCustomers = async (filters?: CustomerFilterCriteria): Promise<
         const parts = itemsStr.split(/[,，、\n]/).map(p => p.trim()).filter(Boolean);
         parts.forEach(p => {
           const product = p.split(/x|X|×/)[0].trim();
-          if (product) purchased.push(product);
+          if (product) {purchased.push(product);}
         });
       }
 
@@ -208,11 +208,11 @@ export const fetchCustomers = async (filters?: CustomerFilterCriteria): Promise<
       g.purchaseCount += 1;
       g.purchasedItems = Array.from(new Set([...g.purchasedItems, ...purchased]));
       // 用較新的非空資料覆蓋
-      if (!g.name && name) g.name = name;
-      if (!g.address && address) g.address = address;
-      if (!g.deliveryMethod && deliveryMethod) g.deliveryMethod = deliveryMethod;
-      if (!g.orderTime && orderTime) g.orderTime = orderTime;
-      if (!g.items && itemsStr) g.items = itemsStr;
+      if (!g.name && name) {g.name = name;}
+      if (!g.address && address) {g.address = address;}
+      if (!g.deliveryMethod && deliveryMethod) {g.deliveryMethod = deliveryMethod;}
+      if (!g.orderTime && orderTime) {g.orderTime = orderTime;}
+      if (!g.items && itemsStr) {g.items = itemsStr;}
     });
 
     const customersWithStats = Object.values(groups);
@@ -236,15 +236,15 @@ export const fetchCustomers = async (filters?: CustomerFilterCriteria): Promise<
 
 // 從地址中提取地區資訊
 const extractRegion = (address: string): string => {
-  if (!address) return '未知地區';
+  if (!address) {return '未知地區';}
 
   // 嘗試匹配常見的地址格式
   const cityMatch = address.match(/^(.*?[市縣])/);
-  if (cityMatch) return cityMatch[1];
+  if (cityMatch) {return cityMatch[1];}
 
   // 如果沒有匹配到市或縣，嘗試匹配鄉鎮市區
   const districtMatch = address.match(/^(.*?[鄉鎮市區])/);
-  if (districtMatch) return districtMatch[1];
+  if (districtMatch) {return districtMatch[1];}
 
   return '未知地區';
 };

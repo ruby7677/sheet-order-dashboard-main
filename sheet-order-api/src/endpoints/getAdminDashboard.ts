@@ -174,7 +174,7 @@ export class GetAdminDashboard extends OpenAPIRoute {
 			};
 
 		} catch (error) {
-			if (error instanceof ApiError) throw error;
+			if (error instanceof ApiError) {throw error;}
 			throw new ApiError(500, `獲取儀表板統計資料失敗: ${error instanceof Error ? error.message : String(error)}`, 'SHEET_ACCESS_ERROR');
 		}
 	}
@@ -238,7 +238,7 @@ export class GetAdminDashboard extends OpenAPIRoute {
 		};
 
 		rows.forEach((row) => {
-			if (!row || row.length === 0) return;
+			if (!row || row.length === 0) {return;}
 
 			totalOrders++;
 

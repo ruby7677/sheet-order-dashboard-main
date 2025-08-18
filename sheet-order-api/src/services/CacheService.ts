@@ -21,7 +21,7 @@ export class CacheService {
 	async get<T = any>(key: string): Promise<T | null> {
 		try {
 			const cached = await this.kv.get(key, 'json');
-			if (!cached) return null;
+			if (!cached) {return null;}
 
 			// 檢查是否包含時間戳和 TTL 資訊
 			if (typeof cached === 'object' && cached !== null && 'data' in cached && 'timestamp' in cached && 'ttl' in cached) {

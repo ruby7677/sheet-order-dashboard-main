@@ -60,9 +60,9 @@ export async function validateMigrationData(): Promise<{
 
     const issues: string[] = [];
 
-    if (ordersResult.error) issues.push(`訂單查詢錯誤: ${ordersResult.error.message}`);
-    if (customersResult.error) issues.push(`客戶查詢錯誤: ${customersResult.error.message}`);
-    if (productsResult.error) issues.push(`商品查詢錯誤: ${productsResult.error.message}`);
+    if (ordersResult.error) {issues.push(`訂單查詢錯誤: ${ordersResult.error.message}`);}
+    if (customersResult.error) {issues.push(`客戶查詢錯誤: ${customersResult.error.message}`);}
+    if (productsResult.error) {issues.push(`商品查詢錯誤: ${productsResult.error.message}`);}
 
     return {
       ordersCount: ordersResult.count || 0,

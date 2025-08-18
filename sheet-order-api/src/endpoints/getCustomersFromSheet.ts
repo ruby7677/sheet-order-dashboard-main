@@ -163,7 +163,7 @@ export class GetCustomersFromSheet extends OpenAPIRoute {
 	 * 參考原始 PHP 檔案的轉換邏輯，支援動態標題映射
 	 */
 	private transformSheetDataToCustomers(sheetData: any[][]): any[] {
-		if (sheetData.length === 0) return [];
+		if (sheetData.length === 0) {return [];}
 
 		// 第一行是標題
 		const header = sheetData[0];
@@ -207,7 +207,7 @@ export class GetCustomersFromSheet extends OpenAPIRoute {
 		const customers = [];
 		dataRows.forEach((row: any[], idx: number) => {
 			// 確保資料完整性
-			if (!row || row.length === 0) return;
+			if (!row || row.length === 0) {return;}
 			
 			// 檢查必要欄位
 			if (!headerMap.hasOwnProperty('name') || !row[headerMap['name']] ||

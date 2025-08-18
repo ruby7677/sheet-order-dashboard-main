@@ -494,7 +494,7 @@ const Index: React.FC = () => {
               open={isDetailOpen}
               onClose={handleCloseDetail}
               onOrderStatusUpdate={(orderId, newStatus, newPaymentStatus) => {
-                if (orderListRef) orderListRef(orderId, newStatus, newPaymentStatus);
+                if (orderListRef) {orderListRef(orderId, newStatus, newPaymentStatus);}
                 handleOrdersChange();
               }}
             />

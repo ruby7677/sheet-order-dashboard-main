@@ -85,7 +85,7 @@ const CustomerList: React.FC<CustomerListProps> = ({
 
   // 處理頁面變更
   const handlePageChange = (newPage: number) => {
-    if (newPage < 1 || newPage > totalPages) return;
+    if (newPage < 1 || newPage > totalPages) {return;}
 
     setCurrentPage(newPage);
     const startIndex = (newPage - 1) * itemsPerPage;
@@ -205,7 +205,7 @@ const CustomerList: React.FC<CustomerListProps> = ({
 
                 const pageNumber = startPage + i;
                 // 確保不超過總頁數
-                if (pageNumber > totalPages) return null;
+                if (pageNumber > totalPages) {return null;}
 
                 return (
                   <Button

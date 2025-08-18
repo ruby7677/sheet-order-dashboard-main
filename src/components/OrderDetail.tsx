@@ -59,7 +59,7 @@ const OrderDetail: React.FC<OrderDetailProps> = ({
   }, [order]);
 
   const handleStatusChange = async (newStatus: '訂單確認中' | '已抄單' | '已出貨' | '取消訂單') => {
-    if (!order) return;
+    if (!order) {return;}
 
     setIsUpdating(true);
     try {
@@ -88,12 +88,12 @@ const OrderDetail: React.FC<OrderDetailProps> = ({
   };
 
   const handlePrint = () => {
-    if (!order) return;
+    if (!order) {return;}
     printOrders([order]);
   };
 
   const handleDelete = async () => {
-    if (!order) return;
+    if (!order) {return;}
 
     // 顯示確認對話框
     const confirmed = window.confirm(
@@ -146,7 +146,7 @@ const OrderDetail: React.FC<OrderDetailProps> = ({
 
   // 款項狀態更新
   const handlePaymentStatusChange = async (newPaymentStatus: import('./PaymentStatusEditor').PaymentStatus) => {
-    if (!order) return;
+    if (!order) {return;}
     setIsUpdating(true);
     try {
       // 使用 orderService 中的統一 API 呼叫邏輯
@@ -178,7 +178,7 @@ const OrderDetail: React.FC<OrderDetailProps> = ({
   };
 
   const handleSaveItems = async (newItems: OrderItem[], newTotal: number) => {
-    if (!currentOrder) return;
+    if (!currentOrder) {return;}
 
     setIsUpdating(true);
     try {
@@ -216,7 +216,7 @@ const OrderDetail: React.FC<OrderDetailProps> = ({
     }
   };
 
-  if (!order) return null;
+  if (!order) {return null;}
 
   return (
     <Dialog open={open} onOpenChange={onClose}>

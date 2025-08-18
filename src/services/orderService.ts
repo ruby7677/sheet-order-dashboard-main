@@ -185,7 +185,7 @@ export const fetchOrders = async (filters?: {
   }
 
   const result = await res.json();
-  if (!result.success) throw new Error(result.message || '讀取訂單失敗');
+  if (!result.success) {throw new Error(result.message || '讀取訂單失敗');}
   if (!result.data || !Array.isArray(result.data)) {
     console.warn('API回傳的訂單資料格式不正確，應為陣列:', result.data);
     return []; // 或者拋出錯誤，視情況而定
@@ -227,10 +227,10 @@ export const fetchOrders = async (filters?: {
         const quantity = Number(parts[1]) || 1;
         let price = 0;
         // 自動對應單價（可依實際品項再擴充）
-        if (product.includes('原味蘿蔔糕')) price = 250;
-        else if (product.includes('芋頭粿')) price = 350;
-        else if (product.includes('台式鹹蘿蔔糕')) price = 350;
-        else if (product.includes('鳳梨豆腐乳')) price = 300;
+        if (product.includes('原味蘿蔔糕')) {price = 250;}
+        else if (product.includes('芋頭粿')) {price = 350;}
+        else if (product.includes('台式鹹蘿蔔糕')) {price = 350;}
+        else if (product.includes('鳳梨豆腐乳')) {price = 300;}
         // 如果 Google Sheet 提供單價，則使用提供的單價（第三段）
         if (parts.length > 2 && parts[2] && !isNaN(Number(parts[2]))) {
           price = Number(parts[2]);
@@ -371,13 +371,13 @@ const filterOrdersInMemory = (orders: Order[], filters: {
 
       if (startDateFilter || endDateFilter) {
         filteredOrders = filteredOrders.filter(order => {
-          if (!order.dueDate) return false; // 如果訂單沒有到貨日期，則不符合條件
+          if (!order.dueDate) {return false;} // 如果訂單沒有到貨日期，則不符合條件
 
           try {
             const orderDueDate = new Date(order.dueDate);
             orderDueDate.setHours(0, 0, 0, 0);
 
-            if (isNaN(orderDueDate.getTime())) return false;
+            if (isNaN(orderDueDate.getTime())) {return false;}
 
             // 檢查開始日期條件
             if (startDateFilter && !isNaN(startDateFilter.getTime())) {
@@ -503,7 +503,7 @@ export const updateOrderStatus = async (id: string, status: '訂單確認中' | 
     throw new Error(errorMsg);
   }
   const result = await res.json();
-  if (!result.success) throw new Error(result.message || '更新訂單狀態失敗');
+  if (!result.success) {throw new Error(result.message || '更新訂單狀態失敗');}
 
   // 成功更新後清除快取
   clearOrderCache();
@@ -566,7 +566,7 @@ export const updateOrderPaymentStatus = async (id: string, paymentStatus: string
     throw new Error(errorMsg);
   }
   const result = await res.json();
-  if (!result.success) throw new Error(result.message || '更新款項狀態失敗');
+  if (!result.success) {throw new Error(result.message || '更新款項狀態失敗');}
 
   // 成功更新後清除快取
   clearOrderCache();
@@ -619,7 +619,7 @@ export const updateOrderItems = async (id: string, items: OrderItem[], total: nu
   }
 
   const result = await res.json();
-  if (!result.success) throw new Error(result.message || '更新訂單商品失敗');
+  if (!result.success) {throw new Error(result.message || '更新訂單商品失敗');}
 
   // 成功更新後清除快取
   clearOrderCache();
@@ -658,7 +658,7 @@ export const deleteOrder = async (id: string): Promise<any> => {
     throw new Error(errorMsg);
   }
   const result = await res.json();
-  if (!result.success) throw new Error(result.message || '刪除訂單失敗');
+  if (!result.success) {throw new Error(result.message || '刪除訂單失敗');}
 
   // 成功刪除後清除快取
   clearOrderCache();
@@ -712,7 +712,7 @@ export const batchDeleteOrders = async (ids: string[]): Promise<{
   }
 
   const result = await res.json();
-  if (!result.success) throw new Error(result.message || '批次刪除訂單失敗');
+  if (!result.success) {throw new Error(result.message || '批次刪除訂單失敗');}
 
   // 成功刪除後清除快取
   clearOrderCache();
@@ -739,7 +739,7 @@ export interface DuplicateGroup {
 
 // 標準化電話號碼（只保留數字，取後9碼）
 const normalizePhone = (phone: string): string => {
-  if (!phone) return '';
+  if (!phone) {return '';}
   // 移除所有非數字字符
   const digitsOnly = phone.replace(/[^0-9]/g, '');
   // 取後9碼進行比較（如果電話號碼長度大於9）
@@ -753,7 +753,7 @@ export const detectDuplicateOrders = (orders: Order[]): DuplicateGroup[] => {
 
   orders.forEach(order => {
     const normalizedPhone = normalizePhone(order.customer.phone);
-    if (!normalizedPhone) return; // 跳過無效電話號碼
+    if (!normalizedPhone) {return;} // 跳過無效電話號碼
 
     const duplicateOrder: DuplicateOrder = {
       id: order.id,
@@ -789,7 +789,7 @@ export const detectDuplicateOrders = (orders: Order[]): DuplicateGroup[] => {
 // 檢查單個訂單是否為重複訂單
 export const isOrderDuplicate = (order: Order, allOrders: Order[]): boolean => {
   const normalizedPhone = normalizePhone(order.customer.phone);
-  if (!normalizedPhone) return false;
+  if (!normalizedPhone) {return false;}
 
   // 計算有相同標準化電話號碼的訂單數量
   const samePhoneOrders = allOrders.filter(o =>
@@ -861,7 +861,7 @@ export const exportToCsv = (orders: Order[]): string => {
   const formatPhone = (phone: string) => /^09\d{8}$/.test(phone) ? `'${phone}` : '';
   // CSV欄位格式化工具，處理包含逗號、引號、換行的內容
   const formatCsvField = (str: string) => {
-    if (!str) return '';
+    if (!str) {return '';}
     // 如果包含逗號、引號或換行符，需要用引號包圍並轉義內部引號
     if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
       return `"${str.replace(/"/g, '""')}"`;
@@ -901,8 +901,8 @@ export const exportToCsv = (orders: Order[]): string => {
     // 希望配合時段
     let wishTime = '';
     if (order.deliveryTime) {
-      if (order.deliveryTime.includes('上')) wishTime = '1';
-      else if (order.deliveryTime.includes('下')) wishTime = '2';
+      if (order.deliveryTime.includes('上')) {wishTime = '1';}
+      else if (order.deliveryTime.includes('下')) {wishTime = '2';}
     }
     return [
       genOrderNumber(idx), // 依序產生A001~A100訂單編號

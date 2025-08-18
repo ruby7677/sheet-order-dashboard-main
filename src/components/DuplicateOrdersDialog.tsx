@@ -27,7 +27,7 @@ const DuplicateOrdersDialog: React.FC<DuplicateOrdersDialogProps> = ({
   onOrderClick,
   isAutoAlert = false
 }) => {
-  if (!isOpen) return null;
+  if (!isOpen) {return null;}
 
   // 計算總重複訂單數量
   const totalDuplicateOrders = duplicateGroups.reduce((sum, group) => sum + group.count, 0);

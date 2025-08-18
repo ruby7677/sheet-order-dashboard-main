@@ -52,7 +52,7 @@ const OrderList: React.FC<OrderListProps> = ({ filters, onOrderClick, onOrdersCh
     newPaymentStatus?: PaymentStatus
   ) => {
     setOrders(prev => prev.map(order => {
-      if (order.id !== orderId) return order;
+      if (order.id !== orderId) {return order;}
       return {
         ...order,
         status: newStatus !== undefined ? newStatus : order.status,
@@ -113,7 +113,7 @@ const OrderList: React.FC<OrderListProps> = ({ filters, onOrderClick, onOrdersCh
 
   // 切換頁面的函數
   const handlePageChange = (page: number) => {
-    if (page < 1 || page > totalPages) return;
+    if (page < 1 || page > totalPages) {return;}
     setCurrentPage(page);
     const startIndex = (page - 1) * itemsPerPage;
     const endIndex = Math.min(startIndex + itemsPerPage, allOrders.length);
@@ -233,7 +233,7 @@ const OrderList: React.FC<OrderListProps> = ({ filters, onOrderClick, onOrdersCh
 
   // 確認批次刪除
   const handleConfirmBatchDelete = async () => {
-    if (selected.length === 0) return;
+    if (selected.length === 0) {return;}
 
     setBatchDeleting(true);
     try {
@@ -325,7 +325,7 @@ const OrderList: React.FC<OrderListProps> = ({ filters, onOrderClick, onOrdersCh
                 </select>
                 <Button
                   onClick={async () => {
-                    if (!batchOrderStatus || selected.length === 0) return;
+                    if (!batchOrderStatus || selected.length === 0) {return;}
                     setBatchLoading(true);
                     try {
                       await batchUpdateOrderStatus(selected, batchOrderStatus as any);
@@ -371,7 +371,7 @@ const OrderList: React.FC<OrderListProps> = ({ filters, onOrderClick, onOrdersCh
                 </select>
                 <Button
                   onClick={async () => {
-                    if (!batchPaymentStatus || selected.length === 0) return;
+                    if (!batchPaymentStatus || selected.length === 0) {return;}
                     setBatchLoading(true);
                     try {
                       await batchUpdateOrderPaymentStatus(selected, batchPaymentStatus as any);
@@ -581,7 +581,7 @@ const OrderList: React.FC<OrderListProps> = ({ filters, onOrderClick, onOrdersCh
 
                 const pageNumber = startPage + i;
                 // 確保不超過總頁數
-                if (pageNumber > totalPages) return null;
+                if (pageNumber > totalPages) {return null;}
 
                 return (
                   <Button
