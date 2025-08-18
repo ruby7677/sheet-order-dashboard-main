@@ -69,12 +69,14 @@ const OrderList: React.FC<OrderListProps> = ({ filters, onOrderClick, onOrdersCh
   const { toast } = useToast();
 
   // 載入訂單的共用函式
-  const reloadOrders = async () => {
+  const reloadOrders = async (force: boolean = false) => {
     setLoading(true);
     try {
-      // 先清除快取，確保從伺服器獲取最新資料
-      clearOrderCache();
-      const data = await fetchOrders(filters);
+      // 僅在需要強制刷新時清除快取，平時優先走前端記憶體快取
+      if (force) {
+        clearOrderCache();
+      }
+      const data = await fetchOrders(filters, { forceRefresh: force });
       setAllOrders(data); // 儲存所有訂單
       setTotalPages(Math.ceil(data.length / itemsPerPage)); // 計算總頁數
 
@@ -120,7 +122,7 @@ const OrderList: React.FC<OrderListProps> = ({ filters, onOrderClick, onOrdersCh
 
   // 過濾條件變動時重新載入訂單
   useEffect(() => {
-    reloadOrders();
+    reloadOrders(false);
   }, [filters]);
 
 
@@ -200,8 +202,8 @@ const OrderList: React.FC<OrderListProps> = ({ filters, onOrderClick, onOrdersCh
       }
 
       // 強制清除快取並重新載入訂單
-      clearOrderCache();
-      await reloadOrders();
+      // clearOrderCache();
+      await reloadOrders(true);
 
       // 通知父組件訂單已變更，觸發統計數據更新
       if (typeof onOrdersChange === 'function') {
@@ -272,8 +274,8 @@ const OrderList: React.FC<OrderListProps> = ({ filters, onOrderClick, onOrdersCh
       onSelectedChange([]);
 
       // 強制清除快取並重新載入訂單
-      clearOrderCache();
-      await reloadOrders();
+      // clearOrderCache();
+      await reloadOrders(true);
 
       // 通知父組件訂單已變更，觸發統計數據更新
       if (typeof onOrdersChange === 'function') {
@@ -331,7 +333,7 @@ const OrderList: React.FC<OrderListProps> = ({ filters, onOrderClick, onOrdersCh
                         title: '成功',
                         description: '訂單狀態已批次更新',
                       });
-                      await reloadOrders();
+                      await reloadOrders(true);
                       setBatchOrderStatus('');
                       onOrdersChange();
                     } catch (error) {
@@ -372,13 +374,13 @@ const OrderList: React.FC<OrderListProps> = ({ filters, onOrderClick, onOrdersCh
                     if (!batchPaymentStatus || selected.length === 0) return;
                     setBatchLoading(true);
                     try {
-                      await batchUpdateOrderPaymentStatus(selected, batchPaymentStatus);
+                      await batchUpdateOrderPaymentStatus(selected, batchPaymentStatus as any);
                       toast({
                         title: '成功',
                         description: '款項狀態已批次更新',
                       });
                       // 確保前端顯示更新
-                      await reloadOrders();
+                      await reloadOrders(true);
                       setBatchPaymentStatus('');
                       onOrdersChange();
                     } catch (error) {
