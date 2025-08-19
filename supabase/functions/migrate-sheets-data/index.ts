@@ -262,15 +262,54 @@ async function migrateOrders(supabase: any, ordersData: any[][], dryRun: boolean
         }
       }
 
-      const { error } = await supabase
+      const { data: upsertedOrders, error: upsertErr } = await supabase
         .from('orders')
-        .upsert(orderData, { onConflict: 'google_sheet_id' });
+        .upsert(orderData, { onConflict: 'google_sheet_id' })
+        .select('id')
+        .eq('google_sheet_id', orderData.google_sheet_id)
+        .limit(1);
 
-      if (error) {
-        errors.push(`訂單 ${orderData.order_number}: ${error.message}`);
-      } else {
-        processed++;
+      if (upsertErr) {
+        errors.push(`訂單 ${orderData.order_number}: ${upsertErr.message}`);
+        continue;
       }
+
+      const orderId = upsertedOrders && upsertedOrders[0]?.id;
+      if (!orderId) {
+        errors.push(`訂單 ${orderData.order_number}: 無法取得 upsert 後的 order.id`);
+        continue;
+      }
+
+      // 解析購買項目字串並 upsert 至 order_items（冪等）
+      try {
+        const itemsRaw = (rows[i][8] ?? '').toString().trim();
+        if (itemsRaw) {
+          const itemStrings = itemsRaw.split(/[,，、\n]/).map(s => s.trim()).filter(Boolean);
+          const items = itemStrings.map((s) => {
+            const m = s.split(/\s*[xX×]\s*/);
+            const product = (m[0] ?? '').trim();
+            const quantity = Math.max(0, parseInt((m[1] ?? '1'), 10) || 1);
+            const price = Math.max(0, parseFloat(m[2] ?? '0') || 0);
+            const subtotal = price * quantity;
+            return { product, quantity, price, subtotal };
+          }).filter(it => it.product);
+
+          if (!dryRun && items.length > 0) {
+            // 可選：為冪等，可先刪舊再插新，或建立唯一鍵 (order_id, product, quantity, price)
+            // 這裡採刪舊再插入，簡化處理
+            await supabase.from('order_items').delete().eq('order_id', orderId);
+            const insertPayload = items.map(it => ({ order_id: orderId, ...it }));
+            const { error: itemErr } = await supabase.from('order_items').insert(insertPayload);
+            if (itemErr) {
+              errors.push(`訂單 ${orderData.order_number}: 寫入 order_items 失敗 - ${itemErr.message}`);
+            }
+          }
+        }
+      } catch (e) {
+        errors.push(`訂單 ${orderData.order_number}: 解析/寫入購買項目失敗 - ${e instanceof Error ? e.message : e}`);
+      }
+
+      processed++;
     } catch (error) {
       errors.push(`處理訂單第 ${i + 2} 行時發生錯誤: ${error}`);
     }
@@ -326,22 +365,30 @@ Deno.serve(async (req) => {
     // 獲取 Google Sheets 存取權杖
     const accessToken = await getAccessToken(googleServiceAccountKey);
 
-    // 只讀取訂單資料
-    const ordersData = await getGoogleSheetsData(sheetId, 'Sheet1', accessToken);
+    // 讀取兩個工作表
+    const [ordersData, customersData] = await Promise.all([
+      getGoogleSheetsData(sheetId, 'Sheet1', accessToken),
+      getGoogleSheetsData(sheetId, '客戶名單', accessToken).catch(() => [])
+    ]);
 
-    console.log(`讀取到 ${ordersData.length} 行訂單資料`);
+    console.log(`讀取到 ${ordersData.length} 行訂單資料；${customersData.length} 行客戶資料`);
 
-    // 只執行訂單遷移
-    const ordersResult = await migrateOrders(supabase, ordersData, dryRun, skipExisting);
+    // 執行遷移
+    const [ordersResult, customersResult] = await Promise.all([
+      migrateOrders(supabase, ordersData, dryRun, skipExisting),
+      migrateCustomers(supabase, customersData, dryRun, skipExisting)
+    ]);
+
+    const allErrors = [...ordersResult.errors, ...customersResult.errors];
 
     const result: MigrationResult = {
-      success: true,
-      message: dryRun ? '試運行完成' : '資料遷移完成',
+      success: allErrors.length === 0,
+      message: dryRun ? '試運行完成' : (allErrors.length ? '資料遷移完成（含錯誤）' : '資料遷移完成'),
       stats: {
         ordersProcessed: ordersResult.processed,
-        customersProcessed: 0, // 已移除客戶遷移
-        productsProcessed: 0, // 暫時不處理商品資料
-        errors: ordersResult.errors
+        customersProcessed: customersResult.processed,
+        productsProcessed: 0, // order_items 已寫入，但暫不單獨統計數量
+        errors: allErrors
       }
     };
 
