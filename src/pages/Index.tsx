@@ -20,7 +20,7 @@ import { fetchOrders, detectDuplicateOrders, DuplicateGroup } from '@/services/o
 import { fetchCustomers, getCustomerStats } from '@/services/customerService';
 import { downloadExcelCsv, printOrders } from '@/utils/exportUtils';
 import { downloadQuickStoreXlsx } from '@/utils/exportQuickStoreXlsx';
-import { Download, Printer, Users, ShoppingBag, Calendar, AlertTriangle } from 'lucide-react';
+import { Download, Printer, Calendar, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const Index: React.FC = () => {
@@ -100,7 +100,7 @@ const Index: React.FC = () => {
   });
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
-  const [orderListRef, setOrderListRef] = useState<any>(null);
+  const [orderListRef, setOrderListRef] = useState<((orderId: string, newStatus?: '訂單確認中' | '已抄單' | '已出貨' | '取消訂單', newPaymentStatus?: PaymentStatus) => void) | null>(null);
   const [stats, setStats] = useState({
     total: 0,
     processing: 0,
@@ -129,7 +129,37 @@ const Index: React.FC = () => {
   };
 
   useEffect(() => {
-    updateStatsInitial(); // 使用專門的初始載入函數
+    // 更新重複訂單檢測
+    const updateDuplicateOrdersLocal = (orders: Order[], isInitialLoad: boolean = false) => {
+      const duplicates = detectDuplicateOrders(orders);
+      setDuplicateGroups(duplicates);
+
+      // 如果是初次載入且有重複訂單且尚未顯示過警示，則自動彈窗
+      if (isInitialLoad && duplicates.length > 0 && !hasShownInitialDuplicateAlert) {
+        setIsAutoAlert(true); // 設定為自動警示模式
+        setShowDuplicateDialog(true);
+        setHasShownInitialDuplicateAlert(true);
+      }
+    };
+
+    // 初始載入時的統計更新（會觸發重複訂單警示）
+    const updateStatsInitial = async () => {
+      try {
+        const allOrders = await fetchOrders();
+        setStats({
+          total: allOrders.length,
+          processing: allOrders.filter(order => order.status === '已抄單').length,
+          selected: 0
+        });
+
+        // 更新重複訂單檢測，標記為初次載入
+        updateDuplicateOrdersLocal(allOrders, true);
+      } catch (error) {
+        console.error('Failed to update stats:', error);
+      }
+    };
+
+    updateStatsInitial();
     updateCustomerStats();
 
     // 檢測是否在 iframe 中
@@ -154,24 +184,8 @@ const Index: React.FC = () => {
     return () => {
       window.removeEventListener('message', handleMessage);
     };
-  }, []); // 依賴項維持空陣列，因為只想在掛載和卸載時執行
+  }, [hasShownInitialDuplicateAlert]); // 依賴項包含相關狀態
 
-  // 初始載入時的統計更新（會觸發重複訂單警示）
-  const updateStatsInitial = async () => {
-    try {
-      const allOrders = await fetchOrders();
-      setStats({
-        total: allOrders.length,
-        processing: allOrders.filter(order => order.status === '已抄單').length,
-        selected: 0
-      });
-
-      // 更新重複訂單檢測，標記為初次載入
-      updateDuplicateOrders(allOrders, true);
-    } catch (error) {
-      console.error('Failed to update stats:', error);
-    }
-  };
 
   // 一般的統計更新（不會觸發自動警示）
   const updateStats = async () => {
@@ -227,7 +241,7 @@ const Index: React.FC = () => {
         setIsDetailOpen(true);
 
         // 設定一個空的更新函數，因為從重複訂單對話框開啟的詳情不需要更新列表
-        setOrderListRef(() => (orderId: string, newStatus?: any, newPaymentStatus?: any) => {
+        setOrderListRef(() => (orderId: string, newStatus?: '訂單確認中' | '已抄單' | '已出貨' | '取消訂單', newPaymentStatus?: PaymentStatus) => {
           // 這裡可以實作更新邏輯，或者留空
           console.log('訂單更新:', orderId, newStatus, newPaymentStatus);
         });
