@@ -16,7 +16,7 @@ import { Order, PaymentStatus } from '@/types/order';
 import { CustomerWithStats } from '../types/customer';
 import { FilterCriteria } from '../types/filters';
 import { CustomerFilterCriteria } from '../types/customer';
-import { fetchOrders, detectDuplicateOrders, DuplicateGroup } from '@/services/orderService';
+import { fetchOrders, detectDuplicateOrders, DuplicateGroup, subscribeDataSourceChange } from '@/services/orderService';
 import { fetchCustomers, getCustomerStats } from '@/services/customerService';
 import { downloadExcelCsv, printOrders } from '@/utils/exportUtils';
 import { downloadQuickStoreXlsx } from '@/utils/exportQuickStoreXlsx';
@@ -185,6 +185,24 @@ const Index: React.FC = () => {
       window.removeEventListener('message', handleMessage);
     };
   }, [hasShownInitialDuplicateAlert]); // 依賴項包含相關狀態
+
+  // 監聽資料來源變更：清空快取並重新載入
+  useEffect(() => {
+    const unsub = subscribeDataSourceChange(() => {
+      setSelected([]);
+      setSelectedCustomers([]);
+      setDashboardRefreshTrigger(prev => prev + 1);
+      setCustomerDashboardRefreshTrigger(prev => prev + 1);
+      // 重新載入訂單/客戶
+      (async () => {
+        try {
+          const _ = await fetchOrders();
+          updateCustomerStats();
+        } catch {}
+      })();
+    });
+    return unsub;
+  }, []);
 
 
   // 一般的統計更新（不會觸發自動警示）

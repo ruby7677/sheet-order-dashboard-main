@@ -19,7 +19,7 @@ import {
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
-import { getDataSource, setDataSource } from '@/services/orderService';
+import { getDataSource, setDataSourceAndNotify, subscribeDataSourceChange } from '@/services/orderService';
 
 interface CompactControlPanelProps {
   // 統計資訊
@@ -55,6 +55,13 @@ const CompactControlPanel: React.FC<CompactControlPanelProps> = ({
 }) => {
   const [isStatsExpanded, setIsStatsExpanded] = useState(defaultExpanded);
   const [isFiltersExpanded, setIsFiltersExpanded] = useState(false);
+  const [currentSource, setCurrentSource] = useState(getDataSource());
+
+  // 監聽資料來源變更，觸發 UI 更新
+  React.useEffect(() => {
+    const unsub = subscribeDataSourceChange(() => setCurrentSource(getDataSource()));
+    return unsub;
+  }, []);
 
   return (
     <div className="space-y-2 mb-4">
@@ -139,18 +146,18 @@ const CompactControlPanel: React.FC<CompactControlPanelProps> = ({
               <div className="flex items-center gap-1 text-xs border rounded px-2 py-1 mr-1">
                 <span className="text-muted-foreground">來源</span>
                 <Button
-                  variant={getDataSource() === 'sheets' ? 'default' : 'outline'}
+                  variant={currentSource === 'sheets' ? 'default' : 'outline'}
                   size="sm"
                   className="h-7 px-2"
-                  onClick={() => setDataSource('sheets')}
+                  onClick={() => setDataSourceAndNotify('sheets')}
                 >
                   Sheets
                 </Button>
                 <Button
-                  variant={getDataSource() === 'supabase' ? 'default' : 'outline'}
+                  variant={currentSource === 'supabase' ? 'default' : 'outline'}
                   size="sm"
                   className="h-7 px-2"
-                  onClick={() => setDataSource('supabase')}
+                  onClick={() => setDataSourceAndNotify('supabase')}
                 >
                   Supabase
                 </Button>
