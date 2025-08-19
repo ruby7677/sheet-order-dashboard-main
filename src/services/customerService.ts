@@ -327,36 +327,93 @@ export const getCustomerStats = (customers: CustomerWithStats[]): CustomerStats 
   };
 };
 
+// 電話號碼標準化函數
+const normalizePhone = (phone: string): string => {
+  if (!phone) return '';
+  // 移除所有空格、破折號和括號
+  return phone.replace(/[\s\-\(\)]/g, '').trim();
+};
+
 // 獲取客戶訂單歷史
 // 從訂單資料推導客戶的訂單歷史
 export const fetchCustomerOrders = async (phone: string): Promise<CustomerOrder[]> => {
   // 檢查是否有快取且未過期
   const now = Date.now();
+  const normalizedPhone = normalizePhone(phone);
+  
   if (
-    customerOrdersCache[phone] &&
-    (now - customerOrdersCache[phone].timestamp < CACHE_DURATION)
+    customerOrdersCache[normalizedPhone] &&
+    (now - customerOrdersCache[normalizedPhone].timestamp < CACHE_DURATION)
   ) {
-    console.log('使用快取的客戶訂單資料');
-    return customerOrdersCache[phone].data;
+    console.log('使用快取的客戶訂單資料:', normalizedPhone);
+    return customerOrdersCache[normalizedPhone].data;
   }
 
-  const allOrders = await fetchOrders();
-  const orders = allOrders
-    .filter(o => o.customer?.phone === phone)
-    .map(o => ({
-      id: o.id,
-      orderTime: o.createdAt || o.dueDate || '',
-      items: o.items.map(i => `${i.product} x ${i.quantity}`).join(', '),
-      name: o.customer?.name,
-    }));
+  console.log('🔍 正在查找客戶訂單歷史:', { 
+    原始電話: phone, 
+    標準化電話: normalizedPhone 
+  });
 
-  // 更新快取
-  customerOrdersCache[phone] = {
-    timestamp: now,
-    data: orders,
-  };
+  try {
+    const allOrders = await fetchOrders();
+    console.log('📋 所有訂單數量:', allOrders.length);
+    
+    // 使用標準化的電話號碼進行比對
+    const customerOrders = allOrders.filter(order => {
+      const orderPhone = normalizePhone(order.customer?.phone || '');
+      const isMatch = orderPhone === normalizedPhone;
+      
+      if (isMatch) {
+        console.log('✅ 找到匹配訂單:', {
+          訂單ID: order.id,
+          訂單電話: order.customer?.phone,
+          標準化後: orderPhone
+        });
+      }
+      
+      return isMatch;
+    });
 
-  return orders;
+    console.log('📊 客戶訂單統計:', {
+      客戶電話: phone,
+      找到訂單數: customerOrders.length,
+      訂單詳情: customerOrders.map(o => ({
+        id: o.id,
+        時間: o.createdAt || o.dueDate,
+        商品數: o.items.length
+      }))
+    });
+
+    const orders: CustomerOrder[] = customerOrders
+      .sort((a, b) => {
+        // 按時間排序，最新的在前
+        const timeA = new Date(a.createdAt || a.dueDate || '').getTime();
+        const timeB = new Date(b.createdAt || b.dueDate || '').getTime();
+        return timeB - timeA;
+      })
+      .map(order => ({
+        id: order.id,
+        orderTime: order.createdAt || order.dueDate || '',
+        items: order.items.map(item => `${item.product} x ${item.quantity}`).join(', '),
+        name: order.customer?.name,
+      }));
+
+    // 更新快取
+    customerOrdersCache[normalizedPhone] = {
+      timestamp: now,
+      data: orders,
+    };
+
+    console.log('💾 客戶訂單已快取:', {
+      客戶: normalizedPhone,
+      訂單數: orders.length
+    });
+
+    return orders;
+  } catch (error) {
+    console.error('❌ 載入客戶訂單失敗:', error);
+    return [];
+  }
 };
 
 // 清除客戶資料快取
@@ -368,8 +425,9 @@ export const clearCustomerCache = () => {
 // 清除客戶訂單快取
 export const clearCustomerOrderCache = (phone?: string) => {
   if (phone) {
-    delete customerOrdersCache[phone];
-    console.log(`已清除客戶 ${phone} 的訂單快取`);
+    const normalizedPhone = normalizePhone(phone);
+    delete customerOrdersCache[normalizedPhone];
+    console.log(`已清除客戶 ${phone} (${normalizedPhone}) 的訂單快取`);
   } else {
     Object.keys(customerOrdersCache).forEach(key => {
       delete customerOrdersCache[key];

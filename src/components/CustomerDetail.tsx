@@ -33,16 +33,24 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customer, open, onClose
 
   const loadCustomerOrders = async (phone: string) => {
     setLoading(true);
+    console.log('🔄 開始載入客戶訂單歷史:', phone);
+    
     try {
       const customerOrders = await fetchCustomerOrders(phone);
+      console.log('📦 載入的訂單數量:', customerOrders.length, customerOrders);
       setOrders(customerOrders);
+      
+      if (customerOrders.length === 0) {
+        console.log('⚠️ 未找到該客戶的訂單記錄');
+      }
     } catch (error) {
-      console.error('Failed to load customer orders:', error);
+      console.error('❌ 載入客戶訂單歷史失敗:', error);
       toast({
         title: '錯誤',
-        description: '載入客戶訂單歷史失敗',
+        description: `載入客戶訂單歷史失敗: ${error instanceof Error ? error.message : '未知錯誤'}`,
         variant: 'destructive',
       });
+      setOrders([]); // 確保在錯誤時清空訂單列表
     } finally {
       setLoading(false);
     }
@@ -114,24 +122,54 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customer, open, onClose
             <h3 className="text-lg font-semibold mb-4">訂單歷史</h3>
 
             {loading ? (
-              <div className="text-center py-4">載入訂單歷史中...</div>
+              <div className="text-center py-8">
+                <div className="inline-flex items-center space-x-2">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div>
+                  <span>載入訂單歷史中...</span>
+                </div>
+              </div>
             ) : orders.length === 0 ? (
-              <div className="text-center py-4 text-muted-foreground">無訂單歷史記錄</div>
+              <div className="text-center py-8">
+                <Package className="h-12 w-12 text-muted-foreground mx-auto mb-3 opacity-50" />
+                <div className="text-muted-foreground mb-2">無訂單歷史記錄</div>
+                <div className="text-sm text-muted-foreground">
+                  該客戶電話 ({customer?.phone}) 尚未有訂單記錄
+                </div>
+              </div>
             ) : (
               <div className="space-y-4">
+                <div className="text-sm text-muted-foreground mb-3">
+                  共 {orders.length} 筆訂單記錄
+                </div>
                 {orders.map((order, index) => (
-                  <div key={order.id} className="border rounded-lg p-4 bg-muted/[0.2]">
-                    <div className="flex justify-between items-start mb-2">
-                      <div className="font-semibold">訂單 #{index + 1}</div>
-                      <div className="text-sm text-muted-foreground">{formatDate(order.orderTime)}</div>
+                  <div key={`${order.id}-${index}`} className="border rounded-lg p-4 bg-muted/[0.2] hover:bg-muted/[0.3] transition-colors">
+                    <div className="flex justify-between items-start mb-3">
+                      <div className="flex items-center space-x-2">
+                        <div className="font-semibold">訂單 #{index + 1}</div>
+                        {order.name && (
+                          <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded">
+                            {order.name}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-sm text-muted-foreground flex items-center space-x-1">
+                        <Calendar className="h-3 w-3" />
+                        <span>{formatDate(order.orderTime)}</span>
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-1 gap-2 text-sm">
                       <div className="flex items-start space-x-2">
                         <Package className="h-4 w-4 text-muted-foreground mt-1" />
                         <span className="font-medium">購買項目：</span>
-                        <span className="flex-1">{order.items}</span>
+                        <span className="flex-1 text-foreground">{order.items || '無商品資訊'}</span>
                       </div>
+                      {order.id && (
+                        <div className="flex items-center space-x-2 mt-2 pt-2 border-t border-border/50">
+                          <span className="text-xs text-muted-foreground">訂單ID:</span>
+                          <span className="text-xs font-mono bg-muted px-2 py-1 rounded">{order.id}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
