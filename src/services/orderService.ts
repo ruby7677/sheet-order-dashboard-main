@@ -68,6 +68,28 @@ export const setDataSource = (source: DataSource) => {
   clearOrderCache();
 };
 
+// 簡易事件系統：通知資料來源變更
+type Listener = () => void;
+const dataSourceListeners = new Set<Listener>();
+
+export const subscribeDataSourceChange = (listener: Listener) => {
+  dataSourceListeners.add(listener);
+  return () => dataSourceListeners.delete(listener);
+};
+
+const notifyDataSourceChange = () => {
+  dataSourceListeners.forEach((l) => {
+    try { l(); } catch {}
+  });
+};
+
+// 包裝 setDataSource 以發出事件
+const _origSetDataSource = setDataSource;
+export const setDataSourceAndNotify = (source: DataSource) => {
+  _origSetDataSource(source);
+  notifyDataSourceChange();
+};
+
 // 建立一個錯誤處理和重試機制
 const apiCallWithFallback = async (endpoint: string, options: RequestInit = {}) => {
   const config = getApiConfig();
@@ -182,10 +204,20 @@ export const fetchOrders = async (filters?: {
   
   const fullEndpoint = useSupabase ? endpoint : `${endpoint}?${params.toString()}`;
   
-  // 使用錯誤處理和重試機制
-  const res = await apiCallWithFallback(fullEndpoint, {
-    method: 'GET'
-  });
+  // 使用錯誤處理和重試機制（Supabase 404 則回退至 Sheets）
+  let res: Response;
+  try {
+    res = await apiCallWithFallback(fullEndpoint, { method: 'GET' });
+  } catch (err: any) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (useSupabase && /404/.test(msg)) {
+      // 回退到 Sheets 來源
+      const fallbackEndpoint = `/api/get_orders_from_sheet.php?${params.toString()}`;
+      res = await apiCallWithFallback(fallbackEndpoint, { method: 'GET' });
+    } else {
+      throw err;
+    }
+  }
   if (!res.ok) {
     // 如果 HTTP 狀態碼不是 2xx，嘗試讀取錯誤訊息
     let errorMsg = '讀取訂單失敗';
