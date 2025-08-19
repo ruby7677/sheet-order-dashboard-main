@@ -52,22 +52,22 @@ export async function validateMigrationData(): Promise<{
   issues: string[];
 }> {
   try {
-    const [ordersResult, customersResult, productsResult] = await Promise.all([
+    const [ordersResult, customersResult, itemsResult] = await Promise.all([
       supabase.from('orders').select('*', { count: 'exact', head: true }),
       supabase.from('customers').select('*', { count: 'exact', head: true }),
-      supabase.from('products').select('*', { count: 'exact', head: true })
+      supabase.from('order_items').select('*', { count: 'exact', head: true })
     ]);
 
     const issues: string[] = [];
 
-    if (ordersResult.error) {issues.push(`訂單查詢錯誤: ${ordersResult.error.message}`);}
-    if (customersResult.error) {issues.push(`客戶查詢錯誤: ${customersResult.error.message}`);}
-    if (productsResult.error) {issues.push(`商品查詢錯誤: ${productsResult.error.message}`);}
+    if (ordersResult.error) {issues.push(`訂單查詢錯誤: ${ordersResult.error.message}`);}    
+    if (customersResult.error) {issues.push(`客戶查詢錯誤: ${customersResult.error.message}`);}    
+    if (itemsResult.error) {issues.push(`order_items 查詢錯誤: ${itemsResult.error.message}`);}    
 
     return {
       ordersCount: ordersResult.count || 0,
       customersCount: customersResult.count || 0,
-      productsCount: productsResult.count || 0,
+      productsCount: itemsResult.count || 0,
       issues
     };
   } catch (error) {
