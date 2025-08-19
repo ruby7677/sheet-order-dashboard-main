@@ -64,6 +64,8 @@ export class GetOrdersFromSupabase extends OpenAPIRoute {
 
       const svc = new SupabaseService(c.env as any);
       const paged = await svc.getOrders(query);
+      const orderIdList = paged.data.map((r) => r.id);
+      const itemsMap = await svc.getOrderItemsForOrderIds(orderIdList);
 
       // 轉換為前端 Order 形狀
       const orders = paged.data.map((r) => ({
@@ -73,7 +75,7 @@ export class GetOrdersFromSupabase extends OpenAPIRoute {
           name: r.customer_name,
           phone: r.customer_phone,
         },
-        items: [], // items 在前端可再查，或由另一端點提供；此處暫空
+        items: itemsMap[r.id] ?? [],
         total: Number(r.total_amount ?? 0),
         status: r.status as any,
         createdAt: r.created_at,
