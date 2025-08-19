@@ -126,7 +126,7 @@ supabase gen types typescript --local > src/integrations/supabase/types.ts
 ## 環境配置
 
 ### 開發端口
-- 前端開發服務器: `8080` (已配置在 vite.config.ts)
+- 前端開發服務器: `8082` (已配置在 vite.config.ts)
 - Cloudflare Workers 本地: `5714` (推薦用於測試)
 - 測試替代端口: `8082` 或 `5714`
 
