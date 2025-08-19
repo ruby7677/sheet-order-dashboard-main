@@ -36,7 +36,7 @@
 			"vars": {
 				"GOOGLE_SHEET_ID": "10MMALrfBonchPGjb-ps6Knw7MV6lllrrKRCTeafCIuo",
 				"APP_ENV": "production",
-				"CACHE_DURATION": "15000",
+				"CACHE_DURATION": "15",
 				"DEBUG_MODE": "false"
 			}
 		},
@@ -51,7 +51,7 @@
 			"vars": {
 				"GOOGLE_SHEET_ID": "10MMALrfBonchPGjb-ps6Knw7MV6lllrrKRCTeafCIuo",
 				"APP_ENV": "development",
-				"CACHE_DURATION": "15000",
+				"CACHE_DURATION": "15",
 				"DEBUG_MODE": "true"
 			}
 		}
@@ -67,7 +67,7 @@
 	"vars": {
 		"GOOGLE_SHEET_ID": "10MMALrfBonchPGjb-ps6Knw7MV6lllrrKRCTeafCIuo",
 		"APP_ENV": "development",
-		"CACHE_DURATION": "5000",
+		"CACHE_DURATION": "15",
 		"DEBUG_MODE": "true"
 	}
 
