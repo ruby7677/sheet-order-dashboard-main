@@ -10,21 +10,35 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### 前端架構
 - **技術棧**: React 18 + TypeScript + Vite + Tailwind CSS v4 + shadcn/ui
-- **狀態管理**: TanStack Query 用於服務器狀態管理，React Context 用於認證狀態
-- **路由**: React Router v6
+- **狀態管理**: TanStack Query 用於服務器狀態管理，React Context 用於認證狀態  
+- **路由**: React Router v6，主路由在 `src/App.tsx`，管理路由在 `src/routes/adminRoutes.tsx`
 - **UI 組件**: shadcn/ui 組件庫，完整的 Radix UI 系統
 - **圖表**: Recharts 用於數據可視化
+- **錯誤處理**: ErrorBoundary 組件包裝整個應用
 
 ### 後端架構
-- **傳統 API**: PHP API (`api/` 目錄) - Google Sheets 整合
-- **現代 API**: Cloudflare Workers (`sheet-order-api/` 目錄) - 使用 Hono 框架
+- **傳統 API**: PHP API (`api/` 目錄) - Google Sheets 整合，作為後備方案
+- **現代 API**: Cloudflare Workers (`sheet-order-api/` 目錄) - 使用 Hono 框架 + OpenAPI
 - **新資料層**: Supabase 整合 (`src/integrations/supabase/`)
+- **API 路由**: 支援現代化 REST 端點和 PHP 兼容端點
 
-### 數據流
-1. **Google Sheets**: 原始訂單數據來源
+### 動態 API 配置架構
+系統實現智能的 API 端點切換機制：
+1. **生產環境**: 優先使用 Cloudflare Workers API (`https://sheet-order-api.ruby7677.workers.dev`)
+2. **本地開發**: 嘗試本地 Workers API (`http://127.0.0.1:5714`)，失敗則自動降級到 PHP API
+3. **環境檢測**: 基於 hostname 和 port 自動判斷運行環境
+4. **降級機制**: 多層降級確保服務可用性
+
+### 數據來源與整合
+1. **Google Sheets**: 主要數據來源（訂單表、客戶名單表）
 2. **Supabase**: 現代化資料庫存儲
 3. **Cloudflare KV**: Workers API 的快取層
-4. **前端快取**: 使用 TanStack Query 管理
+4. **前端快取**: TanStack Query 管理 API 快取
+
+### 電話號碼處理架構
+- **標準化**: 移除所有非數字字符 (`/[^0-9]/g`)
+- **比對邏輯**: 使用後九碼進行匹配，與 PHP API 保持一致
+- **快取策略**: 以標準化後的電話號碼作為快取鍵
 
 ## 常用指令
 
@@ -88,6 +102,27 @@ supabase db push
 supabase gen types typescript --local > src/integrations/supabase/types.ts
 ```
 
+## 核心服務架構
+
+### API 服務層 (`src/services/`)
+- **orderService.ts**: 訂單管理服務，包含動態 API 配置和降級邏輯
+- **customerService.ts**: 客戶管理服務，電話號碼標準化和客戶訂單歷史
+- **migrationService.ts**: 數據遷移服務
+- **secureApiService.ts**: 安全 API 調用服務
+
+### 組件架構 (`src/components/`)
+- **主頁面**: `src/pages/Index.tsx` - 雙模式界面（訂單/客戶管理）
+- **側邊欄**: `ModernSidebar.tsx` - 模式切換和統計顯示
+- **控制面板**: `CompactControlPanel.tsx` - 統合篩選器和操作按鈕
+- **詳情組件**: `OrderDetail.tsx`, `CustomerDetail.tsx` - 詳細信息展示
+- **快取清除**: 所有服務都提供 `clearCache()` 函數
+
+### Workers API 架構 (`sheet-order-api/src/`)
+- **框架**: Hono + chanfana (OpenAPI)
+- **端點**: RESTful API + PHP 兼容端點
+- **快取**: Cloudflare KV 快取服務
+- **環境**: 生產和開發環境分離配置
+
 ## 環境配置
 
 ### 開發端口
@@ -95,59 +130,47 @@ supabase gen types typescript --local > src/integrations/supabase/types.ts
 - Cloudflare Workers 本地: `5714` (推薦用於測試)
 - 測試替代端口: `8082` 或 `5714`
 
-### API 端點策略
-系統使用動態 API 配置 (`src/services/orderService.ts:5-38`)：
-1. **生產環境**: 使用 Cloudflare Workers API (`https://sheet-order-api.ruby7677.workers.dev`)
-2. **本地開發**: 嘗試本地 Workers API (`http://127.0.0.1:5714`)，失敗則降級到傳統 PHP API
-3. **Cloudflare Pages**: 使用生產 Workers API
+### 關鍵 API 端點
+- **訂單**: `/api/orders` (Workers) 或 `/api/get_orders_from_sheet.php` (PHP)
+- **客戶**: `/api/customers` (Workers) 或 `/api/get_customers_from_sheet.php` (PHP)  
+- **客戶訂單**: `/api/customers/orders` (Workers) 或 `/api/get_customer_orders.php` (PHP)
+- **訂單更新**: `/api/orders/status`, `/api/orders/payment`, `/api/orders/items`
 
-## 重要檔案結構
-
-### 前端核心
-- `src/App.tsx` - 主應用入口，路由配置
-- `src/pages/Index.tsx` - 主頁面，目前有未提交的修改
-- `src/components/Dashboard.tsx` - 核心統計面板
-- `src/services/orderService.ts` - 訂單服務，包含動態 API 配置邏輯
-- `src/integrations/supabase/` - Supabase 整合
-
-### 後端 API
-- `api/` - 傳統 PHP API 檔案
-- `sheet-order-api/src/` - Cloudflare Workers API
-- `sheet-order-api/wrangler.jsonc` - Workers 部署配置
-
-### 配置檔案
-- `vite.config.ts` - Vite 配置，包含開發代理設定
-- `components.json` - shadcn/ui 組件配置
-- `tailwind.config.ts.bak` - Tailwind CSS 配置備份
+### 跨域和代理配置
+- 開發環境配置了詳細的 CORS 和代理設定 (`vite.config.ts`)
+- 支援多域名和 iframe 嵌入
+- URI 解碼錯誤處理和安全路徑重寫
 
 ## 開發注意事項
 
 ### 程式碼風格
 - 檔案大小限制: 單檔嚴格控制在 500 行以內
 - TypeScript 嚴格模式啟用
-- ESLint 規則已配置，@typescript-eslint/no-unused-vars 已關閉
+- 主動將過大檔案拆分為邏輯清晰的小模組
 
-### API 開發
-- 優先使用 Cloudflare Workers API 進行新功能開發
-- 傳統 PHP API 作為後備方案維護
-- 所有 API 調用都透過 `orderService.ts` 統一管理
+### API 開發策略
+- **優先順序**: Cloudflare Workers API > PHP API
+- **降級機制**: 自動檢測和降級，確保服務穩定性
+- **統一管理**: 所有 API 調用透過對應的 service 檔案管理
+- **快取策略**: 前端 TanStack Query + Workers KV 雙層快取
 
-### Supabase 整合
-- 新功能應優先考慮使用 Supabase 作為資料來源
-- 現有 Google Sheets 整合保持向後兼容
-- 使用 `src/integrations/supabase/client.ts` 進行資料庫操作
+### 客戶訂單歷史
+- **數據來源**: Google Sheets「客戶名單」工作表（非訂單表）
+- **電話比對**: 使用後九碼標準化比對邏輯
+- **API 端點**: 優先使用 `/api/customers/orders`，降級到 `/api/get_customer_orders.php`
+- **快取鍵**: 使用標準化電話號碼的後九碼
 
 ### 環境變數管理
-- Vite 環境變數前綴: `VITE_`
-- Workers 環境變數在 `wrangler.jsonc` 中配置
-- Supabase 配置透過 `src/integrations/supabase/client.ts`
+- **Vite**: 環境變數前綴 `VITE_`
+- **Workers**: 環境變數在 `wrangler.jsonc` 中配置，支援生產/開發環境
+- **Supabase**: 配置透過 `src/integrations/supabase/client.ts`
 
-### 快取策略
-- 前端: TanStack Query 提供智能快取
-- Workers: Cloudflare KV 作為快取層 (15 秒過期)
-- 開發時可透過 `clearOrderCache()` 清除快取
+### iframe 模式支援
+- 主頁面支援 iframe 嵌入模式
+- 透過 PostMessage API 進行父子窗口通信
+- 簡化界面在 iframe 模式下隱藏不必要的導航元素
 
-### 跨域和代理
-- 開發環境配置了詳細的 CORS 和代理設定
-- Proxy 配置支援 URI 解碼錯誤處理
-- 允許的主機包含本地和生產域名
+### 雙模式界面
+- **訂單模式**: 訂單管理、篩選、統計、批量操作
+- **客戶模式**: 客戶管理、統計、訂單歷史查詢
+- 模式切換透過 `ModernSidebar` 組件控制

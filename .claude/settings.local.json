@@ -17,7 +17,8 @@
       "Bash(npm run build:*)",
       "mcp__context7__resolve-library-id",
       "mcp__context7__get-library-docs",
-      "mcp__ide__getDiagnostics"
+      "mcp__ide__getDiagnostics",
+      "WebFetch(domain:developers.cloudflare.com)"
     ],
     "deny": []
   }
