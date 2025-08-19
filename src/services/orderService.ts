@@ -54,6 +54,20 @@ const getApiEndpoint = (endpoint: string) => {
   return `${config.legacyApiBase}${endpoint}`;
 };
 
+// 資料來源切換
+export type DataSource = 'sheets' | 'supabase';
+const DATA_SOURCE_KEY = 'data_source';
+
+export const getDataSource = (): DataSource => {
+  const v = (localStorage.getItem(DATA_SOURCE_KEY) || 'sheets').toLowerCase();
+  return v === 'supabase' ? 'supabase' : 'sheets';
+};
+
+export const setDataSource = (source: DataSource) => {
+  localStorage.setItem(DATA_SOURCE_KEY, source);
+  clearOrderCache();
+};
+
 // 建立一個錯誤處理和重試機制
 const apiCallWithFallback = async (endpoint: string, options: RequestInit = {}) => {
   const config = getApiConfig();
@@ -152,7 +166,8 @@ export const fetchOrders = async (filters?: {
   const nonce = Math.random().toString(36).substring(2, 15);
   
   // 構建 API 端點和參數（僅在需要即時一致時才強制刷新）
-  const endpoint = '/api/get_orders_from_sheet.php';
+  const useSupabase = getDataSource() === 'supabase';
+  const endpoint = useSupabase ? '/api/orders.supabase' : '/api/get_orders_from_sheet.php';
   const params = new URLSearchParams({
     v: '1.2' // API 版本號
   });
@@ -165,7 +180,7 @@ export const fetchOrders = async (filters?: {
     params.set('realtime', '1');
   }
   
-  const fullEndpoint = `${endpoint}?${params.toString()}`;
+  const fullEndpoint = useSupabase ? endpoint : `${endpoint}?${params.toString()}`;
   
   // 使用錯誤處理和重試機制
   const res = await apiCallWithFallback(fullEndpoint, {
@@ -191,7 +206,30 @@ export const fetchOrders = async (filters?: {
     return []; // 或者拋出錯誤，視情況而定
   }
 
-  // 將 Google Sheets 資料轉換成前端 Order 型別
+  // Supabase：已回傳前端 Order 形狀
+  if (useSupabase) {
+    const supabaseOrders: Order[] = (result.data as any[]).map((o: any) => ({
+      id: String(o.id),
+      orderNumber: String(o.orderNumber),
+      customer: { name: String(o.customer?.name || ''), phone: String(o.customer?.phone || '') },
+      items: Array.isArray(o.items) ? o.items : [],
+      total: Number(o.total || 0),
+      status: String(o.status || '訂單確認中') as any,
+      createdAt: String(o.createdAt || ''),
+      deliveryMethod: String(o.deliveryMethod || ''),
+      deliveryAddress: String(o.deliveryAddress || ''),
+      dueDate: String(o.dueDate || ''),
+      deliveryTime: String(o.deliveryTime || ''),
+      paymentMethod: String(o.paymentMethod || ''),
+      notes: String(o.notes || ''),
+      paymentStatus: String(o.paymentStatus || '') as any,
+    }));
+
+    orderCache = { timestamp: now, data: supabaseOrders };
+    return filters ? filterOrdersInMemory(supabaseOrders, filters) : supabaseOrders;
+  }
+
+  // Sheets：將資料轉換成前端 Order 型別
   let orders = result.data.map((row: {
     createdAt?: string;
     id?: string;

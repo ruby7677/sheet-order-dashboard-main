@@ -6,6 +6,7 @@ import { TaskDelete } from "./endpoints/taskDelete";
 import { TaskFetch } from "./endpoints/taskFetch";
 import { TaskList } from "./endpoints/taskList";
 import { GetOrdersFromSheet } from './endpoints/getOrdersFromSheet';
+import { GetOrdersFromSupabase } from './endpoints/getOrdersFromSupabase';
 import { GetCustomersFromSheet } from './endpoints/getCustomersFromSheet';
 import { UpdateOrderStatus } from './endpoints/updateOrderStatus';
 import { UpdatePaymentStatus } from './endpoints/updatePaymentStatus';
@@ -58,7 +59,9 @@ openapi.get("/api/tasks/:taskSlug", TaskFetch);
 openapi.delete("/api/tasks/:taskSlug", TaskDelete);
 
 // 訂單系統 API 端點
+// 預設仍沿用 Sheets；若要切換至 Supabase，將此行改為 GetOrdersFromSupabase
 openapi.get("/api/orders", GetOrdersFromSheet);
+openapi.get("/api/orders.supabase", GetOrdersFromSupabase);
 openapi.get("/api/customers", GetCustomersFromSheet);
 openapi.put("/api/orders/status", UpdateOrderStatus);
 openapi.put("/api/orders/payment", UpdatePaymentStatus);

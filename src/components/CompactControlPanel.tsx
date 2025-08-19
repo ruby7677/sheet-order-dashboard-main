@@ -19,6 +19,7 @@ import {
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
+import { getDataSource, setDataSource } from '@/services/orderService';
 
 interface CompactControlPanelProps {
   // 統計資訊
@@ -133,7 +134,27 @@ const CompactControlPanel: React.FC<CompactControlPanelProps> = ({
             </div>
 
             {/* 右側：操作按鈕 - 更緊湊的佈局 */}
-            <div className="flex flex-wrap gap-1">
+            <div className="flex flex-wrap gap-1 items-center">
+              {/* 資料來源切換：Sheets / Supabase */}
+              <div className="flex items-center gap-1 text-xs border rounded px-2 py-1 mr-1">
+                <span className="text-muted-foreground">來源</span>
+                <Button
+                  variant={getDataSource() === 'sheets' ? 'default' : 'outline'}
+                  size="sm"
+                  className="h-7 px-2"
+                  onClick={() => setDataSource('sheets')}
+                >
+                  Sheets
+                </Button>
+                <Button
+                  variant={getDataSource() === 'supabase' ? 'default' : 'outline'}
+                  size="sm"
+                  className="h-7 px-2"
+                  onClick={() => setDataSource('supabase')}
+                >
+                  Supabase
+                </Button>
+              </div>
               {actionButtons}
             </div>
           </div>
