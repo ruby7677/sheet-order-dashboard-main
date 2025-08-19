@@ -216,5 +216,31 @@ export class SupabaseService {
     if (error) {throw new ApiError(500, `批次刪除訂單失敗: ${error.message}`, 'DB_DELETE_ERROR')}
     return count ?? 0
   }
+
+  // 取得多筆訂單的 items（order_items）
+  async getOrderItemsForOrderIds(orderIds: string[]): Promise<Record<string, Array<{ product: string; quantity: number; price: number; subtotal: number }>>> {
+    const result: Record<string, Array<{ product: string; quantity: number; price: number; subtotal: number }>> = {}
+    if (!orderIds || orderIds.length === 0) {return result}
+
+    const { data, error } = await this.client
+      .from('order_items')
+      .select('order_id, product, quantity, price, subtotal')
+      .in('order_id', orderIds)
+
+    if (error) {throw new ApiError(500, `查詢 order_items 失敗: ${error.message}`, 'DB_QUERY_ERROR')}
+
+    for (const row of data ?? []) {
+      const oid = String((row as any).order_id)
+      if (!result[oid]) {result[oid] = []}
+      result[oid].push({
+        product: String((row as any).product ?? ''),
+        quantity: Number((row as any).quantity ?? 0),
+        price: Number((row as any).price ?? 0),
+        subtotal: Number((row as any).subtotal ?? 0),
+      })
+    }
+
+    return result
+  }
 }
 
