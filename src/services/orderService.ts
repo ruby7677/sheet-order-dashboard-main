@@ -209,13 +209,13 @@ export const fetchOrders = async (filters?: {
   try {
     res = await apiCallWithFallback(fullEndpoint, { method: 'GET' });
   } catch (err: any) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (useSupabase && /404/.test(msg)) {
-      // 回退到 Sheets 來源
+    // 任何 Supabase 來源錯誤，皆回退到 Sheets，確保 UI 可用
+    if (useSupabase) {
       const fallbackEndpoint = `/api/get_orders_from_sheet.php?${params.toString()}`;
       res = await apiCallWithFallback(fallbackEndpoint, { method: 'GET' });
     } else {
-      throw err;
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new Error(msg);
     }
   }
   if (!res.ok) {

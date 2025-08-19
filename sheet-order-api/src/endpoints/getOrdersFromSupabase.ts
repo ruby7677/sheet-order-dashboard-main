@@ -65,7 +65,14 @@ export class GetOrdersFromSupabase extends OpenAPIRoute {
       const svc = new SupabaseService(c.env as any);
       const paged = await svc.getOrders(query);
       const orderIdList = paged.data.map((r) => r.id);
-      const itemsMap = await svc.getOrderItemsForOrderIds(orderIdList);
+      let itemsMap: Record<string, Array<{ product: string; quantity: number; price: number; subtotal: number }>> = {};
+      try {
+        itemsMap = await svc.getOrderItemsForOrderIds(orderIdList);
+      } catch (e) {
+        // 若 order_items 查詢失敗，不影響主資料回傳，僅回傳空 items
+        console.warn('查詢 order_items 失敗，將以空陣列回傳 items。', e);
+        itemsMap = {};
+      }
 
       // 轉換為前端 Order 形狀
       const orders = paged.data.map((r) => ({
@@ -102,6 +109,7 @@ export class GetOrdersFromSupabase extends OpenAPIRoute {
       return c.json(response);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
+      console.error('GetOrdersFromSupabase 500:', err);
       c.header('X-Response-Time', `${Date.now() - start}ms`);
       return c.json({ success: false, message: msg, request_id: requestId }, 500 as any);
     }

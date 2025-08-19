@@ -193,13 +193,10 @@ const Index: React.FC = () => {
       setSelectedCustomers([]);
       setDashboardRefreshTrigger(prev => prev + 1);
       setCustomerDashboardRefreshTrigger(prev => prev + 1);
-      // 重新載入訂單/客戶
-      (async () => {
-        try {
-          const _ = await fetchOrders();
-          updateCustomerStats();
-        } catch {}
-      })();
+      // 觸發 OrderList 重新載入（filters 物件引用變更）
+      setFilters(prev => ({ ...prev }));
+      // 重新整理客戶統計
+      updateCustomerStats();
     });
     return unsub;
   }, []);
