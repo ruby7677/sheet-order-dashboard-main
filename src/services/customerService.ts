@@ -1,4 +1,4 @@
-import { Customer, CustomerWithStats, CustomerOrder, CustomerFilterCriteria, CustomerStats } from '@/types/customer';
+import { CustomerWithStats, CustomerOrder, CustomerFilterCriteria, CustomerStats } from '@/types/customer';
 import { fetchOrders } from './orderService';
 
 // 動態 API 配置系統 (與 orderService 保持一致)
@@ -92,12 +92,12 @@ export const fetchCustomers = async (filters?: CustomerFilterCriteria): Promise<
   const deriveFromOrders = async (): Promise<CustomerWithStats[]> => {
     const orders = await fetchOrders();
 
-    const customersByPhone: { [phone: string]: typeof orders } = {} as any;
+    const customersByPhone: { [phone: string]: typeof orders } = {};
     orders.forEach(o => {
       const phone = o.customer?.phone?.trim();
       if (!phone) {return;}
-      if (!customersByPhone[phone]) {customersByPhone[phone] = [] as any;}
-      (customersByPhone[phone] as any).push(o);
+      if (!customersByPhone[phone]) {customersByPhone[phone] = [];}
+      customersByPhone[phone].push(o);
     });
 
     const customersWithStats: CustomerWithStats[] = Object.entries(customersByPhone).map(([phone, group]) => {
@@ -327,92 +327,166 @@ export const getCustomerStats = (customers: CustomerWithStats[]): CustomerStats 
   };
 };
 
-// 電話號碼標準化函數
+// 電話號碼標準化函數（移除所有非數字字符）
 const normalizePhone = (phone: string): string => {
   if (!phone) return '';
-  // 移除所有空格、破折號和括號
-  return phone.replace(/[\s\-\(\)]/g, '').trim();
+  // 移除所有非數字字符
+  return phone.replace(/[^0-9]/g, '');
+};
+
+// 獲取電話號碼的後九碼（與 PHP API 邏輯一致）
+const getLastNineDigits = (phone: string): string => {
+  const normalized = normalizePhone(phone);
+  return normalized.length >= 9 ? normalized.slice(-9) : normalized;
 };
 
 // 獲取客戶訂單歷史
-// 從訂單資料推導客戶的訂單歷史
+// 使用專門的客戶訂單 API 端點
 export const fetchCustomerOrders = async (phone: string): Promise<CustomerOrder[]> => {
   // 檢查是否有快取且未過期
   const now = Date.now();
-  const normalizedPhone = normalizePhone(phone);
+  const phoneKey = getLastNineDigits(phone);
   
   if (
-    customerOrdersCache[normalizedPhone] &&
-    (now - customerOrdersCache[normalizedPhone].timestamp < CACHE_DURATION)
+    customerOrdersCache[phoneKey] &&
+    (now - customerOrdersCache[phoneKey].timestamp < CACHE_DURATION)
   ) {
-    console.log('使用快取的客戶訂單資料:', normalizedPhone);
-    return customerOrdersCache[normalizedPhone].data;
+    console.log('使用快取的客戶訂單資料:', phoneKey);
+    return customerOrdersCache[phoneKey].data;
   }
 
-  console.log('🔍 正在查找客戶訂單歷史:', { 
+  console.log('🔍 正在從客戶名單獲取訂單歷史:', { 
     原始電話: phone, 
-    標準化電話: normalizedPhone 
+    後九碼: phoneKey 
   });
 
   try {
-    const allOrders = await fetchOrders();
-    console.log('📋 所有訂單數量:', allOrders.length);
+    // 優先嘗試 Workers API，失敗則降級到 PHP API
+    const config = getApiConfig();
+    let response: Response;
+    let url: string;
     
-    // 使用標準化的電話號碼進行比對
-    const customerOrders = allOrders.filter(order => {
-      const orderPhone = normalizePhone(order.customer?.phone || '');
-      const isMatch = orderPhone === normalizedPhone;
+    if (config.isCloudflarePages || !config.isLocalDev) {
+      // 生產環境：使用 Workers API
+      url = `${config.workersApiUrl}/api/customers/orders?phone=${encodeURIComponent(phone)}&nonce=${now}`;
+      console.log('🌐 嘗試 Workers API:', url);
       
-      if (isMatch) {
-        console.log('✅ 找到匹配訂單:', {
-          訂單ID: order.id,
-          訂單電話: order.customer?.phone,
-          標準化後: orderPhone
+      response = await fetch(url, {
+        headers: { 
+          'Cache-Control': 'no-cache',
+          'Accept': 'application/json'
+        },
+      });
+    } else {
+      // 本地開發：嘗試本地 Workers API
+      try {
+        url = `${config.localWorkersApiUrl}/api/customers/orders?phone=${encodeURIComponent(phone)}&nonce=${now}`;
+        console.log('🌐 嘗試本地 Workers API:', url);
+        
+        response = await fetch(url, {
+          headers: { 
+            'Cache-Control': 'no-cache',
+            'Accept': 'application/json'
+          },
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Workers API 失敗: ${response.status}`);
+        }
+      } catch (workersError) {
+        console.log('⚠️ Workers API 失敗，降級到 PHP API:', workersError);
+        
+        // 降級到 PHP API
+        const phpEndpoint = getApiEndpoint('/api/get_customer_orders.php');
+        url = `${phpEndpoint}?phone=${encodeURIComponent(phone)}&nonce=${now}`;
+        console.log('🌐 嘗試 PHP API:', url);
+        
+        response = await fetch(url, {
+          headers: { 
+            'Cache-Control': 'no-cache',
+            'Accept': 'application/json'
+          },
         });
       }
-      
-      return isMatch;
-    });
+    }
 
-    console.log('📊 客戶訂單統計:', {
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const result = await response.json();
+    console.log('📦 API 回應:', result);
+
+    if (!result.success) {
+      throw new Error(result.message || '獲取客戶訂單失敗');
+    }
+
+    // 轉換 API 資料格式
+    const orders: CustomerOrder[] = (result.data || []).map((order: { id?: string | number; orderTime?: string; items?: string; name?: string }, index: number) => ({
+      id: order.id ? String(order.id) : `order-${index}`,
+      orderTime: order.orderTime || '',
+      items: order.items || '',
+      name: order.name || '',
+    }));
+
+    console.log('📊 處理後的客戶訂單:', {
       客戶電話: phone,
-      找到訂單數: customerOrders.length,
-      訂單詳情: customerOrders.map(o => ({
-        id: o.id,
-        時間: o.createdAt || o.dueDate,
-        商品數: o.items.length
-      }))
+      找到訂單數: orders.length,
+      訂單詳情: orders
     });
-
-    const orders: CustomerOrder[] = customerOrders
-      .sort((a, b) => {
-        // 按時間排序，最新的在前
-        const timeA = new Date(a.createdAt || a.dueDate || '').getTime();
-        const timeB = new Date(b.createdAt || b.dueDate || '').getTime();
-        return timeB - timeA;
-      })
-      .map(order => ({
-        id: order.id,
-        orderTime: order.createdAt || order.dueDate || '',
-        items: order.items.map(item => `${item.product} x ${item.quantity}`).join(', '),
-        name: order.customer?.name,
-      }));
 
     // 更新快取
-    customerOrdersCache[normalizedPhone] = {
+    customerOrdersCache[phoneKey] = {
       timestamp: now,
       data: orders,
     };
 
     console.log('💾 客戶訂單已快取:', {
-      客戶: normalizedPhone,
+      客戶: phoneKey,
       訂單數: orders.length
     });
 
     return orders;
   } catch (error) {
-    console.error('❌ 載入客戶訂單失敗:', error);
-    return [];
+    console.error('❌ 從 API 載入客戶訂單失敗:', error);
+    
+    // 降級方案：從訂單資料推導
+    console.log('🔄 嘗試降級方案：從訂單資料推導...');
+    try {
+      const allOrders = await fetchOrders();
+      console.log('📋 所有訂單數量:', allOrders.length);
+      
+      // 使用後九碼比對（與 PHP API 一致）
+      const customerOrders = allOrders.filter(order => {
+        const orderPhone = getLastNineDigits(order.customer?.phone || '');
+        const targetPhone = getLastNineDigits(phone);
+        return orderPhone === targetPhone;
+      });
+
+      const orders: CustomerOrder[] = customerOrders
+        .sort((a, b) => {
+          // 按時間排序，最早的在前（與 PHP API 一致）
+          const timeA = new Date(a.createdAt || a.dueDate || '').getTime();
+          const timeB = new Date(b.createdAt || b.dueDate || '').getTime();
+          return timeA - timeB;
+        })
+        .map((order, index) => ({
+          id: order.id || `fallback-${index}`,
+          orderTime: order.createdAt || order.dueDate || '',
+          items: order.items.map(item => `${item.product} x ${item.quantity}`).join(', '),
+          name: order.customer?.name,
+        }));
+
+      console.log('🔄 降級方案結果:', {
+        客戶電話: phone,
+        找到訂單數: orders.length
+      });
+
+      return orders;
+    } catch (fallbackError) {
+      console.error('❌ 降級方案也失敗了:', fallbackError);
+      return [];
+    }
   }
 };
 
@@ -425,9 +499,9 @@ export const clearCustomerCache = () => {
 // 清除客戶訂單快取
 export const clearCustomerOrderCache = (phone?: string) => {
   if (phone) {
-    const normalizedPhone = normalizePhone(phone);
-    delete customerOrdersCache[normalizedPhone];
-    console.log(`已清除客戶 ${phone} (${normalizedPhone}) 的訂單快取`);
+    const phoneKey = getLastNineDigits(phone);
+    delete customerOrdersCache[phoneKey];
+    console.log(`已清除客戶 ${phone} (後九碼: ${phoneKey}) 的訂單快取`);
   } else {
     Object.keys(customerOrdersCache).forEach(key => {
       delete customerOrdersCache[key];
