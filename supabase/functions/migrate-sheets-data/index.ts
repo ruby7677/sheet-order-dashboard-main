@@ -119,6 +119,28 @@ function base64UrlEncode(data: string | Uint8Array): string {
   return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 }
 
+// 僅保留數字作為標準化電話
+function normalizePhone(phone: string): string {
+  return (phone || '').replace(/[^0-9]/g, '');
+}
+
+// 重試工具（指數退避）
+async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
+  let attempt = 0;
+  let lastErr: any;
+  while (attempt < maxRetries) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      const delay = Math.pow(2, attempt) * 200;
+      await new Promise(r => setTimeout(r, delay));
+      attempt++;
+    }
+  }
+  throw lastErr;
+}
+
 function parseDate(dateStr: string): string | null {
   if (!dateStr) {return null;}
   
@@ -166,7 +188,7 @@ async function migrateCustomers(supabase: any, customersData: any[][], dryRun: b
     try {
       const customerData = {
         name: row[headerMap['name']]?.toString().trim() || '',
-        phone: row[headerMap['phone']]?.toString().trim() || '',
+        phone: normalizePhone(row[headerMap['phone']]?.toString().trim() || ''),
         address: row[headerMap['address']]?.toString().trim() || '',
         delivery_method: row[headerMap['deliveryMethod']]?.toString().trim() || '',
         contact_method: row[headerMap['contactMethod']]?.toString().trim() || '',
@@ -182,11 +204,13 @@ async function migrateCustomers(supabase: any, customersData: any[][], dryRun: b
 
       // 檢查是否已存在
       if (skipExisting) {
-        const { data: existing } = await supabase
-          .from('customers')
-          .select('id')
-          .eq('phone', customerData.phone)
-          .single();
+        const { data: existing } = await withRetry(() =>
+          supabase
+            .from('customers')
+            .select('id')
+            .eq('phone', customerData.phone)
+            .single()
+        );
         
         if (existing) {
           console.log(`客戶已存在: ${customerData.phone}`);
@@ -194,9 +218,11 @@ async function migrateCustomers(supabase: any, customersData: any[][], dryRun: b
         }
       }
 
-      const { error } = await supabase
-        .from('customers')
-        .upsert(customerData, { onConflict: 'phone' });
+      const { error } = await withRetry(() =>
+        supabase
+          .from('customers')
+          .upsert(customerData, { onConflict: 'phone' })
+      );
 
       if (error) {
         errors.push(`客戶 ${customerData.name}: ${error.message}`);
@@ -212,11 +238,12 @@ async function migrateCustomers(supabase: any, customersData: any[][], dryRun: b
 }
 
 async function migrateOrders(supabase: any, ordersData: any[][], dryRun: boolean, skipExisting: boolean) {
-  if (ordersData.length === 0) {return { processed: 0, errors: [] };}
+  if (ordersData.length === 0) {return { processed: 0, itemsProcessed: 0, errors: [] };}
   
   const rows = ordersData.slice(1); // 跳過標題行
   const errors: string[] = [];
   let processed = 0;
+  let itemsProcessed = 0;
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
@@ -262,12 +289,14 @@ async function migrateOrders(supabase: any, ordersData: any[][], dryRun: boolean
         }
       }
 
-      const { data: upsertedOrders, error: upsertErr } = await supabase
-        .from('orders')
-        .upsert(orderData, { onConflict: 'google_sheet_id' })
-        .select('id')
-        .eq('google_sheet_id', orderData.google_sheet_id)
-        .limit(1);
+      const { data: upsertedOrders, error: upsertErr } = await withRetry(() =>
+        supabase
+          .from('orders')
+          .upsert(orderData, { onConflict: 'google_sheet_id' })
+          .select('id')
+          .eq('google_sheet_id', orderData.google_sheet_id)
+          .limit(1)
+      );
 
       if (upsertErr) {
         errors.push(`訂單 ${orderData.order_number}: ${upsertErr.message}`);
@@ -297,12 +326,15 @@ async function migrateOrders(supabase: any, ordersData: any[][], dryRun: boolean
           if (!dryRun && items.length > 0) {
             // 可選：為冪等，可先刪舊再插新，或建立唯一鍵 (order_id, product, quantity, price)
             // 這裡採刪舊再插入，簡化處理
-            await supabase.from('order_items').delete().eq('order_id', orderId);
+            await withRetry(() => supabase.from('order_items').delete().eq('order_id', orderId));
             const insertPayload = items.map(it => ({ order_id: orderId, ...it }));
-            const { error: itemErr } = await supabase.from('order_items').insert(insertPayload);
+            const { error: itemErr } = await withRetry(() => supabase.from('order_items').insert(insertPayload));
             if (itemErr) {
               errors.push(`訂單 ${orderData.order_number}: 寫入 order_items 失敗 - ${itemErr.message}`);
             }
+            itemsProcessed += items.length;
+          } else if (dryRun) {
+            itemsProcessed += items.length;
           }
         }
       } catch (e) {
@@ -315,7 +347,7 @@ async function migrateOrders(supabase: any, ordersData: any[][], dryRun: boolean
     }
   }
 
-  return { processed, errors };
+  return { processed, itemsProcessed, errors };
 }
 
 Deno.serve(async (req) => {
@@ -387,7 +419,7 @@ Deno.serve(async (req) => {
       stats: {
         ordersProcessed: ordersResult.processed,
         customersProcessed: customersResult.processed,
-        productsProcessed: 0, // order_items 已寫入，但暫不單獨統計數量
+        productsProcessed: ordersResult.itemsProcessed,
         errors: allErrors
       }
     };
