@@ -222,9 +222,10 @@ export class SupabaseService {
     const result: Record<string, Array<{ product: string; quantity: number; price: number; subtotal: number }>> = {}
     if (!orderIds || orderIds.length === 0) {return result}
 
+    // 以 * 取回所有欄位，後續以相容映射對應不同 schema（product_name/unit_price/total_price 或 product/price/subtotal）
     const { data, error } = await this.client
       .from('order_items')
-      .select('order_id, product, quantity, price, subtotal')
+      .select('*')
       .in('order_id', orderIds)
 
     if (error) {throw new ApiError(500, `查詢 order_items 失敗: ${error.message}`, 'DB_QUERY_ERROR')}
@@ -232,11 +233,15 @@ export class SupabaseService {
     for (const row of data ?? []) {
       const oid = String((row as any).order_id)
       if (!result[oid]) {result[oid] = []}
+      const r: any = row as any
+      const product = r.product_name ?? r.product ?? ''
+      const price = r.unit_price ?? r.price ?? 0
+      const subtotal = r.total_price ?? r.subtotal ?? (Number(price) * Number(r.quantity ?? 0))
       result[oid].push({
-        product: String((row as any).product ?? ''),
-        quantity: Number((row as any).quantity ?? 0),
-        price: Number((row as any).price ?? 0),
-        subtotal: Number((row as any).subtotal ?? 0),
+        product: String(product ?? ''),
+        quantity: Number(r.quantity ?? 0),
+        price: Number(price ?? 0),
+        subtotal: Number(subtotal ?? 0),
       })
     }
 
