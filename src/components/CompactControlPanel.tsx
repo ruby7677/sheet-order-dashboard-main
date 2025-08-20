@@ -60,7 +60,11 @@ const CompactControlPanel: React.FC<CompactControlPanelProps> = ({
   // 監聽資料來源變更，觸發 UI 更新
   React.useEffect(() => {
     const unsub = subscribeDataSourceChange(() => setCurrentSource(getDataSource()));
-    return unsub;
+    return () => {
+      if (typeof unsub === 'function') {
+        unsub();
+      }
+    };
   }, []);
 
   return (

@@ -198,7 +198,11 @@ const Index: React.FC = () => {
       // 重新整理客戶統計
       updateCustomerStats();
     });
-    return unsub;
+    return () => {
+      if (typeof unsub === 'function') {
+        unsub();
+      }
+    };
   }, []);
 
 
