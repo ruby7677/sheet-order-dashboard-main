@@ -60,18 +60,20 @@ const ProductManagementPage: React.FC = () => {
   const loadProducts = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
+      const { data, error, status, statusText } = await supabase
         .from('products')
         .select('*')
         .order('sort_order', { ascending: true });
 
-      if (error) throw error;
+      if (error) {
+        throw new Error(`[${status} ${statusText}] ${error.message}`);
+      }
       setProducts((data as Product[]) || []);
     } catch (error) {
       console.error('載入商品失敗:', error);
       toast({
         title: '錯誤',
-        description: '載入商品資料失敗',
+        description: (error as any)?.message || '載入商品資料失敗',
         variant: 'destructive',
       });
     } finally {
@@ -128,15 +130,14 @@ const ProductManagementPage: React.FC = () => {
 
       if (editingProduct) {
         // 更新
-        const { error } = await supabase
+        const { error, status, statusText } = await supabase
           .from('products')
           .update({
             ...formData,
             updated_at: new Date().toISOString()
           })
           .eq('id', editingProduct.id);
-
-        if (error) throw error;
+        if (error) { throw new Error(`[${status} ${statusText}] ${error.message}`); }
         
         toast({
           title: '成功',
@@ -144,11 +145,10 @@ const ProductManagementPage: React.FC = () => {
         });
       } else {
         // 新增
-        const { error } = await supabase
+        const { error, status, statusText } = await supabase
           .from('products')
           .insert([formData as any]);
-
-        if (error) throw error;
+        if (error) { throw new Error(`[${status} ${statusText}] ${error.message}`); }
         
         toast({
           title: '成功',
@@ -175,12 +175,11 @@ const ProductManagementPage: React.FC = () => {
     }
 
     try {
-      const { error } = await supabase
+      const { error, status, statusText } = await supabase
         .from('products')
         .delete()
         .eq('id', product.id);
-
-      if (error) throw error;
+      if (error) { throw new Error(`[${status} ${statusText}] ${error.message}`); }
       
       toast({
         title: '成功',
@@ -205,12 +204,11 @@ const ProductManagementPage: React.FC = () => {
         updateData.stock_quantity = stockQuantity;
       }
 
-      const { error } = await supabase
+      const { error, status, statusText } = await supabase
         .from('products')
         .update(updateData)
         .eq('id', product.id);
-
-      if (error) throw error;
+      if (error) { throw new Error(`[${status} ${statusText}] ${error.message}`); }
       
       toast({
         title: '成功',
