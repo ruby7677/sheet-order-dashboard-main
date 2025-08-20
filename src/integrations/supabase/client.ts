@@ -2,21 +2,9 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
-// 優先從環境變數讀取（Vite/Node），避免硬編碼導致不同環境連線失敗
-const ENV_SUPABASE_URL = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_SUPABASE_URL) || (typeof process !== 'undefined' && (process as any).env?.VITE_SUPABASE_URL);
-const ENV_SUPABASE_ANON_KEY = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_SUPABASE_ANON_KEY) || (typeof process !== 'undefined' && (process as any).env?.VITE_SUPABASE_ANON_KEY);
-
-const DEFAULT_SUPABASE_URL = "https://skcdapfynyszxyqqsvib.supabase.co";
-const DEFAULT_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNrY2RhcGZ5bnlzenh5cXFzdmliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ5NzQzMzQsImV4cCI6MjA3MDU1MDMzNH0.BilWvEh4djyQAYb5QWkuiju9teOVHlmk9zG0JVgMZbQ";
-
-const SUPABASE_URL = ENV_SUPABASE_URL || DEFAULT_SUPABASE_URL;
-const SUPABASE_PUBLISHABLE_KEY = ENV_SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ANON_KEY;
-
-if (!ENV_SUPABASE_URL || !ENV_SUPABASE_ANON_KEY) {
-  // 在開發主控台提示，以利配置調整
-  // eslint-disable-next-line no-console
-  console.warn('[Supabase] 未偵測到 VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY，已使用預設值。請在 .env 設定以連上你的專案。');
-}
+// 在生產環境內已透過 Workers 配置，前端不再依賴 .env
+const SUPABASE_URL = "https://skcdapfynyszxyqqsvib.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNrY2RhcGZ5bnlzenh5cXFzdmliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ5NzQzMzQsImV4cCI6MjA3MDU1MDMzNH0.BilWvEh4djyQAYb5QWkuiju9teOVHlmk9zG0JVgMZbQ";
 
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
