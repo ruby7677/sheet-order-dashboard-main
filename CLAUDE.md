@@ -43,19 +43,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## 常用指令
 
 ### 開發環境
-```bash
+```powershell
 # 啟動前端開發服務器 (端口 8080)
 npm run dev
 
 # 啟動前端開發服務器 (除錯模式)
 npm run dev:debug
 
-# 清除快取並啟動
+# 清除快取並啟動 (Windows PowerShell)
 npm run dev:clean
 ```
 
 ### 建置和部署
-```bash
+```powershell
 # 生產環境建置
 npm run build
 
@@ -65,25 +65,25 @@ npm run build:dev
 # 預覽建置結果
 npm run preview
 
-# 清除 node_modules 快取和 dist
+# 清除 node_modules 快取和 dist (Windows PowerShell)
 npm run clean
 ```
 
 ### 程式碼品質
-```bash
-# ESLint 檢查
+```powershell
+# ESLint 檢查和修復
 npm run lint
 ```
 
 ### Cloudflare Workers API
-```bash
+```powershell
 # 進入 Workers 目錄
 cd sheet-order-api
 
-# 本地開發 Workers (端口 5714)
+# 本地開發 Workers (端口 5714，使用 wrangler dev)
 npm run dev
 
-# 部署到 Cloudflare
+# 部署到 Cloudflare (需要 Cloudflare 帳戶和權限)
 npm run deploy
 
 # 生成 TypeScript 類型
@@ -126,8 +126,8 @@ supabase gen types typescript --local > src/integrations/supabase/types.ts
 ## 環境配置
 
 ### 開發端口
-- 前端開發服務器: `8082` (已配置在 vite.config.ts)
-- Cloudflare Workers 本地: `5714` (推薦用於測試)
+- 前端開發服務器: `8080` (已配置在 package.json 和 vite.config.ts)
+- Cloudflare Workers 本地: `5714` (已配置在 sheet-order-api/wrangler.jsonc)
 - 測試替代端口: `8082` 或 `5714`
 
 ### 關鍵 API 端點
@@ -174,3 +174,29 @@ supabase gen types typescript --local > src/integrations/supabase/types.ts
 - **訂單模式**: 訂單管理、篩選、統計、批量操作
 - **客戶模式**: 客戶管理、統計、訂單歷史查詢
 - 模式切換透過 `ModernSidebar` 組件控制
+
+## TypeScript 配置
+
+### 嚴格模式設定
+- **TypeScript 配置**: 採用專案引用結構 (`tsconfig.json`, `tsconfig.app.json`, `tsconfig.node.json`)
+- **嚴格檢查**: 啟用 `noImplicitAny`, `noUnusedParameters`, `noUnusedLocals`, `strictNullChecks`
+- **路徑別名**: `@/*` 指向 `./src/*`
+- **編譯選項**: 允許 JavaScript 檔案，跳過 lib 檢查以提升編譯速度
+
+### Workers TypeScript 配置
+- **獨立配置**: `sheet-order-api/tsconfig.json` 使用 Cloudflare Workers 類型
+- **類型生成**: 使用 `wrangler types` 自動生成 Cloudflare Workers 類型定義
+
+## Windows 開發環境
+
+### 指令相容性
+- **終端機**: 使用 PowerShell 相容語法
+- **指令分隔**: 使用分號 (`;`) 分隔多個指令
+- **避免**: 不使用 `curl` 指令，改用 fetch API 或其他方法
+- **路徑處理**: 支援 Windows 路徑格式，URI 解碼錯誤處理
+
+### 代理和 CORS 設定
+- **開發代理**: 自動將 `/api` 路徑重寫為 `/sheet-order-dashboard-main/api`
+- **跨域設定**: 支援多個允許的域名和 iframe 嵌入
+- **錯誤處理**: URI 解碼失敗時的安全後備機制
+- **安全標頭**: CSP 和 CORS 標頭配置以支援開發和生產環境
