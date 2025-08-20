@@ -271,41 +271,57 @@ async function migrateOrders(supabase: any, ordersData: any[][], dryRun: boolean
 
       if (dryRun) {
         console.log('Dry run - 訂單資料:', orderData);
+        // 仍然嘗試解析 items 計數，便於評估
+        try {
+          const itemsRaw = (rows[i][8] ?? '').toString().trim();
+          if (itemsRaw) {
+            const itemStrings = itemsRaw.split(/[,，、\n]/).map(s => s.trim()).filter(Boolean);
+            const items = itemStrings.map((s) => {
+              const m = s.split(/\s*[xX×]\s*/);
+              const product = (m[0] ?? '').trim();
+              const quantity = Math.max(0, parseInt((m[1] ?? '1'), 10) || 1);
+              const price = Math.max(0, parseFloat(m[2] ?? '0') || 0);
+              const subtotal = price * quantity;
+              return { product, quantity, price, subtotal };
+            }).filter(it => it.product);
+            itemsProcessed += items.length;
+          }
+        } catch {}
         processed++;
         continue;
       }
 
-      // 檢查是否已存在
+      // 取得訂單 id：若已存在且 skipExisting 為 true，則沿用既有 id；否則 upsert 並取得 id
+      let orderId: string | null = null;
       if (skipExisting) {
         const { data: existing } = await supabase
           .from('orders')
           .select('id')
           .eq('google_sheet_id', orderData.google_sheet_id)
           .single();
-        
-        if (existing) {
-          console.log(`訂單已存在: ${orderData.order_number}`);
-          continue;
+        if (existing?.id) {
+          orderId = existing.id;
         }
       }
 
-      const { data: upsertedOrders, error: upsertErr } = await withRetry(() =>
-        supabase
-          .from('orders')
-          .upsert(orderData, { onConflict: 'google_sheet_id' })
-          .select('id')
-          .eq('google_sheet_id', orderData.google_sheet_id)
-          .limit(1)
-      );
-
-      if (upsertErr) {
-        errors.push(`訂單 ${orderData.order_number}: ${upsertErr.message}`);
-        continue;
+      if (!orderId) {
+        const { data: upsertedOrders, error: upsertErr } = await withRetry(() =>
+          supabase
+            .from('orders')
+            .upsert(orderData, { onConflict: 'google_sheet_id' })
+            .select('id')
+            .eq('google_sheet_id', orderData.google_sheet_id)
+            .limit(1)
+        );
+        if (upsertErr) {
+          errors.push(`訂單 ${orderData.order_number}: ${upsertErr.message}`);
+          continue;
+        }
+        orderId = upsertedOrders && upsertedOrders[0]?.id;
       }
 
-      const orderId = upsertedOrders && upsertedOrders[0]?.id;
       if (!orderId) {
-        errors.push(`訂單 ${orderData.order_number}: 無法取得 upsert 後的 order.id`);
+        errors.push(`訂單 ${orderData.order_number}: 無法取得 order.id`);
         continue;
       }
 
@@ -324,15 +340,43 @@ async function migrateOrders(supabase: any, ordersData: any[][], dryRun: boolean
           }).filter(it => it.product);
 
           if (!dryRun && items.length > 0) {
-            // 可選：為冪等，可先刪舊再插新，或建立唯一鍵 (order_id, product, quantity, price)
-            // 這裡採刪舊再插入，簡化處理
+            // 冪等：先刪舊再插入
             await withRetry(() => supabase.from('order_items').delete().eq('order_id', orderId));
-            const insertPayload = items.map(it => ({ order_id: orderId, ...it }));
-            const { error: itemErr } = await withRetry(() => supabase.from('order_items').insert(insertPayload));
-            if (itemErr) {
-              errors.push(`訂單 ${orderData.order_number}: 寫入 order_items 失敗 - ${itemErr.message}`);
+
+            // 優先使用新版欄位（product_name, unit_price, total_price），失敗則回退舊版（product, price, subtotal）
+            const payloadNew = items.map(it => ({
+              order_id: orderId,
+              product_name: it.product,
+              quantity: it.quantity,
+              unit_price: it.price,
+              total_price: it.subtotal,
+            }));
+
+            let insertOk = false;
+            let itemErrMsg: string | null = null;
+            try {
+              const { error: itemErr } = await withRetry(() => supabase.from('order_items').insert(payloadNew));
+              if (itemErr) { throw new Error(itemErr.message); }
+              insertOk = true;
+            } catch (e) {
+              itemErrMsg = e instanceof Error ? e.message : String(e);
+              // 回退舊欄位
+              const payloadOld = items.map(it => ({
+                order_id: orderId,
+                product: it.product,
+                quantity: it.quantity,
+                price: it.price,
+                subtotal: it.subtotal,
+              }));
+              const { error: itemErr2 } = await withRetry(() => supabase.from('order_items').insert(payloadOld));
+              if (itemErr2) {
+                errors.push(`訂單 ${orderData.order_number}: 寫入 order_items 失敗 - new: ${itemErrMsg}; old: ${itemErr2.message}`);
+              } else {
+                insertOk = true;
+              }
             }
-            itemsProcessed += items.length;
+
+            if (insertOk) { itemsProcessed += items.length; }
           } else if (dryRun) {
             itemsProcessed += items.length;
           }
