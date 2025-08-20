@@ -24,12 +24,6 @@ import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import SecureApiService from '@/services/secureApiService';
-import { 
-  STOCK_STATUS_OPTIONS, 
-  getStockStatusLabel, 
-  getStockStatusClass,
-  type StockStatus
-} from '@/utils/stockStatusUtils';
 
 interface Product {
   id: string;
@@ -47,7 +41,7 @@ interface Product {
   sort_order: number;
   stock_quantity: number;
   is_active: boolean;
-  stock_status: StockStatus;
+  stock_status: 'available' | 'limited' | 'sold_out';
   category: string;
   created_at?: string;
   updated_at?: string;
@@ -252,31 +246,17 @@ const ProductManagementPage: React.FC = () => {
     }
   };
 
-  // 庫存狀態顯示組件
-  const StockStatusDisplay = ({ product }: { product: Product }) => {
-    return (
-      <Select
-        value={product.stock_status}
-        onValueChange={(value: StockStatus) => handleQuickStockUpdate(product, value)}
-      >
-        <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent hover:bg-gray-50">
-          <Badge className={getStockStatusClass(product.stock_status)}>
-            {getStockStatusLabel(product.stock_status)}
-          </Badge>
-        </SelectTrigger>
-        <SelectContent>
-          {STOCK_STATUS_OPTIONS.map((option) => (
-            <SelectItem key={option.value} value={option.value}>
-              <div className="flex items-center space-x-2">
-                <Badge className={option.badgeClass}>
-                  {option.label}
-                </Badge>
-              </div>
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    );
+  const getStockStatusBadge = (status: string) => {
+    switch (status) {
+      case 'available':
+        return <Badge className="bg-green-100 text-green-800">有庫存</Badge>;
+      case 'limited':
+        return <Badge className="bg-yellow-100 text-yellow-800">庫存有限</Badge>;
+      case 'sold_out':
+        return <Badge className="bg-red-100 text-red-800">已完售</Badge>;
+      default:
+        return <Badge variant="secondary">{status}</Badge>;
+    }
   };
 
   return (
@@ -360,9 +340,7 @@ const ProductManagementPage: React.FC = () => {
                         <TableCell className="font-medium">{product.name}</TableCell>
                         <TableCell>NT$ {product.price}</TableCell>
                         <TableCell>{product.unit}</TableCell>
-                        <TableCell>
-                          <StockStatusDisplay product={product} />
-                        </TableCell>
+                        <TableCell>{getStockStatusBadge(product.stock_status)}</TableCell>
                         <TableCell>{product.stock_quantity}</TableCell>
                         <TableCell>{product.category}</TableCell>
                         <TableCell>
@@ -475,16 +453,14 @@ const ProductManagementPage: React.FC = () => {
               
               <div>
                 <Label htmlFor="stock_status">庫存狀態</Label>
-                <Select value={formData.stock_status} onValueChange={(value: StockStatus) => setFormData({ ...formData, stock_status: value })}>
+                <Select value={formData.stock_status} onValueChange={(value) => setFormData({ ...formData, stock_status: value as any })}>
                   <SelectTrigger>
-                    <SelectValue placeholder="請選擇庫存狀態" />
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {STOCK_STATUS_OPTIONS.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
+                    <SelectItem value="available">有庫存</SelectItem>
+                    <SelectItem value="limited">庫存有限</SelectItem>
+                    <SelectItem value="sold_out">已完售</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
