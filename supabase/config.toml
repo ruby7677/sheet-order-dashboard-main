@@ -32,6 +32,9 @@ port = 54328
 enabled = true
 port = 54329
 
+[functions.admin-auth]
+verify_jwt = false
+
 [functions.admin-login]
 verify_jwt = false
 
@@ -39,4 +42,4 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.products]
-verify_jwt = false
+verify_jwt = true
