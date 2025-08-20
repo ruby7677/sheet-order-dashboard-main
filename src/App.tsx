@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider, useAuth } from "./components/AuthProvider";
 import ErrorBoundary from "./components/ErrorBoundary";
 import Index from "./pages/Index";
+import ProductManagementPage from "./pages/ProductManagementPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -21,6 +22,7 @@ const App = () => (
           <BrowserRouter>
             <Routes>
               <Route path="/" element={<Index />} />
+              <Route path="/products" element={<ProductManagementPage />} />
               {AdminRoutes.map((route, idx) => (
                 <Route key={idx} path={route.path} element={route.element} />
               ))}

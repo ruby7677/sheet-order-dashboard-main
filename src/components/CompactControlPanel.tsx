@@ -144,26 +144,6 @@ const CompactControlPanel: React.FC<CompactControlPanelProps> = ({
 
             {/* 右側：操作按鈕 - 更緊湊的佈局 */}
             <div className="flex flex-wrap gap-1 items-center">
-              {/* 資料來源切換：Sheets / Supabase */}
-              <div className="flex items-center gap-1 text-xs border rounded px-2 py-1 mr-1">
-                <span className="text-muted-foreground">來源</span>
-                <Button
-                  variant={currentSource === 'sheets' ? 'default' : 'outline'}
-                  size="sm"
-                  className="h-7 px-2"
-                  onClick={() => setDataSourceAndNotify('sheets')}
-                >
-                  Sheets
-                </Button>
-                <Button
-                  variant={currentSource === 'supabase' ? 'default' : 'outline'}
-                  size="sm"
-                  className="h-7 px-2"
-                  onClick={() => setDataSourceAndNotify('supabase')}
-                >
-                  Supabase
-                </Button>
-              </div>
               {actionButtons}
             </div>
           </div>
