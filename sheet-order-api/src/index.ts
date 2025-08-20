@@ -30,7 +30,7 @@ app.use("*", cors({
 		"https://lopokao.767780.xyz",
 		"http://localhost:8080",
 		"http://127.0.0.1:8080",
-		"http://0.0.0.0:8080"
+    "https://*.lovable.app" // 新增這行
 	],
 	allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
 	allowHeaders: [
