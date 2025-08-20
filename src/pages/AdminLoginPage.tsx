@@ -25,7 +25,9 @@ const AdminLoginPage: React.FC = () => {
       const result = await login(username, password);
       
       if (result.success) {
-        navigate('/admin/dashboard');
+        // 登入成功後優先回導原始目的地
+        const from = (history.state && (history.state as any).usr && (history.state as any).usr.from?.pathname) || '/admin/dashboard';
+        navigate(from, { replace: true });
       } else {
         setError(result.message || '登入失敗');
       }
