@@ -12,7 +12,7 @@ import CompactControlPanel from '@/components/CompactControlPanel';
 import ModernSidebar from '@/components/ModernSidebar';
 import ScrollToTopButton from '@/components/ScrollToTopButton';
 import DuplicateOrdersDialog from '@/components/DuplicateOrdersDialog';
-import { Order, PaymentStatus } from '@/types/order';
+import { Order, PaymentStatus, OrderItem } from '@/types/order';
 import { CustomerWithStats } from '../types/customer';
 import { FilterCriteria } from '../types/filters';
 import { CustomerFilterCriteria } from '../types/customer';
@@ -100,7 +100,7 @@ const Index: React.FC = () => {
   });
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
-  const [orderListRef, setOrderListRef] = useState<((orderId: string, newStatus?: '訂單確認中' | '已抄單' | '已出貨' | '取消訂單', newPaymentStatus?: PaymentStatus) => void) | null>(null);
+  const [orderListRef, setOrderListRef] = useState<((orderId: string, newStatus?: '訂單確認中' | '已抄單' | '已出貨' | '取消訂單', newPaymentStatus?: PaymentStatus, newItems?: OrderItem[], newTotal?: number) => void) | null>(null);
   const [stats, setStats] = useState({
     total: 0,
     processing: 0,
@@ -258,9 +258,14 @@ const Index: React.FC = () => {
         setIsDetailOpen(true);
 
         // 設定一個空的更新函數，因為從重複訂單對話框開啟的詳情不需要更新列表
-        setOrderListRef(() => (orderId: string, newStatus?: '訂單確認中' | '已抄單' | '已出貨' | '取消訂單', newPaymentStatus?: PaymentStatus) => {
-          // 這裡可以實作更新邏輯，或者留空
-          console.log('訂單更新:', orderId, newStatus, newPaymentStatus);
+        setOrderListRef(() => (
+          orderId: string,
+          newStatus?: '訂單確認中' | '已抄單' | '已出貨' | '取消訂單',
+          newPaymentStatus?: PaymentStatus,
+          newItems?: OrderItem[],
+          newTotal?: number
+        ) => {
+          console.log('訂單更新:', orderId, newStatus, newPaymentStatus, newItems, newTotal);
         });
       } else {
         toast({
@@ -302,7 +307,9 @@ const Index: React.FC = () => {
     updateOrderInList: (
       orderId: string,
       newStatus?: '訂單確認中' | '已抄單' | '已出貨' | '取消訂單',
-      newPaymentStatus?: PaymentStatus
+      newPaymentStatus?: PaymentStatus,
+      newItems?: OrderItem[],
+      newTotal?: number
     ) => void
   ) => {
     setSelectedOrder({ ...order });
@@ -524,8 +531,8 @@ const Index: React.FC = () => {
               order={selectedOrder}
               open={isDetailOpen}
               onClose={handleCloseDetail}
-              onOrderStatusUpdate={(orderId, newStatus, newPaymentStatus) => {
-                if (orderListRef) {orderListRef(orderId, newStatus, newPaymentStatus);}
+              onOrderStatusUpdate={(orderId, newStatus, newPaymentStatus, newItems?: OrderItem[], newTotal?: number) => {
+                if (orderListRef) {orderListRef(orderId, newStatus, newPaymentStatus, newItems, newTotal);}
                 handleOrdersChange();
               }}
             />
