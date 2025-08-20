@@ -83,11 +83,13 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // 驗證管理員 JWT（使用與 admin-auth 相同的簽章密鑰）
+  // 驗證管理員 JWT（僅對寫入操作）
   const authHeader = req.headers.get('Authorization') || '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
-  const payload = await verifyJWT(token);
-  if (!payload) {
+  const payload = token ? await verifyJWT(token) : null;
+  
+  // 讀取操作不需要認證，寫入操作需要認證
+  if (['POST', 'PUT', 'DELETE'].includes(req.method) && !payload) {
     return jsonResponse({ success: false, message: '未授權或 Token 失效' }, 401);
   }
 
