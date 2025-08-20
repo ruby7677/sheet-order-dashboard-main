@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../components/AuthProvider';
 
 const AdminLoginPage: React.FC = () => {
@@ -8,6 +8,7 @@ const AdminLoginPage: React.FC = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
   const { login, isAuthenticated } = useAuth();
 
   useEffect(() => {
@@ -26,7 +27,7 @@ const AdminLoginPage: React.FC = () => {
       
       if (result.success) {
         // 登入成功後優先回導原始目的地
-        const from = (history.state && (history.state as any).usr && (history.state as any).usr.from?.pathname) || '/admin/dashboard';
+        const from = (location.state as any)?.from?.pathname || '/admin/dashboard';
         navigate(from, { replace: true });
       } else {
         setError(result.message || '登入失敗');
