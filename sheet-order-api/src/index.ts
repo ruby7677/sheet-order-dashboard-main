@@ -16,6 +16,9 @@ import { BatchDeleteOrders } from './endpoints/batchDeleteOrders';
 import { AdminLogin } from './endpoints/adminLogin';
 import { GetCustomerOrders } from './endpoints/getCustomerOrders';
 import { GetAdminDashboard } from './endpoints/getAdminDashboard';
+import { OpenAPIRoute } from 'chanfana';
+import type { AppContext } from './types';
+import { SupabaseService } from './services/SupabaseService';
 
 // Start a Hono app
 const app = new Hono<{ Bindings: Env }>();
@@ -71,6 +74,76 @@ openapi.delete("/api/orders/batch", BatchDeleteOrders);
 openapi.post("/api/admin/login", AdminLogin);
 openapi.get("/api/customers/orders", GetCustomerOrders);
 openapi.get("/api/admin/dashboard", GetAdminDashboard);
+
+// Products API（為 Cloudflare Worker 直接提供的簡易端點，便於統一呼叫）
+class GetProducts extends OpenAPIRoute {
+  async handle(c: AppContext) {
+    try {
+      const svc = new SupabaseService(c.env as any);
+      const q = c.req.query();
+      const data = await svc.getProducts({
+        search: q.search,
+        category: q.category,
+        active: typeof q.active !== 'undefined' ? q.active === 'true' : undefined
+      });
+      return c.json({ success: true, data });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return c.json({ success: false, message: msg }, 500 as any);
+    }
+  }
+}
+
+class CreateProduct extends OpenAPIRoute {
+  async handle(c: AppContext) {
+    try {
+      const svc = new SupabaseService(c.env as any);
+      const payload = await c.req.json();
+      const data = await svc.createProduct(payload);
+      return c.json({ success: true, data });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return c.json({ success: false, message: msg }, 500 as any);
+    }
+  }
+}
+
+class UpdateProduct extends OpenAPIRoute {
+  async handle(c: AppContext) {
+    try {
+      const svc = new SupabaseService(c.env as any);
+      const payload = await c.req.json();
+      const id = payload?.id;
+      if (!id) { return c.json({ success: false, message: '缺少 id' }, 400 as any); }
+      const data = await svc.updateProduct(id, payload);
+      return c.json({ success: true, data });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return c.json({ success: false, message: msg }, 500 as any);
+    }
+  }
+}
+
+class DeleteProduct extends OpenAPIRoute {
+  async handle(c: AppContext) {
+    try {
+      const svc = new SupabaseService(c.env as any);
+      const q = c.req.query();
+      const id = q.id;
+      if (!id) { return c.json({ success: false, message: '缺少 id' }, 400 as any); }
+      await svc.deleteProduct(id);
+      return c.json({ success: true });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return c.json({ success: false, message: msg }, 500 as any);
+    }
+  }
+}
+
+openapi.get('/api/products', GetProducts);
+openapi.post('/api/products', CreateProduct);
+openapi.put('/api/products', UpdateProduct);
+openapi.delete('/api/products', DeleteProduct);
 
 // PHP 相容性路由 - 支援原有前端代碼
 openapi.get("/api/get_orders_from_sheet.php", GetOrdersFromSheet);
