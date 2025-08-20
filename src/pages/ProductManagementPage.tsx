@@ -24,6 +24,7 @@ import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import SecureApiService from '@/services/secureApiService';
+import { getStockStatusLabel, getStockStatusVariant, STOCK_STATUS_OPTIONS, type StockStatus } from '@/utils/stockStatusUtils';
 
 interface Product {
   id: string;
@@ -41,7 +42,7 @@ interface Product {
   sort_order: number;
   stock_quantity: number;
   is_active: boolean;
-  stock_status: 'available' | 'limited' | 'sold_out';
+  stock_status: StockStatus;
   category: string;
   created_at?: string;
   updated_at?: string;
@@ -108,7 +109,7 @@ const ProductManagementPage: React.FC = () => {
       sort_order: products.length + 1,
       stock_quantity: 0,
       is_active: true,
-      stock_status: 'available',
+      stock_status: 'available' as StockStatus,
       category: '蘿蔔糕'
     });
     setIsModalOpen(true);
@@ -220,8 +221,8 @@ const ProductManagementPage: React.FC = () => {
     }
   };
 
-  // 快速更新庫存狀態
-  const handleQuickStockUpdate = async (product: Product, stockStatus: string, stockQuantity?: number) => {
+  // 快速更新庫存狀態（從表格直接選擇）
+  const handleQuickStockUpdate = async (product: Product, stockStatus: StockStatus, stockQuantity?: number) => {
     try {
       const updateData: any = { stock_status: stockStatus };
       if (stockQuantity !== undefined) {
@@ -253,20 +254,36 @@ const ProductManagementPage: React.FC = () => {
     }
   };
 
-  // 中英映射：顯示中文、儲存英文
-  const STOCK_STATUS_LABEL: Record<string, string> = {
-    available: '有庫存',
-    limited: '庫存有限',
-    sold_out: '已完售',
+  // 渲染庫存狀態Badge（使用中文顯示）
+  const renderStockStatusBadge = (status: string) => {
+    const label = getStockStatusLabel(status);
+    const variant = getStockStatusVariant(status);
+    return <Badge variant={variant}>{label}</Badge>;
   };
 
-  const getStockStatusBadge = (status: string) => {
-    const label = STOCK_STATUS_LABEL[status] || status;
-    const cls = status === 'available' ? 'bg-green-100 text-green-800'
-      : status === 'limited' ? 'bg-yellow-100 text-yellow-800'
-      : status === 'sold_out' ? 'bg-red-100 text-red-800'
-      : undefined;
-    return <Badge className={cls}>{label}</Badge>;
+  // 渲染可編輯的庫存狀態下拉選單（表格內快速編輯）
+  const renderStockStatusSelect = (product: Product) => {
+    return (
+      <Select
+        value={product.stock_status}
+        onValueChange={(value: StockStatus) => handleQuickStockUpdate(product, value)}
+      >
+        <SelectTrigger className="w-32">
+          <SelectValue>
+            {renderStockStatusBadge(product.stock_status)}
+          </SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          {STOCK_STATUS_OPTIONS.map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              <Badge variant={getStockStatusVariant(option.value)}>
+                {option.label}
+              </Badge>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    );
   };
 
   return (
@@ -350,7 +367,7 @@ const ProductManagementPage: React.FC = () => {
                         <TableCell className="font-medium">{product.name}</TableCell>
                         <TableCell>NT$ {product.price}</TableCell>
                         <TableCell>{product.unit}</TableCell>
-                        <TableCell>{getStockStatusBadge(product.stock_status)}</TableCell>
+                        <TableCell>{renderStockStatusSelect(product)}</TableCell>
                         <TableCell>{product.stock_quantity}</TableCell>
                         <TableCell>{product.category}</TableCell>
                         <TableCell>
@@ -463,14 +480,19 @@ const ProductManagementPage: React.FC = () => {
               
               <div>
                 <Label htmlFor="stock_status">庫存狀態</Label>
-                <Select value={formData.stock_status} onValueChange={(value) => setFormData({ ...formData, stock_status: value as any })}>
+                <Select 
+                  value={formData.stock_status} 
+                  onValueChange={(value: StockStatus) => setFormData({ ...formData, stock_status: value })}
+                >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="available">有庫存</SelectItem>
-                    <SelectItem value="limited">庫存有限</SelectItem>
-                    <SelectItem value="sold_out">已完售</SelectItem>
+                    {STOCK_STATUS_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
