@@ -23,16 +23,29 @@ import { SupabaseService } from './services/SupabaseService';
 // Start a Hono app
 const app = new Hono<{ Bindings: Env }>();
 
-// 配置 CORS 中間件
+// 配置 CORS 中間件（以函式動態允許來源）
 app.use("*", cors({
-	origin: [
-		"https://sheet-order-dashboard-main.pages.dev",
-		"https://lopokao.767780.xyz",
-		"http://localhost:8080",
-		"http://127.0.0.1:8080",
-    "https://*.lovable.app",
-    "https://lovable.dev/*" // 新增這行
-	],
+	origin: (requestOrigin: string, _c) => {
+		if (!requestOrigin) { return null; }
+		try {
+			const u = new URL(requestOrigin);
+			const host = u.hostname.toLowerCase();
+			// 明確允許
+			const exactHosts = new Set([
+				"sheet-order-dashboard-main.pages.dev",
+				"lopokao.767780.xyz",
+				"node.767780.xyz"
+			]);
+			if (exactHosts.has(host)) { return requestOrigin; }
+			// 支援預覽與子網域
+			if (host.endsWith(".lovable.app")) { return requestOrigin; }
+			if (host.endsWith(".pages.dev")) { return requestOrigin; }
+			if (host.endsWith(".767780.xyz")) { return requestOrigin; }
+			// 本機
+			if (host === "localhost" || host === "127.0.0.1" || host === "0.0.0.0") { return requestOrigin; }
+		} catch {}
+		return null;
+	},
 	allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
 	allowHeaders: [
 		"Content-Type", 
