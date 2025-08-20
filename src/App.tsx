@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider, useAuth } from "./components/AuthProvider";
 import ErrorBoundary from "./components/ErrorBoundary";
 import Index from "./pages/Index";
@@ -22,8 +22,7 @@ const App = () => (
           <BrowserRouter>
             <Routes>
               <Route path="/" element={<Index />} />
-              {/* 商品管理只允許登入後使用 */}
-              <Route path="/products" element={<Navigate to="/admin/dashboard" />} />
+              <Route path="/products" element={<ProductManagementPage />} />
               {AdminRoutes.map((route, idx) => (
                 <Route key={idx} path={route.path} element={route.element} />
               ))}
