@@ -162,8 +162,8 @@ const Index: React.FC = () => {
     updateStatsInitial();
     updateCustomerStats();
 
-    // 檢測是否在 iframe 中
-    setIsInIframe(window.self !== window.top);
+    // 在預覽環境中也顯示側邊欄和頂部欄
+    setIsInIframe(false);
 
     // 處理來自父視窗的訊息
     const handleMessage = (event: MessageEvent) => {
