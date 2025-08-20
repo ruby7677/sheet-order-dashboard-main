@@ -1,18 +1,7 @@
 import React from 'react';
-import { Navigate } from 'react-router-dom';
 import AdminLoginPage from '../pages/AdminLoginPage';
 import AdminDashboardPage from '../pages/AdminDashboardPage';
-import { useAuth } from '../components/AuthProvider';
-
-const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { isAuthenticated, isLoading } = useAuth();
-  
-  if (isLoading) {
-    return <div className="min-h-screen flex items-center justify-center">載入中...</div>;
-  }
-  
-  return isAuthenticated ? <>{children}</> : <Navigate to="/admin" />;
-};
+import ProtectedRoute from '@/components/ProtectedRoute';
 
 const AdminRoutes = [
   {

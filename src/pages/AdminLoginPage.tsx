@@ -11,9 +11,7 @@ const AdminLoginPage: React.FC = () => {
   const { login, isAuthenticated } = useAuth();
 
   useEffect(() => {
-    if (isAuthenticated) {
-      navigate('/admin/dashboard');
-    }
+    if (isAuthenticated) { navigate('/admin/dashboard'); }
   }, [isAuthenticated, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
