@@ -1,14 +1,18 @@
 import { supabase } from '@/integrations/supabase/client';
 
 class SecureApiService {
-  // 改用 Cloudflare Workers API，依環境自動切換
-  private baseUrl = (() => {
+  // 兩段式後端：優先 Workers /api，其次 Supabase Edge Functions
+  private endpoints: string[] = (() => {
+    const list: string[] = [];
     try {
       const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-      return isLocal ? 'http://127.0.0.1:5714/api' : 'https://sheet-order-api.ruby7677.workers.dev/api';
+      list.push(isLocal ? 'http://127.0.0.1:5714/api' : 'https://sheet-order-api.ruby7677.workers.dev/api');
     } catch {
-      return 'https://sheet-order-api.ruby7677.workers.dev/api';
+      list.push('https://sheet-order-api.ruby7677.workers.dev/api');
     }
+    // Supabase Edge Functions 作為次要路徑
+    list.push('https://skcdapfynyszxyqqsvib.supabase.co/functions/v1');
+    return list;
   })();
   
   private getAuthToken(): string | null {
@@ -17,29 +21,29 @@ class SecureApiService {
 
   private async makeSecureRequest(endpoint: string, options: RequestInit = {}): Promise<Response> {
     const token = this.getAuthToken();
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      ...options.headers as Record<string, string>,
-    };
-    // Workers 端點目前不強制驗證；若前端已有 admin_token，則一併帶上
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
+    let lastErr: any = null;
+    for (const base of this.endpoints) {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...options.headers as Record<string, string>,
+      };
+      if (token) { headers['Authorization'] = `Bearer ${token}`; }
+      try {
+        const response = await fetch(`${base}/${endpoint}`, { ...options, headers });
+        if (response.status === 401) {
+          localStorage.removeItem('admin_token');
+          localStorage.removeItem('admin_user');
+          window.location.href = '/admin';
+          throw new Error('會話已過期，請重新登入');
+        }
+        if (response.ok) { return response; }
+        // 非 2xx 也嘗試讀取錯誤訊息，並嘗試下一個端點
+        try { lastErr = await response.json(); } catch { lastErr = { message: response.statusText }; }
+      } catch (e: any) {
+        lastErr = e;
+      }
     }
-
-    const response = await fetch(`${this.baseUrl}/${endpoint}`, {
-      ...options,
-      headers,
-    });
-
-    if (response.status === 401) {
-      // 令牌無效，清除本地存儲並重新導向登入頁
-      localStorage.removeItem('admin_token');
-      localStorage.removeItem('admin_user');
-      window.location.href = '/admin';
-      throw new Error('會話已過期，請重新登入');
-    }
-
-    return response;
+    throw new Error(lastErr?.message || '後端服務不可用');
   }
 
   async migrateGoogleSheetsData(sheetId: string, options: { dryRun?: boolean; skipExisting?: boolean } = {}) {
