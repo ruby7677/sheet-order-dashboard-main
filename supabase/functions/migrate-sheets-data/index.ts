@@ -366,9 +366,40 @@ async function migrateOrders(supabase: any, ordersData: any[][], dryRun: boolean
             // 冪等：先刪舊再插入
             await withRetry(() => supabase.from('order_items').delete().eq('order_id', orderId));
 
+            // 查詢所有商品以進行名稱匹配
+            const { data: products } = await supabase.from('products').select('id, name, price');
+            const productMap = new Map(products?.map(p => [p.name.trim(), p]) || []);
+
+            // 處理商品項目，匹配 product_id 和價格
+            const processedItems = items.map(it => {
+              const matchedProduct = productMap.get(it.product.trim());
+              let finalUnitPrice = it.price;
+              let finalProductId = null;
+
+              if (matchedProduct) {
+                finalProductId = matchedProduct.id;
+                // 如果解析出的價格為 0，使用商品表中的價格
+                if (it.price === 0) {
+                  finalUnitPrice = matchedProduct.price;
+                }
+              } else if (it.price === 0 && orderData.total_amount > 0) {
+                // 如果沒有匹配到商品且價格為 0，按數量分攤總金額
+                const totalQuantity = items.reduce((sum, item) => sum + item.quantity, 0);
+                finalUnitPrice = totalQuantity > 0 ? orderData.total_amount / totalQuantity : 0;
+              }
+
+              return {
+                ...it,
+                product_id: finalProductId,
+                price: finalUnitPrice,
+                subtotal: finalUnitPrice * it.quantity
+              };
+            });
+
             // 優先使用新版欄位（product_name, unit_price, total_price），失敗則回退舊版（product, price, subtotal）
-            const payloadNew = items.map(it => ({
+            const payloadNew = processedItems.map(it => ({
               order_id: orderId,
+              product_id: it.product_id,
               product_name: it.product,
               quantity: it.quantity,
               unit_price: it.price,
