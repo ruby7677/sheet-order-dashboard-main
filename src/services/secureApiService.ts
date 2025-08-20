@@ -84,6 +84,48 @@ class SecureApiService {
     const sheetIdRegex = /^[a-zA-Z0-9-_]{44}$/;
     return sheetIdRegex.test(sheetId);
   }
+
+  // 產品 CRUD（透過 Edge Function 保護）
+  async listProducts(params?: { search?: string; category?: string; active?: boolean }) {
+    const qs = new URLSearchParams();
+    if (params?.search) { qs.set('search', params.search); }
+    if (params?.category) { qs.set('category', params.category); }
+    if (typeof params?.active === 'boolean') { qs.set('active', String(params.active)); }
+
+    const res = await this.makeSecureRequest('products' + (qs.toString() ? `?${qs.toString()}` : ''));
+    const json = await res.json();
+    if (!res.ok || !json?.success) { throw new Error(json?.message || '載入商品失敗'); }
+    return json.data;
+  }
+
+  async createProduct(payload: any) {
+    const res = await this.makeSecureRequest('products', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+    const json = await res.json();
+    if (!res.ok || !json?.success) { throw new Error(json?.message || '新增商品失敗'); }
+    return json.data;
+  }
+
+  async updateProduct(id: string, payload: any) {
+    const res = await this.makeSecureRequest('products', {
+      method: 'PUT',
+      body: JSON.stringify({ id, ...payload })
+    });
+    const json = await res.json();
+    if (!res.ok || !json?.success) { throw new Error(json?.message || '更新商品失敗'); }
+    return json.data;
+  }
+
+  async deleteProduct(id: string) {
+    const res = await this.makeSecureRequest(`products?id=${encodeURIComponent(id)}`, {
+      method: 'DELETE'
+    });
+    const json = await res.json();
+    if (!res.ok || !json?.success) { throw new Error(json?.message || '刪除商品失敗'); }
+    return true;
+  }
 }
 
 export default SecureApiService;
