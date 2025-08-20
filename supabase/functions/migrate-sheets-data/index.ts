@@ -328,8 +328,6 @@ async function migrateOrders(supabase: any, ordersData: any[][], dryRun: boolean
       // 解析購買項目字串並 upsert 至 order_items（冪等）
       try {
         const itemsRaw = (rows[i][8] ?? '').toString().trim();
-        const totalAmountRaw = (rows[i][9] ?? '').toString().trim();
-        
         if (itemsRaw) {
           const itemStrings = itemsRaw.split(/[,，、\n]/).map(s => s.trim()).filter(Boolean);
           const toHalfWidthDigits = (str: string) => str.replace(/[０-９]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 0xFF10 + 0x30));
@@ -338,48 +336,31 @@ async function migrateOrders(supabase: any, ordersData: any[][], dryRun: boolean
             const matches = normalized.match(/\d+(?:\.\d+)?/g);
             return matches ? matches.map(v => parseFloat(v)) : [];
           };
-          
-          // 解析總金額
-          const totalAmount = Math.max(0, parseFloat(totalAmountRaw) || 0);
-          
-          // 先解析所有商品項目和數量
-          const itemsWithQuantity = itemStrings.map((s) => {
+          const items = itemStrings.map((s) => {
             const m = s.split(/\s*[xX×]\s*/);
-            let product = (m[0] ?? '').trim();
+            let left = (m[0] ?? '').trim();
             let right = (m[1] ?? '').trim();
 
-            // 解析數量
+            // 解析數量與單價：
+            // 優先在右側找 [數量(必)] [單價(可選)]
             const rightNums = extractNumbers(right);
             let quantity = rightNums.length >= 1 ? Math.max(1, Math.floor(rightNums[0])) : 1;
+            let price = rightNums.length >= 2 ? Math.max(0, rightNums[1]) : 0;
 
-            // 清理商品名稱，移除可能的價格信息
-            product = product.replace(/(?:NT\$|\$)?\s*\d+(?:\.\d+)?\s*$/, '').trim();
-
-            return { product, quantity };
-          }).filter(it => it.product);
-
-          // 計算總數量
-          const totalQuantity = itemsWithQuantity.reduce((sum, item) => sum + item.quantity, 0);
-          
-          // 如果有總金額，按比例分配單價
-          const items = itemsWithQuantity.map((item) => {
-            let unitPrice = 0;
-            let subtotal = 0;
-            
-            if (totalAmount > 0 && totalQuantity > 0) {
-              // 按數量比例分配總金額
-              const proportion = item.quantity / totalQuantity;
-              subtotal = Math.round(totalAmount * proportion);
-              unitPrice = totalQuantity === 1 ? totalAmount : Math.round(subtotal / item.quantity);
+            // 若右側未取得單價，嘗試於左側尾端抽出單價，並從商品名移除
+            if (!price) {
+              const leftNums = extractNumbers(left);
+              if (leftNums.length >= 1) {
+                price = Math.max(0, leftNums[leftNums.length - 1]);
+                // 移除左側尾端數字（及可能的貨幣符號）
+                left = left.replace(/(?:NT\$|\$)?\s*\d+(?:\.\d+)?\s*$/, '').trim();
+              }
             }
-            
-            return {
-              product: item.product,
-              quantity: item.quantity,
-              price: unitPrice,
-              subtotal: subtotal
-            };
-          });
+
+            const product = left;
+            const subtotal = (price || 0) * (quantity || 0);
+            return { product, quantity, price, subtotal };
+          }).filter(it => it.product);
 
           if (!dryRun && items.length > 0) {
             // 冪等：先刪舊再插入
