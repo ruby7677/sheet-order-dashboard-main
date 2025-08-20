@@ -77,6 +77,29 @@ export interface PagedResult<T> {
   total: number
 }
 
+// 產品資料模型
+export interface ProductRecord {
+  id: string
+  product_id: string
+  name: string
+  price: number
+  weight?: number | null
+  unit?: string | null
+  description?: string | null
+  detailed_description?: string | null
+  ingredients?: string | null
+  image_url?: string | null
+  is_vegetarian?: boolean | null
+  shipping_note?: string | null
+  sort_order?: number | null
+  stock_quantity?: number | null
+  is_active?: boolean | null
+  stock_status?: string | null
+  category?: string | null
+  created_at?: string | null
+  updated_at?: string | null
+}
+
 export class SupabaseService {
   private client: SupabaseClient
 
@@ -246,6 +269,41 @@ export class SupabaseService {
     }
 
     return result
+  }
+
+  // =============== Products ===============
+  async getProducts(params?: { search?: string; category?: string; active?: boolean }): Promise<ProductRecord[]> {
+    let q = this.client.from('products').select('*').order('sort_order', { ascending: true })
+    if (params?.search) {
+      q = q.or(`name.ilike.%${params.search}%,product_id.ilike.%${params.search}%`)
+    }
+    if (params?.category) { q = q.eq('category', params.category) }
+    if (typeof params?.active === 'boolean') { q = q.eq('is_active', params.active) }
+    const { data, error } = await q
+    if (error) { throw new ApiError(500, `查詢商品失敗: ${error.message}`, 'DB_QUERY_ERROR') }
+    return (data ?? []) as ProductRecord[]
+  }
+
+  async createProduct(payload: Partial<ProductRecord>): Promise<ProductRecord> {
+    if (!payload.product_id || !payload.name || typeof payload.price !== 'number') {
+      throw new ApiError(400, '缺少必要欄位: product_id/name/price', 'VALIDATION_ERROR')
+    }
+    const row = { ...payload, updated_at: new Date().toISOString() }
+    const { data, error } = await this.client.from('products').insert([row as any]).select('*').single()
+    if (error) { throw new ApiError(500, `新增商品失敗: ${error.message}`, 'DB_INSERT_ERROR') }
+    return data as unknown as ProductRecord
+  }
+
+  async updateProduct(id: string, payload: Partial<ProductRecord>): Promise<ProductRecord> {
+    const row = { ...payload, updated_at: new Date().toISOString() }
+    const { data, error } = await this.client.from('products').update(row as any).eq('id', id).select('*').single()
+    if (error) { throw new ApiError(500, `更新商品失敗: ${error.message}`, 'DB_UPDATE_ERROR') }
+    return data as unknown as ProductRecord
+  }
+
+  async deleteProduct(id: string): Promise<void> {
+    const { error } = await this.client.from('products').delete().eq('id', id)
+    if (error) { throw new ApiError(500, `刪除商品失敗: ${error.message}`, 'DB_DELETE_ERROR') }
   }
 }
 
