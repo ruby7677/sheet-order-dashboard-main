@@ -1,7 +1,15 @@
 import { supabase } from '@/integrations/supabase/client';
 
 class SecureApiService {
-  private baseUrl = 'https://skcdapfynyszxyqqsvib.supabase.co/functions/v1';
+  private getConfig() {
+    const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
+    const isLocalDev = hostname === 'localhost' || hostname === '127.0.0.1';
+    return {
+      workerBaseUrl: 'https://sheet-order-api.ruby7677.workers.dev',
+      supabaseFuncBaseUrl: 'https://skcdapfynyszxyqqsvib.supabase.co/functions/v1',
+      isLocalDev,
+    };
+  }
   
   private getAuthToken(): string | null {
     return localStorage.getItem('admin_token');
@@ -20,12 +28,26 @@ class SecureApiService {
       ...options.headers,
     };
 
-    const response = await fetch(`${this.baseUrl}/${endpoint}`, {
-      ...options,
-      headers,
-    });
+    const { workerBaseUrl, supabaseFuncBaseUrl } = this.getConfig();
 
-    if (response.status === 401) {
+    const urls = [
+      `${workerBaseUrl}/${endpoint.startsWith('api/') ? endpoint : `api/${endpoint}`}`,
+      `${supabaseFuncBaseUrl}/${endpoint.replace(/^api\//, '')}`
+    ];
+
+    let lastResponse: Response | null = null;
+    for (const url of urls) {
+      try {
+        const resp = await fetch(url, { ...options, headers });
+        if (resp.ok) { return resp; }
+        lastResponse = resp;
+      } catch (e) {
+        // 繼續嘗試下一個 URL
+      }
+    }
+
+    const response = lastResponse as Response;
+    if (response && response.status === 401) {
       // 令牌無效，清除本地存儲並重新導向登入頁
       localStorage.removeItem('admin_token');
       localStorage.removeItem('admin_user');
@@ -33,7 +55,8 @@ class SecureApiService {
       throw new Error('會話已過期，請重新登入');
     }
 
-    return response;
+    if (response) {return response;}
+    throw new Error('無法連線至任何 API 端點');
   }
 
   async migrateGoogleSheetsData(sheetId: string, options: { dryRun?: boolean; skipExisting?: boolean } = {}) {
@@ -92,14 +115,16 @@ class SecureApiService {
     if (params?.category) { qs.set('category', params.category); }
     if (typeof params?.active === 'boolean') { qs.set('active', String(params.active)); }
 
-    const res = await this.makeSecureRequest('products' + (qs.toString() ? `?${qs.toString()}` : ''));
+    // Workers 使用 /api/products，Supabase 使用 /products
+    const endpoint = 'api/products' + (qs.toString() ? `?${qs.toString()}` : '');
+    const res = await this.makeSecureRequest(endpoint);
     const json = await res.json();
     if (!res.ok || !json?.success) { throw new Error(json?.message || '載入商品失敗'); }
     return json.data;
   }
 
   async createProduct(payload: any) {
-    const res = await this.makeSecureRequest('products', {
+    const res = await this.makeSecureRequest('api/products', {
       method: 'POST',
       body: JSON.stringify(payload)
     });
@@ -109,7 +134,7 @@ class SecureApiService {
   }
 
   async updateProduct(id: string, payload: any) {
-    const res = await this.makeSecureRequest('products', {
+    const res = await this.makeSecureRequest('api/products', {
       method: 'PUT',
       body: JSON.stringify({ id, ...payload })
     });
@@ -119,7 +144,7 @@ class SecureApiService {
   }
 
   async deleteProduct(id: string) {
-    const res = await this.makeSecureRequest(`products?id=${encodeURIComponent(id)}`, {
+    const res = await this.makeSecureRequest(`api/products?id=${encodeURIComponent(id)}`, {
       method: 'DELETE'
     });
     const json = await res.json();
