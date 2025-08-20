@@ -340,7 +340,24 @@ const ProductManagementPage: React.FC = () => {
                         <TableCell className="font-medium">{product.name}</TableCell>
                         <TableCell>NT$ {product.price}</TableCell>
                         <TableCell>{product.unit}</TableCell>
-                        <TableCell>{getStockStatusBadge(product.stock_status)}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            {getStockStatusBadge(product.stock_status)}
+                            <Select 
+                              value={product.stock_status} 
+                              onValueChange={(value) => handleQuickStockUpdate(product, value)}
+                            >
+                              <SelectTrigger className="w-32 h-8 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="available">有庫存</SelectItem>
+                                <SelectItem value="limited">庫存有限</SelectItem>
+                                <SelectItem value="sold_out">已完售</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </TableCell>
                         <TableCell>{product.stock_quantity}</TableCell>
                         <TableCell>{product.category}</TableCell>
                         <TableCell>
