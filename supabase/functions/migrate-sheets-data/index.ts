@@ -330,12 +330,35 @@ async function migrateOrders(supabase: any, ordersData: any[][], dryRun: boolean
         const itemsRaw = (rows[i][8] ?? '').toString().trim();
         if (itemsRaw) {
           const itemStrings = itemsRaw.split(/[,，、\n]/).map(s => s.trim()).filter(Boolean);
+          const toHalfWidthDigits = (str: string) => str.replace(/[０-９]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 0xFF10 + 0x30));
+          const extractNumbers = (str: string): number[] => {
+            const normalized = toHalfWidthDigits(str);
+            const matches = normalized.match(/\d+(?:\.\d+)?/g);
+            return matches ? matches.map(v => parseFloat(v)) : [];
+          };
           const items = itemStrings.map((s) => {
             const m = s.split(/\s*[xX×]\s*/);
-            const product = (m[0] ?? '').trim();
-            const quantity = Math.max(0, parseInt((m[1] ?? '1'), 10) || 1);
-            const price = Math.max(0, parseFloat(m[2] ?? '0') || 0);
-            const subtotal = price * quantity;
+            let left = (m[0] ?? '').trim();
+            let right = (m[1] ?? '').trim();
+
+            // 解析數量與單價：
+            // 優先在右側找 [數量(必)] [單價(可選)]
+            const rightNums = extractNumbers(right);
+            let quantity = rightNums.length >= 1 ? Math.max(1, Math.floor(rightNums[0])) : 1;
+            let price = rightNums.length >= 2 ? Math.max(0, rightNums[1]) : 0;
+
+            // 若右側未取得單價，嘗試於左側尾端抽出單價，並從商品名移除
+            if (!price) {
+              const leftNums = extractNumbers(left);
+              if (leftNums.length >= 1) {
+                price = Math.max(0, leftNums[leftNums.length - 1]);
+                // 移除左側尾端數字（及可能的貨幣符號）
+                left = left.replace(/(?:NT\$|\$)?\s*\d+(?:\.\d+)?\s*$/, '').trim();
+              }
+            }
+
+            const product = left;
+            const subtotal = (price || 0) * (quantity || 0);
             return { product, quantity, price, subtotal };
           }).filter(it => it.product);
 
