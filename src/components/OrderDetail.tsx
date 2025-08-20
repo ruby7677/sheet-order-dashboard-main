@@ -32,7 +32,9 @@ interface OrderDetailProps {
   onOrderStatusUpdate: (
     orderId: string,
     newStatus?: '訂單確認中' | '已抄單' | '已出貨' | '取消訂單',
-    newPaymentStatus?: import('./PaymentStatusEditor').PaymentStatus
+    newPaymentStatus?: import('./PaymentStatusEditor').PaymentStatus,
+    newItems?: OrderItem[],
+    newTotal?: number
   ) => void;
 }
 
@@ -197,9 +199,9 @@ const OrderDetail: React.FC<OrderDetailProps> = ({
         description: '訂單商品已更新',
       });
 
-      // 通知父組件刷新
+      // 通知父組件刷新清單與統計，同步更新列表中該筆訂單的 items/total
       if (typeof onOrderStatusUpdate === 'function') {
-        onOrderStatusUpdate(currentOrder.id, status);
+        onOrderStatusUpdate(currentOrder.id, status, undefined, newItems, newTotal);
       }
 
       setIsEditingItems(false);
@@ -298,7 +300,7 @@ const OrderDetail: React.FC<OrderDetailProps> = ({
             <div>
               <h3 className="font-medium mb-2">付款資訊</h3>
               <p>付款方式: {order.paymentMethod}</p>
-              <p>訂單金額: ${order.total}</p>
+              <p>訂單金額: ${(currentOrder || order).total}</p>
             </div>
 
             {order.notes && (

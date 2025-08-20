@@ -5,7 +5,7 @@ import StatusBadge from './StatusBadge';
 import PaymentStatusBadge from './PaymentStatusBadge';
 import BatchDeleteConfirmDialog from './BatchDeleteConfirmDialog';
 import { fetchOrders, deleteOrder, batchUpdateOrderStatus, batchUpdateOrderPaymentStatus, batchDeleteOrders, clearOrderCache, isOrderDuplicate } from '@/services/orderService';
-import { Order } from '@/types/order';
+import { Order, OrderItem } from '@/types/order';
 import { printOrders } from '@/utils/exportUtils';
 import { Trash, ChevronLeft, ChevronRight, Trash2, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -19,7 +19,7 @@ interface OrderListProps {
   /** 訂單過濾條件 */
   filters: FilterCriteria;
   /** 點擊訂單時的 callback，可傳入 updateOrderInList */
-  onOrderClick: (order: Order, updateOrderInList: (orderId: string, newStatus?: '訂單確認中' | '已抄單' | '已出貨' | '取消訂單', newPaymentStatus?: PaymentStatus) => void) => void;
+  onOrderClick: (order: Order, updateOrderInList: (orderId: string, newStatus?: '訂單確認中' | '已抄單' | '已出貨' | '取消訂單', newPaymentStatus?: PaymentStatus, newItems?: OrderItem[], newTotal?: number) => void) => void;
   /** 訂單資料變動時的 callback */
   onOrdersChange: () => void;
   /** 已選擇訂單 id 陣列，由父元件管理 */
@@ -49,14 +49,31 @@ const OrderList: React.FC<OrderListProps> = ({ filters, onOrderClick, onOrdersCh
   const updateOrderInList = (
     orderId: string,
     newStatus?: '訂單確認中' | '已抄單' | '已出貨' | '取消訂單',
-    newPaymentStatus?: PaymentStatus
+    newPaymentStatus?: PaymentStatus,
+    newItems?: OrderItem[],
+    newTotal?: number
   ) => {
+    // 更新目前頁面的可見清單
     setOrders(prev => prev.map(order => {
       if (order.id !== orderId) {return order;}
       return {
         ...order,
         status: newStatus !== undefined ? newStatus : order.status,
-        paymentStatus: newPaymentStatus !== undefined ? newPaymentStatus : order.paymentStatus
+        paymentStatus: newPaymentStatus !== undefined ? newPaymentStatus : order.paymentStatus,
+        items: Array.isArray(newItems) ? newItems : order.items,
+        total: typeof newTotal === 'number' ? newTotal : order.total
+      };
+    }));
+
+    // 同步更新所有訂單清單，避免分頁或列印時資料不同步
+    setAllOrders(prev => prev.map(order => {
+      if (order.id !== orderId) {return order;}
+      return {
+        ...order,
+        status: newStatus !== undefined ? newStatus : order.status,
+        paymentStatus: newPaymentStatus !== undefined ? newPaymentStatus : order.paymentStatus,
+        items: Array.isArray(newItems) ? newItems : order.items,
+        total: typeof newTotal === 'number' ? newTotal : order.total
       };
     }));
   };
