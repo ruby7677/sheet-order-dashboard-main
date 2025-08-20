@@ -136,7 +136,11 @@ const ProductManagementPage: React.FC = () => {
       if (editingProduct) {
         // 更新（優先 Edge Function，失敗回退 supabase 直連）
         try {
-          await new SecureApiService().updateProduct(editingProduct.id, formData);
+          await new SecureApiService().updateProduct(editingProduct.id, {
+            ...formData,
+            // 確保儲存為英文枚舉值
+            stock_status: formData.stock_status as any
+          });
         } catch (_) {
           const { error, status, statusText } = await supabase
             .from('products')
@@ -155,7 +159,10 @@ const ProductManagementPage: React.FC = () => {
       } else {
         // 新增（優先 Edge Function，失敗回退 supabase 直連）
         try {
-          await new SecureApiService().createProduct(formData);
+          await new SecureApiService().createProduct({
+            ...formData,
+            stock_status: formData.stock_status as any
+          });
         } catch (_) {
           const { error, status, statusText } = await supabase
             .from('products')
@@ -246,17 +253,20 @@ const ProductManagementPage: React.FC = () => {
     }
   };
 
+  // 中英映射：顯示中文、儲存英文
+  const STOCK_STATUS_LABEL: Record<string, string> = {
+    available: '有庫存',
+    limited: '庫存有限',
+    sold_out: '已完售',
+  };
+
   const getStockStatusBadge = (status: string) => {
-    switch (status) {
-      case 'available':
-        return <Badge className="bg-green-100 text-green-800">有庫存</Badge>;
-      case 'limited':
-        return <Badge className="bg-yellow-100 text-yellow-800">庫存有限</Badge>;
-      case 'sold_out':
-        return <Badge className="bg-red-100 text-red-800">已完售</Badge>;
-      default:
-        return <Badge variant="secondary">{status}</Badge>;
-    }
+    const label = STOCK_STATUS_LABEL[status] || status;
+    const cls = status === 'available' ? 'bg-green-100 text-green-800'
+      : status === 'limited' ? 'bg-yellow-100 text-yellow-800'
+      : status === 'sold_out' ? 'bg-red-100 text-red-800'
+      : undefined;
+    return <Badge className={cls}>{label}</Badge>;
   };
 
   return (

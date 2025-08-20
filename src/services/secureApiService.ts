@@ -1,7 +1,15 @@
 import { supabase } from '@/integrations/supabase/client';
 
 class SecureApiService {
-  private baseUrl = 'https://skcdapfynyszxyqqsvib.supabase.co/functions/v1';
+  // 改用 Cloudflare Workers API，依環境自動切換
+  private baseUrl = (() => {
+    try {
+      const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+      return isLocal ? 'http://127.0.0.1:5714/api' : 'https://sheet-order-api.ruby7677.workers.dev/api';
+    } catch {
+      return 'https://sheet-order-api.ruby7677.workers.dev/api';
+    }
+  })();
   
   private getAuthToken(): string | null {
     return localStorage.getItem('admin_token');
@@ -9,16 +17,14 @@ class SecureApiService {
 
   private async makeSecureRequest(endpoint: string, options: RequestInit = {}): Promise<Response> {
     const token = this.getAuthToken();
-    
-    if (!token) {
-      throw new Error('未授權：請先登入');
-    }
-
-    const headers = {
+    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
-      ...options.headers,
+      ...options.headers as Record<string, string>,
     };
+    // Workers 端點目前不強制驗證；若前端已有 admin_token，則一併帶上
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
 
     const response = await fetch(`${this.baseUrl}/${endpoint}`, {
       ...options,
