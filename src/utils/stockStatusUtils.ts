@@ -3,20 +3,20 @@
  * 前端顯示中文，後端儲存英文枚舉值
  */
 
-export type StockStatus = 'available' | 'limited' | 'sold_out';
+export type StockStatus = 'in_stock' | 'low_stock' | 'out_of_stock';
 
-// 庫存狀態中英文對照表
+// 庫存狀態中英文對照表（配合數據庫約束）
 export const STOCK_STATUS_MAP: Record<StockStatus, string> = {
-  available: '有庫存',
-  limited: '庫存有限', 
-  sold_out: '已完售',
+  in_stock: '有庫存',
+  low_stock: '庫存有限', 
+  out_of_stock: '已完售',
 };
 
 // 反向對照表：中文轉英文
 export const STOCK_STATUS_REVERSE_MAP: Record<string, StockStatus> = {
-  '有庫存': 'available',
-  '庫存有限': 'limited',
-  '已完售': 'sold_out',
+  '有庫存': 'in_stock',
+  '庫存有限': 'low_stock',
+  '已完售': 'out_of_stock',
 };
 
 /**
@@ -38,11 +38,11 @@ export function getStockStatusValue(label: string): StockStatus {
  */
 export function getStockStatusVariant(status: string): 'default' | 'secondary' | 'destructive' {
   switch (status) {
-    case 'available':
+    case 'in_stock':
       return 'default'; // 綠色
-    case 'limited':
+    case 'low_stock':
       return 'secondary'; // 黃色
-    case 'sold_out':
+    case 'out_of_stock':
       return 'destructive'; // 紅色
     default:
       return 'secondary';
@@ -53,7 +53,7 @@ export function getStockStatusVariant(status: string): 'default' | 'secondary' |
  * 所有可用的庫存狀態選項（用於下拉選單）
  */
 export const STOCK_STATUS_OPTIONS = [
-  { value: 'available', label: '有庫存' },
-  { value: 'limited', label: '庫存有限' },
-  { value: 'sold_out', label: '已完售' },
+  { value: 'in_stock', label: '有庫存' },
+  { value: 'low_stock', label: '庫存有限' },
+  { value: 'out_of_stock', label: '已完售' },
 ] as const;
