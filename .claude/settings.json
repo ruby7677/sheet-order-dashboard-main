@@ -1,0 +1,120 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit.*\\.(ts|tsx|js|jsx)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '✅ 程式碼已修改，建議執行 npm run lint 檢查程式碼品質'"
+          }
+        ]
+      },
+      {
+        "matcher": "Write.*\\.(ts|tsx|js|jsx)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '✅ 新檔案已建立，建議使用 code-reviewer agent 進行程式碼審查'"
+          }
+        ]
+      },
+      {
+        "matcher": "MultiEdit.*\\.(ts|tsx)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '✅ 批量編輯完成，建議執行 npm run lint 確保程式碼一致性'"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit.*components.*\\.(tsx)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '💡 正在編輯 React 組件，建議使用 react-ui-builder agent 處理 UI 相關任務'"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit.*services.*\\.(ts)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '🔧 正在編輯服務層，建議使用 backend-architect agent 處理架構設計'"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit.*api.*\\.(php|ts)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '🗄️ 正在編輯 API 相關檔案，建議使用 database-optimizer agent 優化數據處理'"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": ".*(React|component|組件|UI|interface|介面).*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '💡 提示：React/UI 相關任務建議使用 react-ui-builder agent'"
+          }
+        ]
+      },
+      {
+        "matcher": ".*(架構|architecture|設計|design|API|後端|backend).*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '🏗️ 提示：架構設計相關任務建議使用 backend-architect agent'"
+          }
+        ]
+      },
+      {
+        "matcher": ".*(資料庫|database|查詢|query|效能|performance|優化|optimization).*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '⚡ 提示：資料庫優化相關任務建議使用 database-optimizer agent'"
+          }
+        ]
+      },
+      {
+        "matcher": ".*(審查|review|檢查|check|品質|quality).*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '🔍 提示：程式碼審查相關任務建議使用 code-reviewer agent'"
+          }
+        ]
+      },
+      {
+        "matcher": ".*(管理|manage|協調|coordinate|整合|integrate|專案|project).*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '📋 提示：專案管理和協調相關任務建議使用 context-manager agent'"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '🚀 蘿蔔糕訂購系統開發環境已啟動！\\n💡 可用的專業 agents：\\n   - react-ui-builder: React 組件開發\\n   - backend-architect: 後端架構設計\\n   - database-optimizer: 資料庫優化\\n   - code-reviewer: 程式碼審查\\n   - context-manager: 專案管理'"
+          }
+        ]
+      }
+    ]
+  }
+}
