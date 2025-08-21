@@ -25,6 +25,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import SecureApiService from '@/services/secureApiService';
 import { getStockStatusLabel, getStockStatusVariant, STOCK_STATUS_OPTIONS, type StockStatus } from '@/utils/stockStatusUtils';
+import ResponsivePageLayout from '@/components/ResponsivePageLayout';
 
 interface Product {
   id: string;
@@ -287,8 +288,24 @@ const ProductManagementPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="container mx-auto px-4 py-8">
+    <ResponsivePageLayout
+      title="商品管理"
+      description="管理商品資料和庫存狀態"
+      breadcrumbs={[{ label: '首頁', href: '/' }, { label: '商品管理' }]}
+      actions={(
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={loadProducts} disabled={loading} aria-label="重新載入">
+            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            重新載入
+          </Button>
+          <Button onClick={handleAdd} aria-label="新增商品">
+            <Plus className="h-4 w-4 mr-2" />
+            新增商品
+          </Button>
+        </div>
+      )}
+    >
+      <div className="container mx-auto px-4 py-2">
         <Card className="shadow-lg">
           {/* 標題列 */}
           <CardHeader className="border-b">
@@ -298,30 +315,16 @@ const ProductManagementPage: React.FC = () => {
                   variant="ghost" 
                   size="icon"
                   onClick={() => navigate('/')}
+                  aria-label="返回首頁"
                 >
                   <ArrowLeft className="h-4 w-4" />
                 </Button>
                 <div>
                   <CardTitle className="text-2xl font-bold text-gray-800 flex items-center gap-2">
                     <Package className="h-6 w-6" />
-                    商品管理
+                    商品清單
                   </CardTitle>
-                  <p className="text-sm text-gray-600 mt-1">管理商品資料和庫存狀態</p>
                 </div>
-              </div>
-              <div className="flex space-x-3">
-                <Button 
-                  variant="outline"
-                  onClick={loadProducts}
-                  disabled={loading}
-                >
-                  <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-                  重新載入
-                </Button>
-                <Button onClick={handleAdd}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  新增商品
-                </Button>
               </div>
             </div>
           </CardHeader>
@@ -626,7 +629,7 @@ const ProductManagementPage: React.FC = () => {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </ResponsivePageLayout>
   );
 };
 

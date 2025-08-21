@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useAuth } from '../components/AuthProvider';
 import { MigrationPanel } from '@/components/MigrationPanel';
+import ResponsivePageLayout from '@/components/ResponsivePageLayout';
+import { Button } from '@/components/ui/button';
 
 const AdminDashboardPage: React.FC = () => {
   const [showMigration, setShowMigration] = useState(false);
@@ -17,25 +19,16 @@ const AdminDashboardPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-6xl mx-auto">
-        {/* 頁面標題 */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-800">管理後台 Dashboard</h1>
-              {user && (
-                <p className="text-sm text-gray-600 mt-1">歡迎，{user.full_name || user.username} ({user.role})</p>
-              )}
-            </div>
-            <button
-              onClick={handleLogout}
-              className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-md transition-colors"
-            >
-              登出
-            </button>
-          </div>
-        </div>
+    <ResponsivePageLayout
+      title="管理後台 Dashboard"
+      description={user ? `歡迎，${user.full_name || user.username} (${user.role})` : undefined}
+      breadcrumbs={[{ label: '首頁', href: '/' }, { label: '管理後台' }]}
+      actions={(
+        <Button variant="destructive" onClick={handleLogout} aria-label="登出">
+          登出
+        </Button>
+      )}
+    >
 
         {/* 功能卡片區域 */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -113,7 +106,7 @@ const AdminDashboardPage: React.FC = () => {
 
         {/* 資料遷移面板 */}
         {showMigration && (
-          <div className="mt-6">
+          <div className="mt-6" aria-live="polite">
             <MigrationPanel />
           </div>
         )}
@@ -140,8 +133,7 @@ const AdminDashboardPage: React.FC = () => {
             </div>
           </div>
         </div>
-      </div>
-    </div>
+    </ResponsivePageLayout>
   );
 };
 

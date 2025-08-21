@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import StatusBadge from './StatusBadge';
@@ -11,6 +11,7 @@ import { Trash, ChevronLeft, ChevronRight, Trash2, AlertTriangle } from 'lucide-
 import { useToast } from '@/hooks/use-toast';
 import { PaymentStatus } from './PaymentStatusEditor';
 import { cn } from '@/lib/utils';
+import OrderListMobile from './OrderListMobile';
 
 // OrderList 元件的屬性型別
 import { FilterCriteria } from '@/types/filters';
@@ -312,6 +313,8 @@ const OrderList: React.FC<OrderListProps> = ({ filters, onOrderClick, onOrdersCh
     }
   };
 
+  const isMobile = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 768px)').matches
+
   return (
     <div className="bg-card border rounded-lg shadow-sm overflow-hidden max-w-7xl mx-auto">
       {/* 批次操作區塊 - 優化設計 */}
@@ -443,6 +446,18 @@ const OrderList: React.FC<OrderListProps> = ({ filters, onOrderClick, onOrdersCh
         </div>
       )}
 
+      {/* 行動版：使用虛擬清單卡片渲染 */}
+      {isMobile ? (
+        <OrderListMobile
+          allOrders={allOrders}
+          loading={loading}
+          selected={selected}
+          onToggleSelect={handleSelectOrder}
+          onOrderClick={onOrderClick}
+          onDeleteOrder={handleDeleteOrder}
+          updateOrderInList={updateOrderInList}
+        />
+      ) : (
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-gradient-to-r from-slate-50 to-slate-100 border-b-2 border-slate-200">
@@ -566,6 +581,7 @@ const OrderList: React.FC<OrderListProps> = ({ filters, onOrderClick, onOrdersCh
           </tbody>
         </table>
       </div>
+      )}
 
       {/* 分頁控制 */}
       {!loading && totalPages > 1 && (
