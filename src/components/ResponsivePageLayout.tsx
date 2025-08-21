@@ -67,7 +67,7 @@ export function ResponsivePageLayout({
 				</div>
 			</header>
 
-			<div className="mx-auto grid w-full max-w-7xl grid-cols-1 gap-4 px-3 py-4 sm:px-4 lg:grid-cols-[280px_1fr]">
+			<div className={`mx-auto grid w-full max-w-7xl grid-cols-1 gap-4 px-3 py-4 sm:px-4 ${sidebar ? 'lg:grid-cols-[280px_1fr]' : ''}`}>
 				{sidebar && (
 					<aside className="lg:sticky lg:top-16 lg:h-[calc(100dvh-4rem)]" aria-label="側邊導覽">
 						{sidebar}

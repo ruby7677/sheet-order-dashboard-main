@@ -230,7 +230,7 @@ const ModernSidebar: React.FC<ModernSidebarProps> = ({
 
       {/* 桌面版側邊欄 */}
       <div className={cn(
-        "hidden lg:flex flex-col bg-card border-r border-border/50 transition-all duration-300 h-screen",
+        "hidden lg:sticky lg:top-0 lg:h-[100dvh] lg:flex flex-col bg-card border-r border-border/50 transition-all duration-300",
         isCollapsed ? "w-16" : "w-64",
         className
       )}>
