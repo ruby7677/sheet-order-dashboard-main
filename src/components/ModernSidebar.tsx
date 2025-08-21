@@ -20,6 +20,7 @@ import {
 import { cn } from '@/lib/utils';
 import { getDataSource, setDataSourceAndNotify, subscribeDataSourceChange } from '@/services/orderService';
 import { useNavigate } from 'react-router-dom';
+import { Sheet, SheetContent } from '@/components/ui/sheet';
 
 interface ModernSidebarProps {
   pageMode: 'orders' | 'customers';
@@ -87,7 +88,7 @@ const ModernSidebar: React.FC<ModernSidebarProps> = ({
   ];
 
   const SidebarContent = () => (
-    <div className="flex flex-col h-screen">
+    <div className="flex flex-col h-screen" role="navigation" aria-label="主選單">
       {/* 標題區域 */}
       <div className="p-4 border-b border-border/50">
         <div className="flex items-center justify-between">
@@ -102,6 +103,7 @@ const ModernSidebar: React.FC<ModernSidebarProps> = ({
             size="icon"
             onClick={() => setIsCollapsed(!isCollapsed)}
             className="h-8 w-8 hidden lg:flex"
+            aria-label={isCollapsed ? '展開側邊欄' : '收合側邊欄'}
           >
             {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
           </Button>
@@ -133,7 +135,7 @@ const ModernSidebar: React.FC<ModernSidebarProps> = ({
               <div className="flex items-center gap-3 w-full">
                 <Icon className={cn("h-5 w-5 flex-shrink-0", isActive && "text-primary-foreground")} />
                 
-                {!isCollapsed && (
+                {(!isCollapsed || isMobileOpen) && (
                   <div className="flex-1 text-left">
                     <div className="flex items-center justify-between">
                       <span className="font-medium">{item.label}</span>
@@ -165,7 +167,7 @@ const ModernSidebar: React.FC<ModernSidebarProps> = ({
         })}
         
         {/* 資料來源切換 */}
-        {!isCollapsed && (
+        {(!isCollapsed || isMobileOpen) && (
           <div className="pt-2 mt-2 border-t border-border/50">
             <div className="text-xs text-muted-foreground mb-2 px-1">資料來源</div>
             <div className="flex gap-1">
@@ -219,6 +221,9 @@ const ModernSidebar: React.FC<ModernSidebarProps> = ({
         size="icon"
         className="lg:hidden fixed top-4 left-4 z-50"
         onClick={() => setIsMobileOpen(true)}
+        aria-label="開啟選單"
+        aria-expanded={isMobileOpen}
+        aria-controls="mobile-sidebar"
       >
         <Menu className="h-5 w-5" />
       </Button>
@@ -229,31 +234,18 @@ const ModernSidebar: React.FC<ModernSidebarProps> = ({
         isCollapsed ? "w-16" : "w-64",
         className
       )}>
-        <SidebarContent />
+        <nav aria-label="主選單"><SidebarContent /></nav>
       </div>
 
-      {/* 手機版側邊欄 */}
-      {isMobileOpen && (
-        <div className="lg:hidden fixed inset-0 z-40">
-          <div 
-            className="absolute inset-0 bg-overlay-80" 
-            onClick={() => setIsMobileOpen(false)}
-          />
-          <div className="absolute left-0 top-0 h-full w-64 bg-card border-r border-border/50">
-            <div className="flex items-center justify-between p-4 border-b border-border/50">
-              <h2 className="text-lg font-bold">選單</h2>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setIsMobileOpen(false)}
-              >
-                <X className="h-5 w-5" />
-              </Button>
-            </div>
-            <SidebarContent />
+      {/* 手機版側邊欄：使用 Sheet 以獲得焦點鎖定與 ESC 關閉 */}
+      <Sheet open={isMobileOpen} onOpenChange={setIsMobileOpen}>
+        <SheetContent side="left" className="w-64 bg-card border-r border-border/50 p-0" id="mobile-sidebar">
+          <div className="flex items-center justify-between p-4 border-b border-border/50">
+            <h2 className="text-lg font-bold">選單</h2>
           </div>
-        </div>
-      )}
+          <nav aria-label="主選單"><SidebarContent /></nav>
+        </SheetContent>
+      </Sheet>
     </>
   );
 };
