@@ -6,6 +6,7 @@ import { CustomerWithStats } from '../types/customer';
 import { CustomerFilterCriteria } from '../types/customer';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import CustomerListMobile from './CustomerListMobile'
 
 interface CustomerListProps {
   filters: CustomerFilterCriteria;
@@ -113,8 +114,20 @@ const CustomerList: React.FC<CustomerListProps> = ({
     }
   };
 
+  const isMobile = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 768px)').matches
+
   return (
     <div className="bg-card border rounded-lg shadow-sm overflow-hidden">
+      {/* 行動版：使用虛擬清單卡片 */}
+      {isMobile ? (
+        <CustomerListMobile
+          allCustomers={allCustomers}
+          loading={loading}
+          selected={selected}
+          onToggleSelect={handleSelectCustomer}
+          onCustomerClick={onCustomerClick}
+        />
+      ) : (
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
@@ -173,9 +186,10 @@ const CustomerList: React.FC<CustomerListProps> = ({
           </tbody>
         </table>
       </div>
+      )}
 
       {/* 分頁控制 */}
-      {!loading && totalPages > 1 && (
+      {!isMobile && !loading && totalPages > 1 && (
         <div className="p-4 flex justify-between items-center border-t mr-16">
           <div className="text-sm text-muted-foreground">
             顯示 {((currentPage - 1) * itemsPerPage) + 1} 至 {Math.min(currentPage * itemsPerPage, allCustomers.length)} 筆，共 {allCustomers.length} 筆
