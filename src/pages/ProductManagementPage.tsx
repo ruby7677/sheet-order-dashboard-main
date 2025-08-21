@@ -305,7 +305,7 @@ const ProductManagementPage: React.FC = () => {
         </div>
       )}
     >
-      <div className="container mx-auto px-4 py-2">
+      <div className="mx-auto w-full max-w-7xl px-4 py-2">
         <Card className="shadow-lg">
           {/* 標題列 */}
           <CardHeader className="border-b">
@@ -347,32 +347,32 @@ const ProductManagementPage: React.FC = () => {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <Table>
+                <Table className="min-w-[960px] lg:min-w-[1120px]">
                   <TableHeader>
                     <TableRow>
-                      <TableHead>排序</TableHead>
-                      <TableHead>商品ID</TableHead>
-                      <TableHead>商品名稱</TableHead>
-                      <TableHead>價格</TableHead>
-                      <TableHead>單位</TableHead>
-                      <TableHead>庫存狀態</TableHead>
-                      <TableHead>庫存數量</TableHead>
-                      <TableHead>分類</TableHead>
-                      <TableHead>狀態</TableHead>
-                      <TableHead>操作</TableHead>
+                      <TableHead className="w-20 whitespace-nowrap">排序</TableHead>
+                      <TableHead className="w-36 whitespace-nowrap">商品ID</TableHead>
+                      <TableHead className="w-[320px] whitespace-nowrap">商品名稱</TableHead>
+                      <TableHead className="w-28 whitespace-nowrap">價格</TableHead>
+                      <TableHead className="w-20 whitespace-nowrap">單位</TableHead>
+                      <TableHead className="w-40 whitespace-nowrap">庫存狀態</TableHead>
+                      <TableHead className="w-28 whitespace-nowrap">庫存數量</TableHead>
+                      <TableHead className="w-28 whitespace-nowrap">分類</TableHead>
+                      <TableHead className="w-24 whitespace-nowrap">狀態</TableHead>
+                      <TableHead className="w-28 whitespace-nowrap">操作</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {products.map((product) => (
                       <TableRow key={product.id}>
-                        <TableCell>{product.sort_order}</TableCell>
-                        <TableCell className="font-mono text-sm">{product.product_id}</TableCell>
-                        <TableCell className="font-medium">{product.name}</TableCell>
+                        <TableCell className="whitespace-nowrap">{product.sort_order}</TableCell>
+                        <TableCell className="font-mono text-sm whitespace-nowrap">{product.product_id}</TableCell>
+                        <TableCell className="font-medium whitespace-nowrap">{product.name}</TableCell>
                         <TableCell>NT$ {product.price}</TableCell>
                         <TableCell>{product.unit}</TableCell>
                         <TableCell>{renderStockStatusSelect(product)}</TableCell>
-                        <TableCell>{product.stock_quantity}</TableCell>
-                        <TableCell>{product.category}</TableCell>
+                        <TableCell className="whitespace-nowrap">{product.stock_quantity}</TableCell>
+                        <TableCell className="whitespace-nowrap">{product.category}</TableCell>
                         <TableCell>
                           {product.is_active ? (
                             <Badge className="bg-green-100 text-green-800">啟用</Badge>
