@@ -74,9 +74,21 @@ export class AutoSyncOrders extends OpenAPIRoute {
         throw new Error('缺少必要的環境變數: GOOGLE_SERVICE_ACCOUNT_KEY 或 GOOGLE_SHEET_ID');
       }
 
-      // 解析請求參數
-      const requestBody = await c.req.json();
-      const params = AutoSyncSchema.parse(requestBody);
+      // 解析請求參數（容忍 CRON 觸發時的空 body）
+      let params;
+      try {
+        const requestBody = await c.req.json();
+        params = AutoSyncSchema.parse(requestBody);
+      } catch (e) {
+        // CRON 觸發時可能沒有 body，使用預設參數
+        params = {
+          forceFullSync: false,
+          dryRun: false,
+          syncOrders: true,
+          syncCustomers: true,
+          triggerType: 'cron' as const
+        };
+      }
 
       console.log(`📋 [${requestId}] 同步參數:`, params);
 

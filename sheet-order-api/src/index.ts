@@ -178,47 +178,5 @@ openapi.get("/api/get_customer_orders.php", GetCustomerOrders);
 // You may also register routes for non OpenAPI directly on Hono
 // app.get('/test', (c) => c.text('Hono!'))
 
-// CRON 處理器 - 處理定時自動同步
-app.all('/api/sync/auto', async (c) => {
-  const isCronTrigger = c.req.header('CF-Cron') || c.req.header('X-Cron-Trigger');
-  
-  if (isCronTrigger) {
-    console.log('🕐 CRON 觸發自動同步');
-    
-    try {
-      // 直接創建 AutoSyncService 來處理 CRON 觸發
-      const { AutoSyncService } = await import('./services/AutoSyncService');
-      const autoSyncService = new AutoSyncService(c.env as any);
-      
-      // 執行自動同步
-      const result = await autoSyncService.executeAutoSync({
-        forceFullSync: false,
-        dryRun: false,
-        syncOrders: true,
-        syncCustomers: true
-      });
-      
-      console.log('✅ CRON 自動同步完成:', result);
-      
-      return c.json({
-        success: true,
-        message: 'CRON 自動同步完成',
-        result
-      });
-    } catch (error) {
-      console.error('❌ CRON 自動同步失敗:', error);
-      
-      return c.json({
-        success: false,
-        message: 'CRON 自動同步失敗',
-        error: error instanceof Error ? error.message : String(error)
-      }, 500);
-    }
-  }
-  
-  // 非 CRON 觸發，繼續正常的 API 處理
-  return c.text('Auto sync endpoint - use POST for manual trigger', 200);
-});
-
 // Export the Hono app
 export default app;
