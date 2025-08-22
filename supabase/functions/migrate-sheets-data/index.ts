@@ -20,6 +20,7 @@ interface MigrationResult {
     ordersProcessed: number;
     customersProcessed: number;
     productsProcessed: number;
+    ordersDeleted?: number;
     errors: string[];
   };
 }
@@ -238,12 +239,51 @@ async function migrateCustomers(supabase: any, customersData: any[][], dryRun: b
 }
 
 async function migrateOrders(supabase: any, ordersData: any[][], dryRun: boolean, skipExisting: boolean) {
-  if (ordersData.length === 0) {return { processed: 0, itemsProcessed: 0, errors: [] };}
+  if (ordersData.length === 0) {return { processed: 0, itemsProcessed: 0, errors: [], deleted: 0 };}
   
   const rows = ordersData.slice(1); // 跳過標題行
   const errors: string[] = [];
   let processed = 0;
   let itemsProcessed = 0;
+  let deleted = 0;
+
+  // 如果不是試運行，處理刪除邏輯
+  if (!dryRun) {
+    try {
+      // 取得 Sheets 中現有的所有訂單 ID (使用 google_sheet_id)
+      const sheetsOrderIds = new Set<number>();
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        if (row[1] && row[1].toString().trim() !== '') {
+          sheetsOrderIds.add(i + 1);
+        }
+      }
+
+      // 如果有 Sheets 數據，刪除 Supabase 中不再存在於 Sheets 的訂單
+      if (sheetsOrderIds.size > 0) {
+        const { data: existingOrders } = await supabase
+          .from('orders')
+          .select('id, google_sheet_id')
+          .not('google_sheet_id', 'is', null);
+
+        if (existingOrders && existingOrders.length > 0) {
+          const ordersToDelete = existingOrders.filter(
+            order => order.google_sheet_id && !sheetsOrderIds.has(order.google_sheet_id)
+          );
+
+          for (const orderToDelete of ordersToDelete) {
+            // 先刪除 order_items
+            await withRetry(() => supabase.from('order_items').delete().eq('order_id', orderToDelete.id));
+            // 再刪除 order
+            await withRetry(() => supabase.from('orders').delete().eq('id', orderToDelete.id));
+            deleted++;
+          }
+        }
+      }
+    } catch (error) {
+      errors.push(`處理訂單deletion時發生錯誤: ${error instanceof Error ? error.message : error}`);
+    }
+  }
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
@@ -445,7 +485,7 @@ async function migrateOrders(supabase: any, ordersData: any[][], dryRun: boolean
     }
   }
 
-  return { processed, itemsProcessed, errors };
+  return { processed, itemsProcessed, errors, deleted };
 }
 
 Deno.serve(async (req) => {
@@ -518,6 +558,7 @@ Deno.serve(async (req) => {
         ordersProcessed: ordersResult.processed,
         customersProcessed: customersResult.processed,
         productsProcessed: ordersResult.itemsProcessed,
+        ordersDeleted: ordersResult.deleted || 0,
         errors: allErrors
       }
     };
@@ -543,6 +584,7 @@ Deno.serve(async (req) => {
           ordersProcessed: 0,
           customersProcessed: 0,
           productsProcessed: 0,
+          ordersDeleted: 0,
           errors: [error instanceof Error ? error.message : String(error)]
         }
       }),

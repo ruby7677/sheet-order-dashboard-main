@@ -11,6 +11,7 @@ export interface MigrationStats {
   ordersProcessed: number;
   customersProcessed: number;
   productsProcessed: number;
+  ordersDeleted?: number;
   errors: string[];
 }
 
