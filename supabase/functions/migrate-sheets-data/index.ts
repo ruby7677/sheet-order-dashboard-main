@@ -291,39 +291,64 @@ async function migrateOrders(supabase: any, ordersData: any[][], dryRun: boolean
         continue;
       }
 
-      // 取得訂單 id：若已存在且 skipExisting 為 true，則沿用既有 id；否則 upsert 並取得 id
-      let orderId: string | null = null;
+      // 檢查是否已存在
       if (skipExisting) {
-        const { data: existing } = await supabase
-          .from('orders')
-          .select('id')
-          .eq('google_sheet_id', orderData.google_sheet_id)
-          .single();
-        if (existing?.id) {
-          orderId = existing.id;
-        }
-      }
-
-      if (!orderId) {
-        const { data: upsertedOrders, error: upsertErr } = await withRetry(() =>
+        const { data: existing, error: checkError } = await withRetry(() =>
           supabase
             .from('orders')
-            .upsert(orderData, { onConflict: 'google_sheet_id' })
             .select('id')
             .eq('google_sheet_id', orderData.google_sheet_id)
-            .limit(1)
+            .maybeSingle()
         );
-        if (upsertErr) {
-          errors.push(`訂單 ${orderData.order_number}: ${upsertErr.message}`);
+        
+        if (checkError) {
+          console.warn(`檢查訂單是否存在時出錯: ${checkError.message}`);
+        } else if (existing) {
+          console.log(`訂單已存在: ${orderData.order_number}`);
           continue;
         }
-        orderId = upsertedOrders && upsertedOrders[0]?.id;
       }
 
-      if (!orderId) {
-        errors.push(`訂單 ${orderData.order_number}: 無法取得 order.id`);
+      // 插入訂單資料
+      const { data: upsertedOrders, error: upsertErr } = await withRetry(() =>
+        supabase
+          .from('orders')
+          .upsert(orderData, { onConflict: 'google_sheet_id' })
+          .select('id')
+      );
+      
+      if (upsertErr) {
+        errors.push(`訂單 ${orderData.order_number}: ${upsertErr.message}`);
         continue;
       }
+      
+      const orderId = upsertedOrders?.[0]?.id;
+
+        const normalizePhone = (phone: string): string => {
+          return (phone || '').replace(/[^0-9]/g, '');
+        };
+
+        // 嘗試找到對應的客戶ID
+        let customerId: string | null = null;
+        if (orderData.customer_phone) {
+          const phoneToMatch = normalizePhone(orderData.customer_phone);
+          if (phoneToMatch) {
+            const { data: customer } = await supabase
+              .from('customers')
+              .select('id')
+              .eq('phone', phoneToMatch)
+              .maybeSingle();
+            customerId = customer?.id || null;
+          }
+        }
+
+        // 如果找到了客戶ID，更新訂單中的customer_id
+        if (customerId && orderId) {
+          await supabase
+            .from('orders')
+            .update({ customer_id: customerId })
+            .eq('id', orderId);
+        }
 
       // 解析購買項目字串並 upsert 至 order_items（冪等）
       try {
