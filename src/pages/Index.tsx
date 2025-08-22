@@ -12,6 +12,7 @@ import CompactControlPanel from '@/components/CompactControlPanel';
 import ModernSidebar from '@/components/ModernSidebar';
 import ScrollToTopButton from '@/components/ScrollToTopButton';
 import DuplicateOrdersDialog from '@/components/DuplicateOrdersDialog';
+import { MigrationPanel } from '@/components/MigrationPanel';
 import { Order, PaymentStatus, OrderItem } from '@/types/order';
 import { CustomerWithStats } from '../types/customer';
 import { FilterCriteria } from '../types/filters';
@@ -22,13 +23,21 @@ import { downloadExcelCsv, printOrders } from '@/utils/exportUtils';
 import { downloadQuickStoreXlsx } from '@/utils/exportQuickStoreXlsx';
 import { Download, Printer, Calendar, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useSearchParams } from 'react-router-dom';
 
 const Index: React.FC = () => {
   // 檢測是否在 iframe 中
   const [isInIframe, setIsInIframe] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  // 頁面模式：'orders' 或 'customers'
-  const [pageMode, setPageMode] = useState<'orders' | 'customers'>('orders');
+  // 頁面模式：'orders' 或 'customers' 或 'migration'
+  const [pageMode, setPageMode] = useState<'orders' | 'customers' | 'migration'>(() => {
+    const mode = searchParams.get('mode');
+    if (mode === 'migration' || mode === 'customers' || mode === 'orders') {
+      return mode;
+    }
+    return 'orders';
+  });
 
   // 訂單相關狀態
   // 已選擇訂單 id 陣列
@@ -284,6 +293,15 @@ const Index: React.FC = () => {
     }
   };
 
+  // 處理頁面模式變更並同步到 URL
+  const handlePageModeChange = (mode: 'orders' | 'customers' | 'migration') => {
+    setPageMode(mode);
+    // 更新 URL 查詢參數
+    const newSearchParams = new URLSearchParams(searchParams);
+    newSearchParams.set('mode', mode);
+    setSearchParams(newSearchParams);
+  };
+
   const updateCustomerStats = async () => {
     try {
       const allCustomers = await fetchCustomers();
@@ -413,7 +431,7 @@ const Index: React.FC = () => {
       {!isInIframe && (
         <ModernSidebar
           pageMode={pageMode}
-          onPageModeChange={setPageMode}
+          onPageModeChange={handlePageModeChange}
           orderStats={{
             total: stats.total,
             pending: stats.processing,
@@ -434,7 +452,7 @@ const Index: React.FC = () => {
             <div className="px-4 lg:px-6 pl-14 lg:pl-6 py-3 flex justify-between items-center">
               <div className="flex items-center gap-3">
                 <h1 className="text-xl font-bold text-foreground">
-                  {pageMode === 'orders' ? '訂單管理' : '客戶資料'}
+                  {pageMode === 'orders' ? '訂單管理' : pageMode === 'customers' ? '客戶資料' : '資料遷移'}
                 </h1>
                 <div className="text-sm text-muted-foreground hidden sm:block">
                   蘿蔔糕訂單系統 - 管理後台
@@ -572,6 +590,12 @@ const Index: React.FC = () => {
               onClose={handleCloseCustomerDetail}
             />
           </>
+        )}
+        {/* 資料遷移頁面 */}
+        {pageMode === 'migration' && (
+          <div className="max-w-4xl mx-auto">
+            <MigrationPanel />
+          </div>
         )}
         </main>
       </div>
