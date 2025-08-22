@@ -16,7 +16,6 @@ import { BatchDeleteOrders } from './endpoints/batchDeleteOrders';
 import { AdminLogin } from './endpoints/adminLogin';
 import { GetCustomerOrders } from './endpoints/getCustomerOrders';
 import { GetAdminDashboard } from './endpoints/getAdminDashboard';
-import { AutoSyncOrders, GetSyncStatus } from './endpoints/autoSync';
 import { OpenAPIRoute } from 'chanfana';
 import type { AppContext } from './types';
 import { SupabaseService } from './services/SupabaseService';
@@ -89,10 +88,6 @@ openapi.delete("/api/orders/batch", BatchDeleteOrders);
 openapi.post("/api/admin/login", AdminLogin);
 openapi.get("/api/customers/orders", GetCustomerOrders);
 openapi.get("/api/admin/dashboard", GetAdminDashboard);
-
-// 自動同步端點
-openapi.post("/api/sync/auto", AutoSyncOrders);
-openapi.get("/api/sync/status", GetSyncStatus);
 
 // Products API（為 Cloudflare Worker 直接提供的簡易端點，便於統一呼叫）
 class GetProducts extends OpenAPIRoute {

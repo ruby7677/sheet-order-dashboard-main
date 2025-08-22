@@ -15,16 +15,16 @@ import {
   Package,
   TrendingUp,
   Database,
-  ShoppingCart,
-  RefreshCw
+  ShoppingCart
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getDataSource, setDataSourceAndNotify, subscribeDataSourceChange } from '@/services/orderService';
+import { useNavigate } from 'react-router-dom';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 
 interface ModernSidebarProps {
-  pageMode: 'orders' | 'customers' | 'migration' | 'products';
-  onPageModeChange: (mode: 'orders' | 'customers' | 'migration' | 'products') => void;
+  pageMode: 'orders' | 'customers';
+  onPageModeChange: (mode: 'orders' | 'customers') => void;
   orderStats?: {
     total: number;
     pending: number;
@@ -47,6 +47,7 @@ const ModernSidebar: React.FC<ModernSidebarProps> = ({
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [currentSource, setCurrentSource] = useState(getDataSource());
+  const navigate = useNavigate();
 
   // 監聽資料來源變更
   React.useEffect(() => {
@@ -76,22 +77,13 @@ const ModernSidebar: React.FC<ModernSidebarProps> = ({
       onClick: () => onPageModeChange('customers')
     },
     {
-      id: 'migration' as const,
-      label: '資料遷移',
-      icon: RefreshCw,
-      badge: 0,
-      subBadge: 0,
-      description: '同步與遷移資料',
-      onClick: () => onPageModeChange('migration')
-    },
-    {
       id: 'products' as const,
       label: '商品管理',
       icon: Package,
       badge: 0,
       subBadge: 0,
       description: '管理商品資料',
-      onClick: () => onPageModeChange('products')
+      onClick: () => navigate('/products')
     }
   ];
 
@@ -147,7 +139,7 @@ const ModernSidebar: React.FC<ModernSidebarProps> = ({
                   <div className="flex-1 text-left">
                     <div className="flex items-center justify-between">
                       <span className="font-medium">{item.label}</span>
-                      {(item.id !== 'products' && item.id !== 'migration') && (
+                      {item.id !== 'products' && (
                         <div className="flex items-center gap-1">
                           {item.subBadge > 0 && (
                             <Badge 
