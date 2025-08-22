@@ -11,6 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { CheckCircle, AlertCircle, Download, Upload, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { migrateGoogleSheetsData, validateMigrationData, clearExistingData, type MigrationResult } from "@/services/migrationService";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export function MigrationPanel() {
   const [sheetId, setSheetId] = useState("10MMALrfBonchPGjb-ps6Knw7MV6lllrrKRCTeafCIuo");
@@ -20,6 +21,8 @@ export function MigrationPanel() {
   const [progress, setProgress] = useState(0);
   const [migrationResult, setMigrationResult] = useState<MigrationResult | null>(null);
   const [validationData, setValidationData] = useState<any>(null);
+  const [strategy, setStrategy] = useState<'auto' | 'replace' | 'upsert'>('auto');
+  const [replaceWindowDays, setReplaceWindowDays] = useState<number>(21);
 
   const handleMigration = async () => {
     if (!sheetId.trim()) {
@@ -40,7 +43,9 @@ export function MigrationPanel() {
       const result = await migrateGoogleSheetsData({
         sheetId: sheetId.trim(),
         dryRun,
-        skipExisting
+        skipExisting,
+        strategy,
+        replaceWindowDays
       });
 
       clearInterval(progressInterval);
@@ -157,6 +162,38 @@ export function MigrationPanel() {
             />
           </div>
 
+          {/* 遷移策略 */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <Label>遷移策略</Label>
+              <Select value={strategy} onValueChange={(v: any) => setStrategy(v)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="選擇策略" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">auto（無交集才清空近窗期）</SelectItem>
+                  <SelectItem value="replace">replace（先清空近窗期再寫入）</SelectItem>
+                  <SelectItem value="upsert">upsert（僅寫入不清空）</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">建議使用 auto；每檔期全重置用 replace。</p>
+            </div>
+
+            <div className="space-y-1">
+              <Label htmlFor="replaceDays">近窗期（天）</Label>
+              <Input
+                id="replaceDays"
+                type="number"
+                min={7}
+                max={60}
+                value={replaceWindowDays}
+                onChange={(e) => setReplaceWindowDays(Math.max(7, Math.min(60, Number(e.target.value))))}
+                disabled={isLoading || strategy === 'upsert'}
+              />
+              <p className="text-xs text-muted-foreground">用於 auto/replace 的清空範圍，預設 21。</p>
+            </div>
+          </div>
+
           {isLoading && (
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
@@ -233,6 +270,12 @@ export function MigrationPanel() {
                 </div>
                 <div className="text-sm text-muted-foreground">商品</div>
               </div>
+              {typeof migrationResult.stats.ordersDeleted === 'number' && (
+                <div className="text-center p-4 border rounded-lg md:col-span-3">
+                  <div className="text-base text-muted-foreground">已刪除近窗期舊訂單</div>
+                  <div className="text-2xl font-bold text-red-600">{migrationResult.stats.ordersDeleted}</div>
+                </div>
+              )}
             </div>
 
             {migrationResult.stats.errors.length > 0 && (

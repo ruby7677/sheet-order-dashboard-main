@@ -5,6 +5,8 @@ export interface MigrationOptions {
   sheetId: string;
   dryRun?: boolean;
   skipExisting?: boolean;
+  strategy?: 'auto' | 'replace' | 'upsert';
+  replaceWindowDays?: number;
 }
 
 export interface MigrationStats {
@@ -41,12 +43,14 @@ export async function migrateGoogleSheetsData(options: MigrationOptions): Promis
       throw new Error('無效的 Google Sheets ID 格式');
     }
 
-    console.log('開始資料遷移:', { sheetId: cleanSheetId, dryRun: options.dryRun, skipExisting: options.skipExisting });
+    console.log('開始資料遷移:', { sheetId: cleanSheetId, dryRun: options.dryRun, skipExisting: options.skipExisting, strategy: options.strategy, replaceWindowDays: options.replaceWindowDays });
 
     const apiService = new SecureApiService();
     const result = await apiService.migrateGoogleSheetsData(cleanSheetId, {
       dryRun: options.dryRun || false,
-      skipExisting: options.skipExisting || true
+      skipExisting: options.skipExisting || true,
+      strategy: options.strategy || 'auto',
+      replaceWindowDays: typeof options.replaceWindowDays === 'number' ? options.replaceWindowDays : 21,
     });
     
     console.log('遷移完成:', result);
