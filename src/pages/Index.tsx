@@ -23,13 +23,8 @@ import { downloadExcelCsv, printOrders } from '@/utils/exportUtils';
 import { downloadQuickStoreXlsx } from '@/utils/exportQuickStoreXlsx';
 import { Download, Printer, Calendar, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/components/AuthProvider';
-import { useNavigate } from 'react-router-dom';
 
 const Index: React.FC = () => {
-  const { isAuthenticated } = useAuth();
-  const navigate = useNavigate();
-  
   // 檢測是否在 iframe 中
   const [isInIframe, setIsInIframe] = useState(false);
 
@@ -119,35 +114,6 @@ const Index: React.FC = () => {
   });
   const [dashboardRefreshTrigger, setDashboardRefreshTrigger] = useState(0);
   const { toast } = useToast();
-
-  // 檢查管理員權限的函數
-  const checkAdminAccess = () => {
-    if (!isAuthenticated) {
-      navigate('/admin');
-      return false;
-    }
-    return true;
-  };
-
-  // 處理需要管理員權限的頁面模式變更
-  const handlePageModeChange = (mode: 'orders' | 'customers' | 'migration') => {
-    if ((mode === 'migration') && !checkAdminAccess()) {
-      return;
-    }
-    setPageMode(mode);
-  };
-
-  // 處理商品管理導航
-  const handleProductsNavigation = () => {
-    if (!checkAdminAccess()) {
-      return;
-    }
-    // 這裡可以添加商品管理的邏輯，例如顯示商品管理面板
-    toast({
-      title: '提示',
-      description: '商品管理功能開發中',
-    });
-  };
 
   // 重複訂單相關狀態
   const [duplicateGroups, setDuplicateGroups] = useState<DuplicateGroup[]>([]);
@@ -448,8 +414,7 @@ const Index: React.FC = () => {
       {!isInIframe && (
         <ModernSidebar
           pageMode={pageMode}
-          onPageModeChange={handlePageModeChange}
-          onProductsNavigation={handleProductsNavigation}
+          onPageModeChange={setPageMode}
           orderStats={{
             total: stats.total,
             pending: stats.processing,

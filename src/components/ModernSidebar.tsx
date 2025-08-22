@@ -19,13 +19,11 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getDataSource, setDataSourceAndNotify, subscribeDataSourceChange } from '@/services/orderService';
-import { useNavigate } from 'react-router-dom';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 
 interface ModernSidebarProps {
   pageMode: 'orders' | 'customers' | 'migration';
   onPageModeChange: (mode: 'orders' | 'customers' | 'migration') => void;
-  onProductsNavigation?: () => void;
   orderStats?: {
     total: number;
     pending: number;
@@ -41,7 +39,6 @@ interface ModernSidebarProps {
 const ModernSidebar: React.FC<ModernSidebarProps> = ({
   pageMode,
   onPageModeChange,
-  onProductsNavigation,
   orderStats,
   customerStats,
   className
@@ -84,7 +81,10 @@ const ModernSidebar: React.FC<ModernSidebarProps> = ({
       badge: 0,
       subBadge: 0,
       description: '管理商品資料',
-      onClick: () => onProductsNavigation?.()
+      onClick: () => {
+        // 這裡可以添加商品管理的邏輯
+        console.log('商品管理功能開發中');
+      }
     },
     {
       id: 'migration' as const,
