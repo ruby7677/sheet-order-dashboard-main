@@ -61,13 +61,10 @@ class SecureApiService {
       
       // 直接使用 Supabase Edge Function
       const token = this.getAuthToken();
-      if (!token) {
-        throw new Error('未登入，無法執行資料遷移');
-      }
-
-      // 檢查 token 格式
-      if (typeof token !== 'string' || token.trim() === '') {
-        throw new Error('無效的授權令牌');
+      const adminKey = (typeof import.meta !== 'undefined' && (import.meta as any)?.env?.VITE_ADMIN_SHARED_KEY) ? String((import.meta as any).env.VITE_ADMIN_SHARED_KEY) : ''
+      if (!token && !adminKey) {
+        // 若沒有登入，也允許使用共享金鑰（VITE_ADMIN_SHARED_KEY）
+        throw new Error('未登入或缺少共享金鑰，無法執行資料遷移');
       }
 
       const requestBody = {
@@ -79,15 +76,20 @@ class SecureApiService {
       console.log('發送遷移請求:', requestBody);
 
       // 驗證與構造授權標頭，避免 fetch 因無效字元拋出 "Invalid value"
-      const bearer = `Bearer ${token.trim()}`
-      const jwtLike = /^Bearer\s+[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+$/
-      if (!jwtLike.test(bearer)) {
-        throw new Error('授權令牌格式錯誤，請重新登入後再試')
-      }
       const headers = new Headers({
         'Content-Type': 'application/json',
-        'Authorization': bearer,
       })
+      if (token && token.trim()) {
+        const bearer = `Bearer ${token.trim()}`
+        const jwtLike = /^Bearer\s+[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+$/
+        if (!jwtLike.test(bearer)) {
+          throw new Error('授權令牌格式錯誤，請重新登入後再試')
+        }
+        headers.set('Authorization', bearer)
+      }
+      if (adminKey && adminKey.trim()) {
+        headers.set('X-Admin-Key', adminKey.trim())
+      }
 
       let response: Response
       try {
@@ -101,7 +103,7 @@ class SecureApiService {
         const fallbackBody = JSON.stringify(requestBody)
         const res = await this.makeSecureRequest('migrate-sheets-data', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': bearer },
+          headers: Object.fromEntries(headers.entries()),
           body: fallbackBody,
         })
         response = res
