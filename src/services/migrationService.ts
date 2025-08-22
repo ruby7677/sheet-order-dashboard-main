@@ -26,20 +26,35 @@ export interface MigrationResult {
  */
 export async function migrateGoogleSheetsData(options: MigrationOptions): Promise<MigrationResult> {
   try {
+    // 檢查和清理 sheetId
+    if (!options.sheetId || typeof options.sheetId !== 'string') {
+      throw new Error('無效的 Google Sheets ID 格式');
+    }
+    
+    const cleanSheetId = options.sheetId.trim();
+    if (!cleanSheetId) {
+      throw new Error('Google Sheets ID 不能為空');
+    }
+    
     // 驗證 Sheet ID 格式
-    if (!SecureApiService.validateSheetId(options.sheetId)) {
+    if (!SecureApiService.validateSheetId(cleanSheetId)) {
       throw new Error('無效的 Google Sheets ID 格式');
     }
 
+    console.log('開始資料遷移:', { sheetId: cleanSheetId, dryRun: options.dryRun, skipExisting: options.skipExisting });
+
     const apiService = new SecureApiService();
-    const result = await apiService.migrateGoogleSheetsData(options.sheetId, {
+    const result = await apiService.migrateGoogleSheetsData(cleanSheetId, {
       dryRun: options.dryRun || false,
       skipExisting: options.skipExisting || true
     });
     
+    console.log('遷移完成:', result);
     return result as MigrationResult;
   } catch (error: any) {
-    throw new Error(`資料遷移失敗: ${error.message}`);
+    console.error('資料遷移錯誤:', error);
+    const errorMessage = error.message || '未知錯誤';
+    throw new Error(`資料遷移失敗: ${errorMessage}`);
   }
 }
 
