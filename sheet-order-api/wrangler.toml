@@ -43,5 +43,4 @@ binding = "AI"
 command = "npm run build"
 
 # 兼容性標誌
-[compatibility_flags]
-nodejs_compat = true
+compatibility_flags = ["nodejs_compat"]

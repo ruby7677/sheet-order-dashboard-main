@@ -54,42 +54,87 @@ export async function migrateGoogleSheetsData(options: MigrationOptions): Promis
       throw new Error('無效的 Google Sheets ID 格式');
     }
 
-    const apiUrl = `${getApiBaseUrl()}/sync/auto`;
+    // 嘗試第一個 API 端點（Cloudflare Workers）
+    const primaryApiUrl = `${getApiBaseUrl()}/sync/auto`;
     
-    // 調用自動同步 API（公開的，不需要認證）
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        forceFullSync: true, // 強制完整同步
-        dryRun: options.dryRun || false,
-        syncOrders: true,
-        syncCustomers: true,
-        triggerType: 'manual'
-      })
-    });
+    try {
+      console.log('嘗試使用 Cloudflare Workers API:', primaryApiUrl);
+      
+      const response = await fetch(primaryApiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          forceFullSync: true, // 強制完整同步
+          dryRun: options.dryRun || false,
+          syncOrders: true,
+          syncCustomers: true,
+          triggerType: 'manual'
+        })
+      });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || `API 請求失敗: ${response.status}`);
-    }
-
-    const result = await response.json();
-    
-    // 轉換 API 回應格式為 MigrationResult
-    return {
-      success: result.success,
-      message: result.message || '同步完成',
-      stats: {
-        ordersProcessed: result.stats?.ordersProcessed || 0,
-        customersProcessed: result.stats?.customersProcessed || 0,
-        productsProcessed: result.stats?.productsProcessed || 0,
-        errors: result.stats?.errors || []
+      if (response.ok) {
+        const result = await response.json();
+        
+        // 轉換 API 回應格式為 MigrationResult
+        return {
+          success: result.success,
+          message: result.message || '同步完成',
+          stats: {
+            ordersProcessed: result.stats?.ordersProcessed || 0,
+            customersProcessed: result.stats?.customersProcessed || 0,
+            productsProcessed: result.stats?.productsProcessed || 0,
+            errors: result.stats?.errors || []
+          }
+        };
+      } else {
+        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+        
+        // 如果是環境變數問題，直接使用備用方案
+        if (errorData.error && errorData.error.includes('環境變數')) {
+          throw new Error(`Workers API 環境變數問題: ${errorData.error}`);
+        }
+        
+        throw new Error(errorData.message || `API 請求失敗: ${response.status}`);
       }
-    };
+    } catch (workerError: any) {
+      console.warn('Cloudflare Workers API 失敗，嘗試備用 Supabase Edge Function:', workerError.message);
+      
+      // 嘗試備用的 Supabase Edge Function
+      const fallbackApiUrl = 'https://skcdapfynyszxyqqsvib.supabase.co/functions/v1/migrate-sheets-data';
+      
+      try {
+        console.log('使用備用 Supabase Edge Function:', fallbackApiUrl);
+        
+        const fallbackResponse = await fetch(fallbackApiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer YOUR_ANON_KEY' // 如果需要的話
+          },
+          body: JSON.stringify({
+            sheetId: options.sheetId,
+            dryRun: options.dryRun || false,
+            skipExisting: options.skipExisting || true
+          })
+        });
+
+        if (fallbackResponse.ok) {
+          const fallbackResult = await fallbackResponse.json();
+          return fallbackResult as MigrationResult;
+        } else {
+          const fallbackErrorData = await fallbackResponse.json().catch(() => ({}));
+          throw new Error(fallbackErrorData.message || `備用 API 請求失敗: ${fallbackResponse.status}`);
+        }
+      } catch (fallbackError: any) {
+        console.error('備用 API 也失敗:', fallbackError.message);
+        // 如果所有 API 都失敗，拋出原始錯誤
+        throw workerError;
+      }
+    }
   } catch (error: any) {
+    console.error('資料遷移失敗:', error);
     throw new Error(`資料遷移失敗: ${error.message}`);
   }
 }
