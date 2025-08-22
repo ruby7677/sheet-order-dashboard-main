@@ -20,12 +20,11 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getDataSource, setDataSourceAndNotify, subscribeDataSourceChange } from '@/services/orderService';
-import { useNavigate } from 'react-router-dom';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 
 interface ModernSidebarProps {
-  pageMode: 'orders' | 'customers' | 'migration';
-  onPageModeChange: (mode: 'orders' | 'customers' | 'migration') => void;
+  pageMode: 'orders' | 'customers' | 'migration' | 'products';
+  onPageModeChange: (mode: 'orders' | 'customers' | 'migration' | 'products') => void;
   orderStats?: {
     total: number;
     pending: number;
@@ -48,7 +47,6 @@ const ModernSidebar: React.FC<ModernSidebarProps> = ({
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [currentSource, setCurrentSource] = useState(getDataSource());
-  const navigate = useNavigate();
 
   // 監聽資料來源變更
   React.useEffect(() => {
@@ -93,7 +91,7 @@ const ModernSidebar: React.FC<ModernSidebarProps> = ({
       badge: 0,
       subBadge: 0,
       description: '管理商品資料',
-      onClick: () => navigate('/products')
+      onClick: () => onPageModeChange('products')
     }
   ];
 
