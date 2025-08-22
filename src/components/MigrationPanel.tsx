@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -8,7 +8,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { CheckCircle, AlertCircle, Download, Upload, Trash2 } from "lucide-react";
+import { CheckCircle, AlertCircle, Download, Upload, Trash2, Clock, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { migrateGoogleSheetsData, validateMigrationData, clearExistingData, type MigrationResult } from "@/services/migrationService";
 
@@ -20,6 +20,77 @@ export function MigrationPanel() {
   const [progress, setProgress] = useState(0);
   const [migrationResult, setMigrationResult] = useState<MigrationResult | null>(null);
   const [validationData, setValidationData] = useState<any>(null);
+  const [autoSyncStatus, setAutoSyncStatus] = useState<any>(null);
+  const [isAutoSyncEnabled, setIsAutoSyncEnabled] = useState(false);
+
+  // 獲取自動同步狀態
+  const fetchAutoSyncStatus = async () => {
+    try {
+      const response = await fetch('/api/sync/status');
+      if (response.ok) {
+        const data = await response.json();
+        setAutoSyncStatus(data.data);
+      }
+    } catch (error) {
+      console.error('獲取自動同步狀態失敗:', error);
+    }
+  };
+
+  // 觸發自動同步
+  const handleAutoSync = async () => {
+    setIsLoading(true);
+    setProgress(0);
+    
+    try {
+      const progressInterval = setInterval(() => {
+        setProgress(prev => Math.min(prev + 10, 90));
+      }, 500);
+
+      const response = await fetch('/api/sync/auto', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          forceFullSync: false,
+          dryRun: false,
+          syncOrders: true,
+          syncCustomers: true,
+          triggerType: 'manual'
+        })
+      });
+
+      clearInterval(progressInterval);
+      setProgress(100);
+
+      if (response.ok) {
+        const result = await response.json();
+        setMigrationResult(result);
+        toast.success('自動同步完成');
+        
+        // 更新同步狀態
+        await fetchAutoSyncStatus();
+        
+        // 驗證資料
+        const validation = await validateMigrationData();
+        setValidationData(validation);
+      } else {
+        const error = await response.json();
+        toast.error(error.message || '自動同步失敗');
+      }
+    } catch (error) {
+      setProgress(0);
+      toast.error('自動同步失敗');
+      console.error('自動同步錯誤:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // 組件載入時獲取狀態
+  useEffect(() => {
+    fetchAutoSyncStatus();
+  }, []);
 
   const handleMigration = async () => {
     if (!sheetId.trim()) {
@@ -102,6 +173,54 @@ export function MigrationPanel() {
 
   return (
     <div className="space-y-6">
+      {autoSyncStatus && (
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Clock className="h-5 w-5" />
+              自動同步狀態
+            </CardTitle>
+            <CardDescription>
+              系統會每 2 小時自動同步 Google Sheets 資料到 Supabase
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">最後同步時間</p>
+                <p className="text-sm text-muted-foreground">
+                  {autoSyncStatus.lastSyncTime 
+                    ? new Date(autoSyncStatus.lastSyncTime).toLocaleString('zh-TW')
+                    : '尚未同步'
+                  }
+                </p>
+              </div>
+              <Badge variant={autoSyncStatus.lastSyncStatus === 'completed' ? 'default' : 'destructive'}>
+                {autoSyncStatus.lastSyncStatus === 'completed' ? '正常' : '異常'}
+              </Badge>
+            </div>
+            
+            <div className="flex gap-2">
+              <Button 
+                onClick={handleAutoSync}
+                disabled={isLoading}
+                className="flex items-center gap-2"
+              >
+                <Zap className="h-4 w-4" />
+                {isLoading ? '同步中...' : '立即同步'}
+              </Button>
+              <Button 
+                variant="outline"
+                onClick={fetchAutoSyncStatus}
+                disabled={isLoading}
+              >
+                更新狀態
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
