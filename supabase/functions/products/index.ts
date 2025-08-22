@@ -18,7 +18,10 @@ interface JwtPayload {
 
 async function verifyJWT(token: string): Promise<JwtPayload | null> {
   try {
-    const secret = Deno.env.get('JWT_SECRET') || 'your-secret-key-change-in-production';
+    const secret = Deno.env.get('JWT_SECRET');
+    if (!secret) {
+      throw new Error('JWT_SECRET environment variable is required');
+    }
     const [headerB64, payloadB64, signatureB64] = token.split('.');
     if (!headerB64 || !payloadB64 || !signatureB64) {return null}
 

@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import SecureStorage from '@/utils/secureStorage';
 
 class SecureApiService {
   // 兩段式後端：優先 Workers /api，其次 Supabase Edge Functions
@@ -16,7 +17,7 @@ class SecureApiService {
   })();
   
   private getAuthToken(): string | null {
-    return localStorage.getItem('admin_token');
+    return SecureStorage.getItem('admin_token');
   }
 
   private async makeSecureRequest(endpoint: string, options: RequestInit = {}): Promise<Response> {
@@ -31,8 +32,8 @@ class SecureApiService {
       try {
         const response = await fetch(`${base}/${endpoint}`, { ...options, headers });
         if (response.status === 401) {
-          localStorage.removeItem('admin_token');
-          localStorage.removeItem('admin_user');
+          SecureStorage.removeItem('admin_token');
+          SecureStorage.removeItem('admin_user');
           window.location.href = '/admin';
           throw new Error('會話已過期，請重新登入');
         }
