@@ -95,25 +95,33 @@ const OrderList: React.FC<OrderListProps> = ({ filters, onOrderClick, onOrdersCh
         clearOrderCache();
       }
       const data = await fetchOrders(filters, { forceRefresh: force });
-      setAllOrders(data); // 儲存所有訂單
-      setTotalPages(Math.ceil(data.length / itemsPerPage)); // 計算總頁數
+
+      // 依訂單編號排序（自然排序，確保 ORD-2 < ORD-10）
+      const sortedData = [...data].sort((a, b) => {
+        const aNum = String(a.orderNumber || '');
+        const bNum = String(b.orderNumber || '');
+        return aNum.localeCompare(bNum, undefined, { numeric: true, sensitivity: 'base' });
+      });
+
+      setAllOrders(sortedData); // 儲存所有訂單（已排序）
+      setTotalPages(Math.ceil(sortedData.length / itemsPerPage)); // 計算總頁數
 
       // 決定當前頁面
       // 如果當前頁碼大於新的總頁數，則設為最後一頁
-      const newCurrentPage = currentPage > Math.ceil(data.length / itemsPerPage)
-        ? Math.ceil(data.length / itemsPerPage) || 1
+      const newCurrentPage = currentPage > Math.ceil(sortedData.length / itemsPerPage)
+        ? Math.ceil(sortedData.length / itemsPerPage) || 1
         : currentPage;
 
       setCurrentPage(newCurrentPage);
 
       // 顯示當前頁的資料
       const startIndex = (newCurrentPage - 1) * itemsPerPage;
-      const endIndex = Math.min(startIndex + itemsPerPage, data.length);
-      setOrders(data.slice(startIndex, endIndex));
+      const endIndex = Math.min(startIndex + itemsPerPage, sortedData.length);
+      setOrders(sortedData.slice(startIndex, endIndex));
 
       // 保留已選中但仍然存在於新資料中的訂單IDs
       if (selected.length > 0) {
-        const existingIds = data.map(order => order.id);
+        const existingIds = sortedData.map(order => order.id);
         const stillExistingSelectedIds = selected.filter(id => existingIds.includes(id));
         onSelectedChange(stillExistingSelectedIds);
       }
