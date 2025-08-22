@@ -47,7 +47,7 @@ class SecureApiService {
     throw new Error(lastErr?.message || '後端服務不可用');
   }
 
-  async migrateGoogleSheetsData(sheetId: string, options: { dryRun?: boolean; skipExisting?: boolean } = {}) {
+  async migrateGoogleSheetsData(sheetId: string, options: { dryRun?: boolean; skipExisting?: boolean; strategy?: 'auto' | 'replace' | 'upsert'; replaceWindowDays?: number } = {}) {
     try {
       // 檢查和清理 sheetId
       if (!sheetId || typeof sheetId !== 'string') {
@@ -74,6 +74,8 @@ class SecureApiService {
         sheetId: cleanSheetId,
         dryRun: Boolean(options.dryRun),
         skipExisting: Boolean(options.skipExisting),
+        strategy: (options.strategy || 'auto'),
+        replaceWindowDays: typeof options.replaceWindowDays === 'number' ? options.replaceWindowDays : 21,
       };
 
       console.log('發送遷移請求:', requestBody);

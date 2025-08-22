@@ -1,3 +1,4 @@
+// @ts-nocheck
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
@@ -11,6 +12,10 @@ interface MigrationRequest {
   sheetId: string;
   dryRun?: boolean;
   skipExisting?: boolean;
+  // 遷移策略：auto（預設）| replace | upsert
+  strategy?: 'auto' | 'replace' | 'upsert';
+  // 近窗期天數（用於 auto/replace 刪除範圍），預設 21 天
+  replaceWindowDays?: number;
 }
 
 interface MigrationResult {
@@ -21,6 +26,7 @@ interface MigrationResult {
     customersProcessed: number;
     productsProcessed: number;
     ordersDeleted?: number;
+    replaceStrategyApplied?: 'auto' | 'replace' | 'upsert' | 'skipped';
     errors: string[];
   };
 }
@@ -488,6 +494,67 @@ async function migrateOrders(supabase: any, ordersData: any[][], dryRun: boolean
   return { processed, itemsProcessed, errors, deleted };
 }
 
+// 於寫入前，視策略決定是否先清空「近窗期」由 Sheets 匯入的舊訂單
+async function maybeReplaceRecentOrders(
+  supabase: any,
+  ordersData: any[][],
+  options: { dryRun: boolean; strategy: 'auto' | 'replace' | 'upsert' | undefined; replaceWindowDays: number | undefined }
+) {
+  const dryRun = options.dryRun === true;
+  const strategy = options.strategy || 'auto';
+  const windowDays = typeof options.replaceWindowDays === 'number' && options.replaceWindowDays > 0 ? options.replaceWindowDays : 21;
+
+  // 非 replace/auto 直接跳過
+  if (strategy === 'upsert') {return { deleted: 0, applied: 'skipped' as const, errors: [] as string[] };}
+
+  const rows = ordersData.slice(1);
+  const sheetPhones = new Set<string>();
+  for (let i = 0; i < rows.length; i++) {
+    const phone = normalizePhone((rows[i][2] ?? '').toString().trim());
+    if (phone) { sheetPhones.add(phone); }
+  }
+
+  const threshold = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000);
+  const thresholdStr = threshold.toISOString().split('T')[0];
+
+  // 近窗期 DB 訂單
+  const { data: recentOrders, error: recentErr } = await supabase
+    .from('orders')
+    .select('id, customer_phone, due_date, google_sheet_id')
+    .gte('due_date', thresholdStr);
+  if (recentErr) {
+    return { deleted: 0, applied: 'skipped' as const, errors: [`讀取近窗期訂單失敗: ${recentErr.message}`] };
+  }
+
+  const dbPhones = new Set<string>((recentOrders || []).map((o: any) => normalizePhone(o.customer_phone || '')));
+  const hasIntersection = (() => {
+    for (const p of sheetPhones) { if (dbPhones.has(p)) { return true; } }
+    return false;
+  })();
+
+  const shouldReplace = strategy === 'replace' || (strategy === 'auto' && !hasIntersection);
+  if (!shouldReplace) { return { deleted: 0, applied: strategy as 'auto' | 'replace' | 'upsert', errors: [] as string[] }; }
+
+  // 僅刪除近窗期且為由 Sheets 匯入（具有 google_sheet_id）的訂單
+  const toDeleteIds = (recentOrders || [])
+    .filter((o: any) => o.google_sheet_id !== null && o.google_sheet_id !== undefined)
+    .map((o: any) => o.id);
+
+  if (toDeleteIds.length === 0) { return { deleted: 0, applied: 'replace' as const, errors: [] as string[] }; }
+
+  if (dryRun) {
+    return { deleted: toDeleteIds.length, applied: 'replace' as const, errors: [] as string[] };
+  }
+
+  const { error: itemsErr } = await supabase.from('order_items').delete().in('order_id', toDeleteIds);
+  if (itemsErr) { return { deleted: 0, applied: 'replace' as const, errors: [`刪除 order_items 失敗: ${itemsErr.message}`] }; }
+
+  const { error: ordersErr } = await supabase.from('orders').delete().in('id', toDeleteIds);
+  if (ordersErr) { return { deleted: 0, applied: 'replace' as const, errors: [`刪除 orders 失敗: ${ordersErr.message}`] }; }
+
+  return { deleted: toDeleteIds.length, applied: 'replace' as const, errors: [] as string[] };
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -514,7 +581,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { sheetId, dryRun = false, skipExisting = true }: MigrationRequest = await req.json();
+    const { sheetId, dryRun = false, skipExisting = true, strategy = 'auto', replaceWindowDays = 21 }: MigrationRequest = await req.json();
 
     if (!sheetId) {
       return new Response(
@@ -543,13 +610,16 @@ Deno.serve(async (req) => {
 
     console.log(`讀取到 ${ordersData.length} 行訂單資料；${customersData.length} 行客戶資料`);
 
+    // 規劃前置替換（auto/replace）
+    const replaceResult = await maybeReplaceRecentOrders(supabase, ordersData, { dryRun, strategy, replaceWindowDays });
+
     // 執行遷移
     const [ordersResult, customersResult] = await Promise.all([
       migrateOrders(supabase, ordersData, dryRun, skipExisting),
       migrateCustomers(supabase, customersData, dryRun, skipExisting)
     ]);
 
-    const allErrors = [...ordersResult.errors, ...customersResult.errors];
+    const allErrors = [...(replaceResult.errors || []), ...ordersResult.errors, ...customersResult.errors];
 
     const result: MigrationResult = {
       success: allErrors.length === 0,
@@ -558,7 +628,8 @@ Deno.serve(async (req) => {
         ordersProcessed: ordersResult.processed,
         customersProcessed: customersResult.processed,
         productsProcessed: ordersResult.itemsProcessed,
-        ordersDeleted: ordersResult.deleted || 0,
+        ordersDeleted: (ordersResult.deleted || 0) + (replaceResult.deleted || 0),
+        replaceStrategyApplied: (replaceResult.applied as any) || (strategy as any),
         errors: allErrors
       }
     };
