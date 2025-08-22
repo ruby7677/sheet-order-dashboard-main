@@ -4,7 +4,7 @@
  */
 
 class SecureStorage {
-  private static encryptionKey = 'lovable-admin-key-2025'; // 簡單的混淆密鑰
+  private static encryptionKey = 'lovable-admin-secure-2025-v2'; // 強化的混淆密鑰
 
   // 簡單的字符串加密（XOR）
   private static encrypt(text: string): string {
