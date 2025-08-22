@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import SecureStorage from '@/utils/secureStorage';
 
 interface User {
   id: string;
@@ -37,8 +38,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const storedToken = localStorage.getItem('admin_token');
-    const storedUser = localStorage.getItem('admin_user');
+    const storedToken = SecureStorage.getItem('admin_token');
+    const storedUser = SecureStorage.getItem('admin_user');
     
     if (storedToken && storedUser) {
       try {
@@ -47,13 +48,13 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           setToken(storedToken);
           setUser(userData);
         } else {
-          localStorage.removeItem('admin_token');
-          localStorage.removeItem('admin_user');
+          SecureStorage.removeItem('admin_token');
+          SecureStorage.removeItem('admin_user');
         }
       } catch (error) {
         console.error('解析用戶資料失敗:', error);
-        localStorage.removeItem('admin_token');
-        localStorage.removeItem('admin_user');
+        SecureStorage.removeItem('admin_token');
+        SecureStorage.removeItem('admin_user');
       }
     }
     
@@ -62,11 +63,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const login = async (username: string, password: string): Promise<{ success: boolean; message?: string }> => {
     try {
-      const response = await fetch('https://skcdapfynyszxyqqsvib.supabase.co/functions/v1/admin-login', {
+      const response = await fetch('https://skcdapfynyszxyqqsvib.supabase.co/functions/v1/admin-auth', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNrY2RhcGZ5bnlzenh5cXFzdmliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ5NzQzMzQsImV4cCI6MjA3MDU1MDMzNH0.BilWvEh4djyQAYb5QWkuiju9teOVHlmk9zG0JVgMZbQ`
         },
         body: JSON.stringify({ username, password })
       });
@@ -76,8 +76,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       if (result.success && result.token && result.user) {
         setToken(result.token);
         setUser(result.user);
-        localStorage.setItem('admin_token', result.token);
-        localStorage.setItem('admin_user', JSON.stringify(result.user));
+        SecureStorage.setItem('admin_token', result.token);
+        SecureStorage.setItem('admin_user', JSON.stringify(result.user));
         return { success: true };
       } else {
         return { success: false, message: result.message || '登入失敗' };
@@ -91,8 +91,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const logout = () => {
     setUser(null);
     setToken(null);
-    localStorage.removeItem('admin_token');
-    localStorage.removeItem('admin_user');
+    SecureStorage.removeItem('admin_token');
+    SecureStorage.removeItem('admin_user');
   };
 
   const isAuthenticated = !!user && !!token;
