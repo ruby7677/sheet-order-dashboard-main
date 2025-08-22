@@ -37,11 +37,7 @@ const App = () => (
           <BrowserRouter>
             <Routes>
               <Route path="/" element={<Index />} />
-              <Route path="/products" element={
-                <ProtectedRoute>
-                  <ProductManagementPage />
-                </ProtectedRoute>
-              } />
+              <Route path="/products" element={<ProductManagementPage />} />
               {AdminRoutes.map((route, idx) => (
                 <Route key={idx} path={route.path} element={route.element} />
               ))}
