@@ -23,10 +23,24 @@ export function MigrationPanel() {
   const [autoSyncStatus, setAutoSyncStatus] = useState<any>(null);
   const [isAutoSyncEnabled, setIsAutoSyncEnabled] = useState(false);
 
+  // 取得 API 基礎 URL
+  const getApiBaseUrl = () => {
+    try {
+      const isLocal = typeof window !== 'undefined' && 
+                     (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+      return isLocal 
+        ? 'http://127.0.0.1:5714/api' 
+        : 'https://sheet-order-api.ruby7677.workers.dev/api';
+    } catch {
+      return 'https://sheet-order-api.ruby7677.workers.dev/api';
+    }
+  };
+
   // 獲取自動同步狀態
   const fetchAutoSyncStatus = async () => {
     try {
-      const response = await fetch('/api/sync/status');
+      const apiUrl = `${getApiBaseUrl()}/sync/status`;
+      const response = await fetch(apiUrl);
       if (response.ok) {
         const data = await response.json();
         setAutoSyncStatus(data.data);
@@ -46,7 +60,8 @@ export function MigrationPanel() {
         setProgress(prev => Math.min(prev + 10, 90));
       }, 500);
 
-      const response = await fetch('/api/sync/auto', {
+      const apiUrl = `${getApiBaseUrl()}/sync/auto`;
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

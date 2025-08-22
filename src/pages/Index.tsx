@@ -13,6 +13,7 @@ import ModernSidebar from '@/components/ModernSidebar';
 import ScrollToTopButton from '@/components/ScrollToTopButton';
 import DuplicateOrdersDialog from '@/components/DuplicateOrdersDialog';
 import { MigrationPanel } from '@/components/MigrationPanel';
+import { ProductManagement } from '@/components/ProductManagement';
 import { Order, PaymentStatus, OrderItem } from '@/types/order';
 import { CustomerWithStats } from '../types/customer';
 import { FilterCriteria } from '../types/filters';
@@ -30,10 +31,10 @@ const Index: React.FC = () => {
   const [isInIframe, setIsInIframe] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
 
-  // 頁面模式：'orders' 或 'customers' 或 'migration'
-  const [pageMode, setPageMode] = useState<'orders' | 'customers' | 'migration'>(() => {
+  // 頁面模式：'orders' 或 'customers' 或 'migration' 或 'products'
+  const [pageMode, setPageMode] = useState<'orders' | 'customers' | 'migration' | 'products'>(() => {
     const mode = searchParams.get('mode');
-    if (mode === 'migration' || mode === 'customers' || mode === 'orders') {
+    if (mode === 'migration' || mode === 'customers' || mode === 'orders' || mode === 'products') {
       return mode;
     }
     return 'orders';
@@ -294,7 +295,7 @@ const Index: React.FC = () => {
   };
 
   // 處理頁面模式變更並同步到 URL
-  const handlePageModeChange = (mode: 'orders' | 'customers' | 'migration') => {
+  const handlePageModeChange = (mode: 'orders' | 'customers' | 'migration' | 'products') => {
     setPageMode(mode);
     // 更新 URL 查詢參數
     const newSearchParams = new URLSearchParams(searchParams);
@@ -452,7 +453,9 @@ const Index: React.FC = () => {
             <div className="px-4 lg:px-6 pl-14 lg:pl-6 py-3 flex justify-between items-center">
               <div className="flex items-center gap-3">
                 <h1 className="text-xl font-bold text-foreground">
-                  {pageMode === 'orders' ? '訂單管理' : pageMode === 'customers' ? '客戶資料' : '資料遷移'}
+                  {pageMode === 'orders' ? '訂單管理' : 
+                   pageMode === 'customers' ? '客戶資料' : 
+                   pageMode === 'migration' ? '資料遷移' : '商品管理'}
                 </h1>
                 <div className="text-sm text-muted-foreground hidden sm:block">
                   蘿蔔糕訂單系統 - 管理後台
@@ -595,6 +598,13 @@ const Index: React.FC = () => {
         {pageMode === 'migration' && (
           <div className="max-w-4xl mx-auto">
             <MigrationPanel />
+          </div>
+        )}
+
+        {/* 商品管理頁面 */}
+        {pageMode === 'products' && (
+          <div className="max-w-6xl mx-auto">
+            <ProductManagement />
           </div>
         )}
         </main>

@@ -8,7 +8,6 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-route
 import { AuthProvider, useAuth } from "./components/AuthProvider";
 import ErrorBoundary from "./components/ErrorBoundary";
 import Index from "./pages/Index";
-import ProductManagementPage from "./pages/ProductManagementPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -37,11 +36,6 @@ const App = () => (
           <BrowserRouter>
             <Routes>
               <Route path="/" element={<Index />} />
-              <Route path="/products" element={
-                <ProtectedRoute>
-                  <ProductManagementPage />
-                </ProtectedRoute>
-              } />
               {AdminRoutes.map((route, idx) => (
                 <Route key={idx} path={route.path} element={route.element} />
               ))}

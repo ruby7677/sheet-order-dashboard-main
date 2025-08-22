@@ -1,5 +1,4 @@
 import { supabase } from "@/integrations/supabase/client";
-import SecureApiService from './secureApiService';
 
 export interface MigrationOptions {
   sheetId: string;
@@ -21,22 +20,75 @@ export interface MigrationResult {
 }
 
 /**
+ * 取得 API 基礎 URL
+ */
+function getApiBaseUrl(): string {
+  try {
+    const isLocal = typeof window !== 'undefined' && 
+                   (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+    return isLocal 
+      ? 'http://127.0.0.1:5714/api' 
+      : 'https://sheet-order-api.ruby7677.workers.dev/api';
+  } catch {
+    return 'https://sheet-order-api.ruby7677.workers.dev/api';
+  }
+}
+
+/**
+ * 驗證 Google Sheets ID 格式
+ */
+function validateSheetId(sheetId: string): boolean {
+  // Google Sheets ID 格式驗證
+  const sheetIdRegex = /^[a-zA-Z0-9-_]{44}$/;
+  return sheetIdRegex.test(sheetId);
+}
+
+/**
  * 執行 Google Sheets 到 Supabase 的資料遷移
+ * 使用公開的自動同步 API，不需要認證
  */
 export async function migrateGoogleSheetsData(options: MigrationOptions): Promise<MigrationResult> {
   try {
     // 驗證 Sheet ID 格式
-    if (!SecureApiService.validateSheetId(options.sheetId)) {
+    if (!validateSheetId(options.sheetId)) {
       throw new Error('無效的 Google Sheets ID 格式');
     }
 
-    const apiService = new SecureApiService();
-    const result = await apiService.migrateGoogleSheetsData(options.sheetId, {
-      dryRun: options.dryRun || false,
-      skipExisting: options.skipExisting || true
-    });
+    const apiUrl = `${getApiBaseUrl()}/sync/auto`;
     
-    return result as MigrationResult;
+    // 調用自動同步 API（公開的，不需要認證）
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        forceFullSync: true, // 強制完整同步
+        dryRun: options.dryRun || false,
+        syncOrders: true,
+        syncCustomers: true,
+        triggerType: 'manual'
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `API 請求失敗: ${response.status}`);
+    }
+
+    const result = await response.json();
+    
+    // 轉換 API 回應格式為 MigrationResult
+    return {
+      success: result.success,
+      message: result.message || '同步完成',
+      stats: {
+        ordersProcessed: result.stats?.ordersProcessed || 0,
+        customersProcessed: result.stats?.customersProcessed || 0,
+        productsProcessed: result.stats?.productsProcessed || 0,
+        errors: result.stats?.errors || []
+      }
+    };
   } catch (error: any) {
     throw new Error(`資料遷移失敗: ${error.message}`);
   }
