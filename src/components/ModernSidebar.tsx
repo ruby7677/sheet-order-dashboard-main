@@ -25,6 +25,7 @@ import { Sheet, SheetContent } from '@/components/ui/sheet';
 interface ModernSidebarProps {
   pageMode: 'orders' | 'customers' | 'migration';
   onPageModeChange: (mode: 'orders' | 'customers' | 'migration') => void;
+  onProductsNavigation?: () => void;
   orderStats?: {
     total: number;
     pending: number;
@@ -40,6 +41,7 @@ interface ModernSidebarProps {
 const ModernSidebar: React.FC<ModernSidebarProps> = ({
   pageMode,
   onPageModeChange,
+  onProductsNavigation,
   orderStats,
   customerStats,
   className
@@ -47,7 +49,6 @@ const ModernSidebar: React.FC<ModernSidebarProps> = ({
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [currentSource, setCurrentSource] = useState(getDataSource());
-  const navigate = useNavigate();
 
   // 監聽資料來源變更
   React.useEffect(() => {
@@ -83,7 +84,7 @@ const ModernSidebar: React.FC<ModernSidebarProps> = ({
       badge: 0,
       subBadge: 0,
       description: '管理商品資料',
-      onClick: () => navigate('/products')
+      onClick: () => onProductsNavigation?.()
     },
     {
       id: 'migration' as const,

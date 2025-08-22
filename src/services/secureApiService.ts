@@ -49,8 +49,18 @@ class SecureApiService {
 
   async migrateGoogleSheetsData(sheetId: string, options: { dryRun?: boolean; skipExisting?: boolean } = {}) {
     try {
-      const response = await this.makeSecureRequest('migrate-sheets-data', {
+      // 直接使用 Supabase Edge Function
+      const token = this.getAuthToken();
+      if (!token) {
+        throw new Error('未登入，無法執行資料遷移');
+      }
+
+      const response = await fetch('https://skcdapfynyszxyqqsvib.supabase.co/functions/v1/migrate-sheets-data', {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
         body: JSON.stringify({
           sheetId,
           dryRun: options.dryRun || false,
@@ -58,10 +68,17 @@ class SecureApiService {
         }),
       });
 
+      if (response.status === 401) {
+        SecureStorage.removeItem('admin_token');
+        SecureStorage.removeItem('admin_user');
+        window.location.href = '/admin';
+        throw new Error('會話已過期，請重新登入');
+      }
+
       const result = await response.json();
       
       if (!response.ok) {
-        throw new Error(result.message || '遷移失敗');
+        throw new Error(result.message || result.error || '遷移失敗');
       }
 
       return result;
