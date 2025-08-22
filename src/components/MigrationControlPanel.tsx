@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { CheckCircle, AlertCircle, Upload, Database, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { migrateGoogleSheetsData, validateMigrationData, clearExistingData, type MigrationResult } from "@/services/migrationService";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface MigrationControlPanelProps {
   className?: string;
@@ -23,6 +24,8 @@ export function MigrationControlPanel({ className }: MigrationControlPanelProps)
   const [progress, setProgress] = useState(0);
   const [migrationResult, setMigrationResult] = useState<MigrationResult | null>(null);
   const [validationData, setValidationData] = useState<any>(null);
+  const [strategy, setStrategy] = useState<'auto' | 'replace' | 'upsert'>('auto');
+  const [replaceWindowDays, setReplaceWindowDays] = useState<number>(21);
 
   const handleMigration = async () => {
     if (!sheetId.trim()) {
@@ -43,7 +46,9 @@ export function MigrationControlPanel({ className }: MigrationControlPanelProps)
       const result = await migrateGoogleSheetsData({
         sheetId: sheetId.trim(),
         dryRun,
-        skipExisting
+        skipExisting,
+        strategy,
+        replaceWindowDays
       });
 
       clearInterval(progressInterval);
@@ -167,6 +172,39 @@ export function MigrationControlPanel({ className }: MigrationControlPanelProps)
               <Progress value={progress} />
             </div>
           )}
+
+          {/* 遷移策略與近窗期 */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <Label className="text-sm">遷移策略</Label>
+              <Select value={strategy} onValueChange={(v: any) => setStrategy(v)}>
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder="選擇策略" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">auto（無交集才清空近窗期）</SelectItem>
+                  <SelectItem value="replace">replace（先清空近窗期再寫入）</SelectItem>
+                  <SelectItem value="upsert">upsert（僅寫入不清空）</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">一般建議使用 auto；每檔期全重置用 replace。</p>
+            </div>
+
+            <div className="space-y-1">
+              <Label htmlFor="replaceDays" className="text-sm">近窗期（天）</Label>
+              <Input
+                id="replaceDays"
+                type="number"
+                min={7}
+                max={60}
+                value={replaceWindowDays}
+                onChange={(e) => setReplaceWindowDays(Math.max(7, Math.min(60, Number(e.target.value))))}
+                disabled={isLoading || strategy === 'upsert'}
+                className="h-9"
+              />
+              <p className="text-xs text-muted-foreground">用於 auto/replace 的清空範圍，預設 21。</p>
+            </div>
+          </div>
 
           <div className="flex gap-2">
             <Button 
