@@ -22,8 +22,8 @@ import { getDataSource, setDataSourceAndNotify, subscribeDataSourceChange } from
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 
 interface ModernSidebarProps {
-  pageMode: 'orders' | 'customers' | 'migration';
-  onPageModeChange: (mode: 'orders' | 'customers' | 'migration') => void;
+  pageMode: 'orders' | 'customers' | 'migration' | 'products';
+  onPageModeChange: (mode: 'orders' | 'customers' | 'migration' | 'products') => void;
   orderStats?: {
     total: number;
     pending: number;
@@ -81,10 +81,7 @@ const ModernSidebar: React.FC<ModernSidebarProps> = ({
       badge: 0,
       subBadge: 0,
       description: '管理商品資料',
-      onClick: () => {
-        // 這裡可以添加商品管理的邏輯
-        console.log('商品管理功能開發中');
-      }
+      onClick: () => onPageModeChange('products')
     },
     {
       id: 'migration' as const,
