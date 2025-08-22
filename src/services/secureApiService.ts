@@ -78,14 +78,34 @@ class SecureApiService {
 
       console.log('發送遷移請求:', requestBody);
 
-      const response = await fetch('https://skcdapfynyszxyqqsvib.supabase.co/functions/v1/migrate-sheets-data', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token.trim()}`,
-        },
-        body: JSON.stringify(requestBody),
-      });
+      // 驗證與構造授權標頭，避免 fetch 因無效字元拋出 "Invalid value"
+      const bearer = `Bearer ${token.trim()}`
+      const jwtLike = /^Bearer\s+[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+$/
+      if (!jwtLike.test(bearer)) {
+        throw new Error('授權令牌格式錯誤，請重新登入後再試')
+      }
+      const headers = new Headers({
+        'Content-Type': 'application/json',
+        'Authorization': bearer,
+      })
+
+      let response: Response
+      try {
+        response = await fetch('https://skcdapfynyszxyqqsvib.supabase.co/functions/v1/migrate-sheets-data', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(requestBody),
+        })
+      } catch (e: any) {
+        // 若瀏覽器因 headers 值或其他初始化問題導致失敗，改用後端代理端點再試一次
+        const fallbackBody = JSON.stringify(requestBody)
+        const res = await this.makeSecureRequest('migrate-sheets-data', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': bearer },
+          body: fallbackBody,
+        })
+        response = res
+      }
 
       console.log('遷移回應狀態:', response.status);
 
@@ -106,7 +126,10 @@ class SecureApiService {
       return result;
     } catch (error) {
       console.error('Google Sheets 資料遷移錯誤:', error);
-      throw error;
+      // 附加診斷資訊，協助使用者快速定位
+      const extra = (msg: string) => `${msg} | 請嘗試重新登入、確認 Sheet ID 與網路，再重試`
+      if (error instanceof Error) { throw new Error(extra(error.message)) }
+      throw new Error(extra('未知錯誤'))
     }
   }
 
