@@ -58,17 +58,6 @@ class SecureApiService {
       if (!cleanSheetId) {
         throw new Error('Google Sheets ID 不能為空');
       }
-      
-      // 直接使用 Supabase Edge Function
-      const token = this.getAuthToken();
-      if (!token) {
-        throw new Error('未登入，無法執行資料遷移');
-      }
-
-      // 檢查 token 格式
-      if (typeof token !== 'string' || token.trim() === '') {
-        throw new Error('無效的授權令牌');
-      }
 
       const requestBody = {
         sheetId: cleanSheetId,
@@ -84,19 +73,11 @@ class SecureApiService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token.trim()}`,
         },
         body: JSON.stringify(requestBody),
       });
 
       console.log('遷移回應狀態:', response.status);
-
-      if (response.status === 401) {
-        SecureStorage.removeItem('admin_token');
-        SecureStorage.removeItem('admin_user');
-        window.location.href = '/admin';
-        throw new Error('會話已過期，請重新登入');
-      }
 
       const result = await response.json();
       console.log('遷移結果:', result);
