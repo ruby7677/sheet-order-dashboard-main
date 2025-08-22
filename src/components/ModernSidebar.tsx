@@ -15,7 +15,8 @@ import {
   Package,
   TrendingUp,
   Database,
-  ShoppingCart
+  ShoppingCart,
+  RefreshCw
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getDataSource, setDataSourceAndNotify, subscribeDataSourceChange } from '@/services/orderService';
@@ -23,8 +24,8 @@ import { useNavigate } from 'react-router-dom';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 
 interface ModernSidebarProps {
-  pageMode: 'orders' | 'customers';
-  onPageModeChange: (mode: 'orders' | 'customers') => void;
+  pageMode: 'orders' | 'customers' | 'migration';
+  onPageModeChange: (mode: 'orders' | 'customers' | 'migration') => void;
   orderStats?: {
     total: number;
     pending: number;
@@ -75,6 +76,15 @@ const ModernSidebar: React.FC<ModernSidebarProps> = ({
       subBadge: customerStats?.active || 0,
       description: '管理客戶資訊',
       onClick: () => onPageModeChange('customers')
+    },
+    {
+      id: 'migration' as const,
+      label: '資料遷移',
+      icon: RefreshCw,
+      badge: 0,
+      subBadge: 0,
+      description: '同步與遷移資料',
+      onClick: () => onPageModeChange('migration')
     },
     {
       id: 'products' as const,
@@ -139,7 +149,7 @@ const ModernSidebar: React.FC<ModernSidebarProps> = ({
                   <div className="flex-1 text-left">
                     <div className="flex items-center justify-between">
                       <span className="font-medium">{item.label}</span>
-                      {item.id !== 'products' && (
+                      {(item.id !== 'products' && item.id !== 'migration') && (
                         <div className="flex items-center gap-1">
                           {item.subBadge > 0 && (
                             <Badge 
