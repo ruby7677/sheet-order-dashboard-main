@@ -23,8 +23,8 @@ import { useNavigate } from 'react-router-dom';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 
 interface ModernSidebarProps {
-  pageMode: 'orders' | 'customers';
-  onPageModeChange: (mode: 'orders' | 'customers') => void;
+  pageMode: 'orders' | 'customers' | 'migration';
+  onPageModeChange: (mode: 'orders' | 'customers' | 'migration') => void;
   orderStats?: {
     total: number;
     pending: number;
@@ -84,6 +84,15 @@ const ModernSidebar: React.FC<ModernSidebarProps> = ({
       subBadge: 0,
       description: '管理商品資料',
       onClick: () => navigate('/products')
+    },
+    {
+      id: 'migration' as const,
+      label: '資料遷移',
+      icon: Database,
+      badge: 0,
+      subBadge: 0,
+      description: 'Google Sheets 同步',
+      onClick: () => onPageModeChange('migration')
     }
   ];
 
