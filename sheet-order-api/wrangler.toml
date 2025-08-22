@@ -1,0 +1,47 @@
+# Cloudflare Workers 配置文件
+name = "sheet-order-api"
+main = "src/index.ts"
+compatibility_date = "2024-08-22"
+
+# 環境變數 (生產環境)
+[env.production.vars]
+ENVIRONMENT = "production"
+CACHE_DURATION = "15"
+
+# KV 命名空間
+[[env.production.kv_namespaces]]
+binding = "CACHE_KV"
+id = "your-kv-namespace-id"  # 需要替換為實際的 KV namespace ID
+
+# CRON 觸發器 - 自動同步訂單資料
+[[env.production.triggers]]
+crons = ["0 */2 * * *"]  # 每2小時執行一次
+route = "/api/sync/auto"
+
+# 開發環境配置
+[env.development]
+
+[env.development.vars]
+ENVIRONMENT = "development"
+CACHE_DURATION = "5"
+
+[[env.development.kv_namespaces]]
+binding = "CACHE_KV"
+id = "your-dev-kv-namespace-id"  # 需要替換為實際的開發環境 KV namespace ID
+
+# 開發環境的 CRON 觸發器（測試用，每30分鐘執行）
+[[env.development.triggers]]
+crons = ["*/30 * * * *"]
+route = "/api/sync/auto"
+
+# Workers AI 模型（如果需要）
+[ai]
+binding = "AI"
+
+# 部署配置
+[build]
+command = "npm run build"
+
+# 兼容性標誌
+[compatibility_flags]
+nodejs_compat = true

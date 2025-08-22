@@ -462,4 +462,39 @@ export class GoogleSheetsService {
 	private delay(ms: number): Promise<void> {
 		return new Promise(resolve => setTimeout(resolve, ms));
 	}
+
+	/**
+	 * 獲取訂單資料（從 Sheet1）
+	 */
+	async getOrdersData(): Promise<any[][]> {
+		try {
+			console.log('📈 正在從 Google Sheets 讀取訂單資料...')
+			const data = await this.getSheetData('Sheet1')
+			console.log(`✅ 成功讀取 ${data.length} 列訂單資料`)
+			return data
+		} catch (error) {
+			console.error('❌ 讀取訂單資料失敗:', error)
+			throw error
+		}
+	}
+
+	/**
+	 * 獲取客戶資料（從 客戶名單）
+	 */
+	async getCustomersData(): Promise<any[][]> {
+		try {
+			console.log('📈 正在從 Google Sheets 讀取客戶資料...')
+			const data = await this.getSheetData('客戶名單')
+			console.log(`✅ 成功讀取 ${data.length} 列客戶資料`)
+			return data
+		} catch (error) {
+			console.error('❌ 讀取客戶資料失敗:', error)
+			// 客戶資料可能不存在，返回空陣列而不拋出錯誤
+			if (error instanceof ApiError && error.statusCode === 400) {
+				console.log('⚠️ 客戶名單工作表不存在，返回空資料')
+				return []
+			}
+			throw error
+		}
+	}
 }

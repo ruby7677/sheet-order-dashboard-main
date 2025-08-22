@@ -196,6 +196,176 @@ export class SupabaseService {
     }
   }
 
+  // 自動同步相關方法
+  
+  /**
+   * 根據電話號碼獲取客戶
+   */
+  async getCustomerByPhone(phone: string): Promise<CustomerRecord | null> {
+    const { data, error } = await this.client
+      .from('customers')
+      .select('*')
+      .eq('phone', phone)
+      .single()
+    
+    if (error) {
+      if (error.code === 'PGRST116') { // No rows returned
+        return null
+      }
+      throw new ApiError(500, `查詢客戶失敗: ${error.message}`, 'DB_QUERY_ERROR')
+    }
+    
+    return data as CustomerRecord
+  }
+
+  /**
+   * 更新或插入客戶資料
+   */
+  async upsertCustomer(customerData: Partial<CustomerRecord>): Promise<CustomerRecord> {
+    const { data, error } = await this.client
+      .from('customers')
+      .upsert(customerData, { onConflict: 'phone' })
+      .select()
+      .single()
+    
+    if (error) {
+      throw new ApiError(500, `更新客戶資料失敗: ${error.message}`, 'DB_UPSERT_ERROR')
+    }
+    
+    return data as CustomerRecord
+  }
+
+  /**
+   * 根據 Google Sheet ID 獲取訂單
+   */
+  async getOrderByGoogleSheetId(googleSheetId: number): Promise<OrderRecord | null> {
+    const { data, error } = await this.client
+      .from('orders')
+      .select('*')
+      .eq('google_sheet_id', googleSheetId)
+      .single()
+    
+    if (error) {
+      if (error.code === 'PGRST116') { // No rows returned
+        return null
+      }
+      throw new ApiError(500, `查詢訂單失敗: ${error.message}`, 'DB_QUERY_ERROR')
+    }
+    
+    return data as OrderRecord
+  }
+
+  /**
+   * 更新或插入訂單資料
+   */
+  async upsertOrder(orderData: Partial<OrderRecord & { google_sheet_id?: number }>): Promise<OrderRecord> {
+    const { data, error } = await this.client
+      .from('orders')
+      .upsert(orderData, { onConflict: 'google_sheet_id' })
+      .select()
+      .single()
+    
+    if (error) {
+      throw new ApiError(500, `更新訂單資料失敗: ${error.message}`, 'DB_UPSERT_ERROR')
+    }
+    
+    return data as OrderRecord
+  }
+
+  /**
+   * 刪除訂單項目
+   */
+  async deleteOrderItems(orderId: string): Promise<void> {
+    const { error } = await this.client
+      .from('order_items')
+      .delete()
+      .eq('order_id', orderId)
+    
+    if (error) {
+      throw new ApiError(500, `刪除訂單項目失敗: ${error.message}`, 'DB_DELETE_ERROR')
+    }
+  }
+
+  /**
+   * 插入訂單項目
+   */
+  async insertOrderItems(orderId: string, items: Array<{
+    product: string
+    quantity: number
+    price: number
+    subtotal: number
+  }>): Promise<void> {
+    const orderItems = items.map(item => ({
+      order_id: orderId,
+      product_name: item.product,
+      quantity: item.quantity,
+      unit_price: item.price,
+      total_price: item.subtotal
+    }))
+    
+    const { error } = await this.client
+      .from('order_items')
+      .insert(orderItems)
+    
+    if (error) {
+      throw new ApiError(500, `插入訂單項目失敗: ${error.message}`, 'DB_INSERT_ERROR')
+    }
+  }
+
+  /**
+   * 獲取最後同步時間
+   */
+  async getLastSyncTime(type: 'orders' | 'customers'): Promise<string | null> {
+    const { data, error } = await this.client
+      .from('sync_logs')
+      .select('created_at')
+      .eq('table_name', type)
+      .eq('sync_status', 'completed')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single()
+    
+    if (error) {
+      if (error.code === 'PGRST116') { // No rows returned
+        return null
+      }
+      console.warn('獲取最後同步時間失敗:', error)
+      return null
+    }
+    
+    return data?.created_at || null
+  }
+
+  /**
+   * 記錄同步操作
+   */
+  async logSyncOperation(logData: {
+    operation: string
+    table_name: string
+    sync_status: string
+    old_data?: any
+    new_data?: any
+    record_id?: string
+    error_message?: string
+  }): Promise<void> {
+    const { error } = await this.client
+      .from('sync_logs')
+      .insert({
+        operation: logData.operation,
+        table_name: logData.table_name,
+        sync_status: logData.sync_status,
+        old_data: logData.old_data ? JSON.stringify(logData.old_data) : null,
+        new_data: logData.new_data ? JSON.stringify(logData.new_data) : null,
+        record_id: logData.record_id || null,
+        error_message: logData.error_message || null,
+        created_at: new Date().toISOString()
+      })
+    
+    if (error) {
+      console.warn('記錄同步操作失敗:', error)
+    }
+  }
+
   // 更新訂單狀態
   async updateOrderStatus(id: string, status: string): Promise<void> {
     const { error } = await this.client.from('orders').update({ status }).eq('id', id)
@@ -304,6 +474,34 @@ export class SupabaseService {
   async deleteProduct(id: string): Promise<void> {
     const { error } = await this.client.from('products').delete().eq('id', id)
     if (error) { throw new ApiError(500, `刪除商品失敗: ${error.message}`, 'DB_DELETE_ERROR') }
+  }
+
+  /**
+   * 獲取最近的同步記錄
+   */
+  async getRecentSyncLogs(limit: number = 10): Promise<Array<{
+    timestamp: string
+    status: string
+    operation: string
+    message?: string
+  }>> {
+    const { data, error } = await this.client
+      .from('sync_logs')
+      .select('created_at, sync_status, operation, error_message')
+      .order('created_at', { ascending: false })
+      .limit(limit)
+    
+    if (error) {
+      console.warn('獲取同步記錄失敗:', error)
+      return []
+    }
+    
+    return (data || []).map(log => ({
+      timestamp: log.created_at,
+      status: log.sync_status,
+      operation: log.operation,
+      message: log.error_message || undefined
+    }))
   }
 }
 
