@@ -49,24 +49,45 @@ class SecureApiService {
 
   async migrateGoogleSheetsData(sheetId: string, options: { dryRun?: boolean; skipExisting?: boolean } = {}) {
     try {
+      // 檢查和清理 sheetId
+      if (!sheetId || typeof sheetId !== 'string') {
+        throw new Error('無效的 Google Sheets ID');
+      }
+      
+      const cleanSheetId = sheetId.trim();
+      if (!cleanSheetId) {
+        throw new Error('Google Sheets ID 不能為空');
+      }
+      
       // 直接使用 Supabase Edge Function
       const token = this.getAuthToken();
       if (!token) {
         throw new Error('未登入，無法執行資料遷移');
       }
 
+      // 檢查 token 格式
+      if (typeof token !== 'string' || token.trim() === '') {
+        throw new Error('無效的授權令牌');
+      }
+
+      const requestBody = {
+        sheetId: cleanSheetId,
+        dryRun: Boolean(options.dryRun),
+        skipExisting: Boolean(options.skipExisting),
+      };
+
+      console.log('發送遷移請求:', requestBody);
+
       const response = await fetch('https://skcdapfynyszxyqqsvib.supabase.co/functions/v1/migrate-sheets-data', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
+          'Authorization': `Bearer ${token.trim()}`,
         },
-        body: JSON.stringify({
-          sheetId,
-          dryRun: options.dryRun || false,
-          skipExisting: options.skipExisting || true,
-        }),
+        body: JSON.stringify(requestBody),
       });
+
+      console.log('遷移回應狀態:', response.status);
 
       if (response.status === 401) {
         SecureStorage.removeItem('admin_token');
@@ -76,6 +97,7 @@ class SecureApiService {
       }
 
       const result = await response.json();
+      console.log('遷移結果:', result);
       
       if (!response.ok) {
         throw new Error(result.message || result.error || '遷移失敗');
