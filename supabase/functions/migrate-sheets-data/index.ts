@@ -494,37 +494,21 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // 授權驗證：支援三種模式（依序判斷）
-  // 1) 環境變數 SKIP_AUTH === 'true' → 直接略過驗證（開發用）
-  // 2) 共享金鑰：請求標頭 X-Admin-Key 與 ADMIN_SHARED_KEY 相符
-  // 3) Bearer JWT：沿用原本 validateJWT 檢核
-  try {
-    const skipAuth = (Deno.env.get('SKIP_AUTH') || '').toLowerCase() === 'true';
-    let authorized = false;
-    if (skipAuth) {
-      authorized = true;
-    } else {
-      const sharedKey = (Deno.env.get('ADMIN_SHARED_KEY') || '').trim();
-      const headerKey = (req.headers.get('X-Admin-Key') || '').trim();
-      if (sharedKey && headerKey && sharedKey === headerKey) {
-        authorized = true;
-      } else {
-        const authHeader = req.headers.get('Authorization') || '';
-        if (authHeader.startsWith('Bearer ')) {
-          const token = authHeader.replace('Bearer ', '');
-          authorized = await validateJWT(token);
-        }
-      }
-    }
-    if (!authorized) {
-      return new Response(
-        JSON.stringify({ success: false, message: '未授權的請求' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-  } catch (e) {
+  // 驗證 JWT 令牌
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return new Response(
-      JSON.stringify({ success: false, message: '授權檢查失敗' }),
+      JSON.stringify({ success: false, message: '未提供授權令牌' }),
+      { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+
+  const token = authHeader.replace('Bearer ', '');
+  const isValidToken = await validateJWT(token);
+  
+  if (!isValidToken) {
+    return new Response(
+      JSON.stringify({ success: false, message: '無效的授權令牌' }),
       { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
