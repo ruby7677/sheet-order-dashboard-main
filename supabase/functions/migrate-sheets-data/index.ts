@@ -494,25 +494,6 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // 驗證 JWT 令牌
-  const authHeader = req.headers.get('Authorization');
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return new Response(
-      JSON.stringify({ success: false, message: '未提供授權令牌' }),
-      { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-  }
-
-  const token = authHeader.replace('Bearer ', '');
-  const isValidToken = await validateJWT(token);
-  
-  if (!isValidToken) {
-    return new Response(
-      JSON.stringify({ success: false, message: '無效的授權令牌' }),
-      { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-  }
-
   try {
     const { sheetId, dryRun = false, skipExisting = true }: MigrationRequest = await req.json();
 
@@ -593,39 +574,4 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       }
     );
-  }
 });
-
-async function validateJWT(token: string): Promise<boolean> {
-  try {
-    const parts = token.split('.');
-    if (parts.length !== 3) {return false;}
-
-    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
-    
-    // 檢查過期時間
-    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
-      return false;
-    }
-
-    // 驗證簽名
-    const secret = Deno.env.get('JWT_SECRET') || 'fallback-secret-key';
-    const encoder = new TextEncoder();
-    const keyData = encoder.encode(secret);
-    
-    const key = await crypto.subtle.importKey(
-      'raw',
-      keyData,
-      { name: 'HMAC', hash: 'SHA-256' },
-      false,
-      ['verify']
-    );
-
-    const dataToVerify = `${parts[0]}.${parts[1]}`;
-    const signature = Uint8Array.from(atob(parts[2].replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
-    
-    return await crypto.subtle.verify('HMAC', key, signature, encoder.encode(dataToVerify));
-  } catch {
-    return false;
-  }
-}
