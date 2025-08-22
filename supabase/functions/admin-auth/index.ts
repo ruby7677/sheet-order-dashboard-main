@@ -1,29 +1,14 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
-// 使用更簡單的密碼比對，避免 bcrypt 在 Deno 環境的問題
+// 使用 bcrypt 進行安全的密碼驗證
 async function verifyPassword(inputPassword: string, storedHash: string): Promise<boolean> {
   try {
-    // 如果是測試環境，使用簡單比對
-    if (storedHash === 'admin123' || inputPassword === storedHash) {
-      return true;
-    }
+    // 導入 bcrypt 函式庫
+    const bcrypt = await import('https://deno.land/x/bcrypt@v0.4.1/mod.ts');
     
-    // 嘗試使用 Web Crypto API 進行簡單的哈希驗證
-    const encoder = new TextEncoder();
-    const data = encoder.encode(inputPassword);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-    
-    // 檢查是否匹配簡單哈希
-    if (storedHash === hashHex) {
-      return true;
-    }
-    
-    // 對於現存的 bcrypt 哈希，暫時使用簡化驗證
-    // 生產環境應該改用其他密碼驗證方案
-    return inputPassword === 'admin123';
+    // 使用 bcrypt 驗證密碼
+    return await bcrypt.compare(inputPassword, storedHash);
   } catch (error) {
     console.error('密碼驗證錯誤:', error);
     return false;
@@ -188,8 +173,11 @@ async function generateJWT(payload: any): Promise<string> {
   const encodedPayload = btoa(JSON.stringify(payload)).replace(/=/g, '');
   const signingInput = `${encodedHeader}.${encodedPayload}`;
 
-  // Use a secure secret for JWT signing (should be in environment variables)
-  const secret = Deno.env.get('JWT_SECRET') || 'your-secret-key-change-in-production';
+  // Use secure JWT secret from environment variables
+  const secret = Deno.env.get('JWT_SECRET');
+  if (!secret) {
+    throw new Error('JWT_SECRET environment variable is required');
+  }
   const key = await crypto.subtle.importKey(
     'raw',
     new TextEncoder().encode(secret),
