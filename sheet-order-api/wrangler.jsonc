@@ -37,8 +37,7 @@
 				"GOOGLE_SHEET_ID": "10MMALrfBonchPGjb-ps6Knw7MV6lllrrKRCTeafCIuo",
 				"APP_ENV": "production",
 				"CACHE_DURATION": "15",
-				"DEBUG_MODE": "false",
-				"SUPABASE_URL": "https://skcdapfynyszxyqqsvib.supabase.co"
+				"DEBUG_MODE": "false"
 			}
 		},
 		"development": {
@@ -53,8 +52,7 @@
 				"GOOGLE_SHEET_ID": "10MMALrfBonchPGjb-ps6Knw7MV6lllrrKRCTeafCIuo",
 				"APP_ENV": "development",
 				"CACHE_DURATION": "15",
-				"DEBUG_MODE": "true",
-				"SUPABASE_URL": "https://skcdapfynyszxyqqsvib.supabase.co"
+				"DEBUG_MODE": "true"
 			}
 		}
 	},
@@ -70,8 +68,7 @@
 		"GOOGLE_SHEET_ID": "10MMALrfBonchPGjb-ps6Knw7MV6lllrrKRCTeafCIuo",
 		"APP_ENV": "development",
 		"CACHE_DURATION": "15",
-		"DEBUG_MODE": "true",
-		"SUPABASE_URL": "https://skcdapfynyszxyqqsvib.supabase.co"
+		"DEBUG_MODE": "true"
 	}
 
 	/**
