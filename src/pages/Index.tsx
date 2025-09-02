@@ -12,8 +12,8 @@ import CompactControlPanel from '@/components/CompactControlPanel';
 import ModernSidebar from '@/components/ModernSidebar';
 import ScrollToTopButton from '@/components/ScrollToTopButton';
 import DuplicateOrdersDialog from '@/components/DuplicateOrdersDialog';
-import { MigrationControlPanel } from '@/components/MigrationControlPanel';
 import ProductManagementPage from '../pages/ProductManagementPage';
+import DeliverySettingsPage from '../pages/DeliverySettingsPage';
 import { Order, PaymentStatus, OrderItem } from '@/types/order';
 import { CustomerWithStats } from '../types/customer';
 import { FilterCriteria } from '../types/filters';
@@ -29,8 +29,8 @@ const Index: React.FC = () => {
   // 檢測是否在 iframe 中
   const [isInIframe, setIsInIframe] = useState(false);
 
-  // 頁面模式：'orders'、'customers'、'migration' 或 'products'
-  const [pageMode, setPageMode] = useState<'orders' | 'customers' | 'migration' | 'products'>('orders');
+  // 頁面模式：'orders'、'customers'、'products' 或 'delivery-settings'
+  const [pageMode, setPageMode] = useState<'orders' | 'customers' | 'products' | 'delivery-settings'>('orders');
 
   // 訂單相關狀態
   // 已選擇訂單 id 陣列
@@ -175,7 +175,7 @@ const Index: React.FC = () => {
       // }
 
       if (event.data && typeof event.data === 'object' && event.data.type === 'SET_PAGE_MODE') {
-        if (event.data.mode === 'orders' || event.data.mode === 'customers' || event.data.mode === 'migration') {
+        if (event.data.mode === 'orders' || event.data.mode === 'customers' || event.data.mode === 'products' || event.data.mode === 'delivery-settings') {
           setPageMode(event.data.mode);
         }
       }
@@ -438,7 +438,7 @@ const Index: React.FC = () => {
                 <h1 className="text-xl font-bold text-foreground">
                   {pageMode === 'orders' ? '訂單管理' : 
                    pageMode === 'customers' ? '客戶資料' : 
-                   pageMode === 'migration' ? '資料遷移' : '商品管理'}
+                   pageMode === 'products' ? '商品管理' : '設定到貨日期'}
                 </h1>
                 <div className="text-sm text-muted-foreground hidden sm:block">
                   蘿蔔糕訂單系統 - 管理後台
@@ -583,9 +583,9 @@ const Index: React.FC = () => {
           <ProductManagementPage />
         )}
 
-        {/* 資料遷移頁面 */}
-        {pageMode === 'migration' && (
-          <MigrationControlPanel className="max-w-4xl mx-auto" />
+        {/* 設定到貨日期頁面 */}
+        {pageMode === 'delivery-settings' && (
+          <DeliverySettingsPage onBack={() => setPageMode('orders')} />
         )}
         </main>
       </div>
