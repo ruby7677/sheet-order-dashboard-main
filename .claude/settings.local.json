@@ -18,7 +18,8 @@
       "mcp__context7__resolve-library-id",
       "mcp__context7__get-library-docs",
       "mcp__ide__getDiagnostics",
-      "WebFetch(domain:developers.cloudflare.com)"
+      "WebFetch(domain:developers.cloudflare.com)",
+      "Bash(npm run dev:*)"
     ],
     "deny": []
   }
