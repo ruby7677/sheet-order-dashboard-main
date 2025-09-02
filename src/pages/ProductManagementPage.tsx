@@ -291,6 +291,7 @@ const ProductManagementPage: React.FC = () => {
     <ResponsivePageLayout
       title="商品管理"
       description="管理商品資料和庫存狀態"
+      breadcrumbs={[{ label: '首頁', href: '/' }, { label: '商品管理' }]}
       actions={(
         <div className="flex gap-2">
           <Button variant="outline" onClick={loadProducts} disabled={loading} aria-label="重新載入">
