@@ -22,7 +22,7 @@ import { fetchOrders, detectDuplicateOrders, DuplicateGroup, subscribeDataSource
 import { fetchCustomers, getCustomerStats } from '@/services/customerService';
 import { downloadExcelCsv, printOrders } from '@/utils/exportUtils';
 import { downloadQuickStoreXlsx } from '@/utils/exportQuickStoreXlsx';
-import { Download, Printer, Calendar, AlertTriangle } from 'lucide-react';
+import { Download, Printer, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const Index: React.FC = () => {
@@ -125,10 +125,6 @@ const Index: React.FC = () => {
   // 篩選器 ref，用於重置功能
   const orderFiltersRef = useRef<OrderFiltersRef>(null);
 
-  // 開啟到貨日設定頁面
-  const openDeliverySettings = () => {
-    window.open('http://lopokao.767780.xyz/admin-delivery-settings.php', '_blank', 'width=800,height=900,scrollbars=yes,resizable=yes');
-  };
 
   useEffect(() => {
     // 更新重複訂單檢測
@@ -431,45 +427,6 @@ const Index: React.FC = () => {
       {/* 主內容區域 */}
       <div className="flex-1 flex flex-col min-h-screen">
         {/* 只在非 iframe 模式下顯示頂部工具欄 */}
-        {!isInIframe && (
-          <header className="border-b bg-card/[0.5] backdrop-blur-sm sticky top-0 z-40">
-            <div className="px-4 lg:px-6 pl-14 lg:pl-6 py-3 flex justify-between items-center">
-              <div className="flex items-center gap-3">
-                <h1 className="text-xl font-bold text-foreground">
-                  {pageMode === 'orders' ? '訂單管理' : 
-                   pageMode === 'customers' ? '客戶資料' : 
-                   pageMode === 'delivery-settings' ? '設定到貨日期' : '商品管理'}
-                </h1>
-                <div className="text-sm text-muted-foreground hidden sm:block">
-                  蘿蔔糕訂單系統 - 管理後台
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => window.open('https://767780.xyz/pos8-test.php', '_blank')}
-                  className="h-8 px-3 text-xs border-2 border-blue-400-80 text-blue-600 hover:bg-blue-50 hover:border-blue-500 transition-all font-medium"
-                >
-                  {/* 可以考慮加上一個圖示，例如 <FilePenLine className="h-3 w-3 mr-1" /> */}
-                  手抄單
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={openDeliverySettings}
-                  className="h-8 px-3 text-xs border-2 border-purple-400-80 text-purple-600 hover:bg-purple-50 hover:border-purple-500 transition-all font-medium"
-                >
-                  <Calendar className="h-3 w-3 mr-1" />
-                  設定到貨日期
-                </Button>
-              </div>
-            </div>
-          </header>
-        )}
-
-      {/* iframe 模式下的簡化導航按鈕已移除 */}
-
         <main className={`flex-1 ${isInIframe ? 'p-3' : 'p-6'}`}>
 
         {/* 訂單頁面 */}

@@ -16,7 +16,8 @@ import {
   TrendingUp,
   Database,
   ShoppingCart,
-  Calendar
+  Calendar,
+  FileText
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getDataSource, setDataSourceAndNotify, subscribeDataSourceChange } from '@/services/orderService';
@@ -173,36 +174,57 @@ const ModernSidebar: React.FC<ModernSidebarProps> = ({
             </Button>
           );
         })}
-        
-        {/* 資料來源切換 */}
+
+        {/* 手抄單連結按鈕 */}
         {(!isCollapsed || isMobileOpen) && (
           <div className="pt-2 mt-2 border-t border-border/50">
-            <div className="text-xs text-muted-foreground mb-2 px-1">資料來源</div>
-            <div className="flex gap-1">
-              <Button
-                variant={currentSource === 'sheets' ? "default" : "outline"}
-                size="sm"
-                className="flex-1 h-8"
-                onClick={() => setDataSourceAndNotify('sheets')}
-              >
-                <Database className="h-3 w-3 mr-1" />
-                Sheets
-              </Button>
-              <Button
-                variant={currentSource === 'supabase' ? "default" : "outline"}
-                size="sm"
-                className="flex-1 h-8"
-                onClick={() => setDataSourceAndNotify('supabase')}
-              >
-                <Database className="h-3 w-3 mr-1" />
-                Supabase
-              </Button>
-            </div>
+            <Button
+              variant="ghost"
+              className="w-full justify-start h-auto p-3 transition-all duration-200 hover:bg-accent hover:text-accent-foreground"
+              onClick={() => window.open('http://lopokao.767780.xyz/admin-delivery-settings.php', '_blank', 'width=800,height=900,scrollbars=yes,resizable=yes')}
+            >
+              <div className="flex items-center gap-3 w-full">
+                <FileText className="h-5 w-5 flex-shrink-0" />
+                <div className="flex-1 text-left">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium">手抄單</span>
+                  </div>
+                  <p className="text-xs opacity-70 mt-1">開啟手抄單頁面</p>
+                </div>
+              </div>
+            </Button>
           </div>
         )}
       </div>
 
-      {/* 底部資訊 */}
+      {/* 資料來源切換 */}
+      {(!isCollapsed || isMobileOpen) && (
+        <div className="p-3 border-t border-border/50">
+          <div className="text-xs text-muted-foreground mb-2 px-1">資料來源</div>
+          <div className="flex gap-1 mb-3">
+            <Button
+              variant={currentSource === 'sheets' ? "default" : "outline"}
+              size="sm"
+              className="flex-1 h-8"
+              onClick={() => setDataSourceAndNotify('sheets')}
+            >
+              <Database className="h-3 w-3 mr-1" />
+              Sheets
+            </Button>
+            <Button
+              variant={currentSource === 'supabase' ? "default" : "outline"}
+              size="sm"
+              className="flex-1 h-8"
+              onClick={() => setDataSourceAndNotify('supabase')}
+            >
+              <Database className="h-3 w-3 mr-1" />
+              Supabase
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* 底部系統狀態 */}
       {!isCollapsed && (
         <div className="p-3 border-t border-border/50">
           <Card className="bg-muted/30">
