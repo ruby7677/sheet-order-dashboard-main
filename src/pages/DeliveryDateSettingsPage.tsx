@@ -17,7 +17,6 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import SecureApiService from '@/services/secureApiService';
-import ResponsivePageLayout from '@/components/ResponsivePageLayout';
 
 interface DeliverySetting {
   id: string;
@@ -289,15 +288,18 @@ const DeliveryDateSettingsPage: React.FC = () => {
   };
 
   return (
-    <ResponsivePageLayout
-      title="到貨日期設定"
-      description="設定本檔期可選擇的到貨日期範圍"
-      breadcrumbs={[
-        { label: '管理後台' },
-        { label: '到貨日期設定' }
-      ]}
-    >
-      <div className="space-y-6">
+    <div className="min-h-dvh bg-background text-foreground">
+      <div className="mx-auto w-full max-w-7xl px-3 py-4 sm:px-4">
+        {/* 標題 */}
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+            <Calendar className="h-6 w-6" />
+            到貨日期設定
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">設定本檔期可選擇的到貨日期範圍</p>
+        </div>
+        
+        <div className="space-y-6">
         {/* 當前設定顯示 */}
         {currentSettings && (
           <Card>
@@ -342,25 +344,31 @@ const DeliveryDateSettingsPage: React.FC = () => {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="start-date">開始日期</Label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-3">
+                <Label htmlFor="start-date" className="text-base font-semibold text-foreground">
+                  開始日期
+                </Label>
                 <Input
                   id="start-date"
                   type="date"
                   value={formData.start_date}
                   onChange={(e) => setFormData(prev => ({ ...prev, start_date: e.target.value }))}
                   required
+                  className="text-lg h-12 border-2 focus:border-primary"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="end-date">結束日期</Label>
+              <div className="space-y-3">
+                <Label htmlFor="end-date" className="text-base font-semibold text-foreground">
+                  結束日期
+                </Label>
                 <Input
                   id="end-date"
                   type="date"
                   value={formData.end_date}
                   onChange={(e) => setFormData(prev => ({ ...prev, end_date: e.target.value }))}
                   required
+                  className="text-lg h-12 border-2 focus:border-primary"
                 />
               </div>
             </div>
@@ -456,8 +464,9 @@ const DeliveryDateSettingsPage: React.FC = () => {
             </div>
           </CardContent>
         </Card>
+        </div>
       </div>
-    </ResponsivePageLayout>
+    </div>
   );
 };
 

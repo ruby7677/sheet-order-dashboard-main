@@ -17,15 +17,12 @@ import {
   Package, 
   Save, 
   X,
-  ArrowLeft,
   RefreshCw
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import SecureApiService from '@/services/secureApiService';
 import { getStockStatusLabel, getStockStatusVariant, STOCK_STATUS_OPTIONS, type StockStatus } from '@/utils/stockStatusUtils';
-import ResponsivePageLayout from '@/components/ResponsivePageLayout';
 
 interface Product {
   id: string;
@@ -50,7 +47,6 @@ interface Product {
 }
 
 const ProductManagementPage: React.FC = () => {
-  const navigate = useNavigate();
   const { toast } = useToast();
   
   const [products, setProducts] = useState<Product[]>([]);
@@ -288,48 +284,31 @@ const ProductManagementPage: React.FC = () => {
   };
 
   return (
-    <ResponsivePageLayout
-      title="商品管理"
-      description="管理商品資料和庫存狀態"
-      breadcrumbs={[{ label: '首頁', href: '/' }, { label: '商品管理' }]}
-      actions={(
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={loadProducts} disabled={loading} aria-label="重新載入">
-            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            重新載入
-          </Button>
-          <Button onClick={handleAdd} aria-label="新增商品">
-            <Plus className="h-4 w-4 mr-2" />
-            新增商品
-          </Button>
+    <div className="min-h-dvh bg-background text-foreground">
+      <div className="mx-auto w-full max-w-7xl px-3 py-4 sm:px-4">
+        {/* 標題和操作按鈕 */}
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+              <Package className="h-6 w-6" />
+              商品管理
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">管理商品資料和庫存狀態</p>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={loadProducts} disabled={loading} aria-label="重新載入">
+              <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              重新載入
+            </Button>
+            <Button onClick={handleAdd} aria-label="新增商品">
+              <Plus className="h-4 w-4 mr-2" />
+              新增商品
+            </Button>
+          </div>
         </div>
-      )}
-    >
-      <div className="mx-auto w-full max-w-7xl px-4 py-2">
+        
+        {/* 商品列表卡片 */}
         <Card className="shadow-lg">
-          {/* 標題列 */}
-          <CardHeader className="border-b">
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-3">
-                <Button 
-                  variant="ghost" 
-                  size="icon"
-                  onClick={() => navigate('/')}
-                  aria-label="返回首頁"
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                </Button>
-                <div>
-                  <CardTitle className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-                    <Package className="h-6 w-6" />
-                    商品清單
-                  </CardTitle>
-                </div>
-              </div>
-            </div>
-          </CardHeader>
-
-          {/* 商品列表 */}
           <CardContent className="p-6">
             {loading ? (
               <div className="text-center py-8">
@@ -577,7 +556,7 @@ const ProductManagementPage: React.FC = () => {
                 id="ingredients"
                 value={formData.ingredients || ''}
                 onChange={(e) => setFormData({ ...formData, ingredients: e.target.value })}
-                placeholder="水&#10;在來米&#10;白蘿蔔"
+                placeholder="水,在來米,白蘿蔔"
                 rows={3}
               />
             </div>
@@ -629,7 +608,7 @@ const ProductManagementPage: React.FC = () => {
           </div>
         </DialogContent>
       </Dialog>
-    </ResponsivePageLayout>
+    </div>
   );
 };
 
