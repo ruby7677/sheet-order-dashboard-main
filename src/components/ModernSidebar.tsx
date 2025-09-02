@@ -181,7 +181,7 @@ const ModernSidebar: React.FC<ModernSidebarProps> = ({
             <Button
               variant="ghost"
               className="w-full justify-start h-auto p-3 transition-all duration-200 hover:bg-accent hover:text-accent-foreground"
-              onClick={() => window.open('http://lopokao.767780.xyz/admin-delivery-settings.php', '_blank', 'width=800,height=900,scrollbars=yes,resizable=yes')}
+              onClick={() => window.open('https://767780.xyz/pos8-test.php', '_blank', 'width=800,height=900,scrollbars=yes,resizable=yes')}
             >
               <div className="flex items-center gap-3 w-full">
                 <FileText className="h-5 w-5 flex-shrink-0" />
