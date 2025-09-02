@@ -148,7 +148,7 @@ const ModernSidebar: React.FC<ModernSidebarProps> = ({
                   <div className="flex-1 text-left">
                     <div className="flex items-center justify-between">
                       <span className="font-medium">{item.label}</span>
-                      {item.id !== 'products' && (
+                      {item.id !== 'products' && item.id !== 'delivery-settings' && (
                         <div className="flex items-center gap-1">
                           {item.subBadge > 0 && (
                             <Badge 
