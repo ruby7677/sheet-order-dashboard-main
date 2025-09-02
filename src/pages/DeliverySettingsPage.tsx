@@ -222,24 +222,35 @@ const DeliverySettingsPage: React.FC<DeliverySettingsPageProps> = ({ onBack }) =
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="flex justify-between">
-                <span className="font-medium">開始日期：</span>
-                <span className="text-muted-foreground">{currentSettings.start_date}</span>
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-green-50 p-3 rounded-lg border border-green-200">
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                    <span className="font-semibold text-green-800">開始日期</span>
+                  </div>
+                  <span className="text-green-700 font-medium text-lg">{currentSettings.start_date}</span>
+                </div>
+                <div className="bg-red-50 p-3 rounded-lg border border-red-200">
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                    <span className="font-semibold text-red-800">結束日期</span>
+                  </div>
+                  <span className="text-red-700 font-medium text-lg">{currentSettings.end_date}</span>
+                </div>
               </div>
-              <div className="flex justify-between">
-                <span className="font-medium">結束日期：</span>
-                <span className="text-muted-foreground">{currentSettings.end_date}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="font-medium">設定說明：</span>
-                <span className="text-muted-foreground">{currentSettings.description || '無'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="font-medium">最後更新：</span>
-                <span className="text-muted-foreground">
-                  {formatUpdateTime(currentSettings.updated_at)} ({currentSettings.updated_by})
-                </span>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex justify-between items-center">
+                  <span className="font-medium text-gray-600">設定說明：</span>
+                  <span className="text-gray-800">{currentSettings.description || '無'}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="font-medium text-gray-600">最後更新：</span>
+                  <span className="text-gray-800 text-sm">
+                    {formatUpdateTime(currentSettings.updated_at)} ({currentSettings.updated_by})
+                  </span>
+                </div>
               </div>
             </div>
           </CardContent>
@@ -256,26 +267,36 @@ const DeliverySettingsPage: React.FC<DeliverySettingsPageProps> = ({ onBack }) =
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <Label htmlFor="start_date">開始日期 *</Label>
+                <Label htmlFor="start_date" className="flex items-center gap-2 text-sm font-semibold text-green-700">
+                  <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                  開始日期 *
+                </Label>
                 <Input
                   id="start_date"
                   type="date"
                   value={formData.start_date}
                   onChange={(e) => handleFormChange('start_date', e.target.value)}
                   required
+                  className="border-green-200 focus:border-green-500 focus:ring-green-500"
                 />
+                <p className="text-xs text-green-600 mt-1">配送服務開始的第一天</p>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="end_date">結束日期 *</Label>
+                <Label htmlFor="end_date" className="flex items-center gap-2 text-sm font-semibold text-red-700">
+                  <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                  結束日期 *
+                </Label>
                 <Input
                   id="end_date"
                   type="date"
                   value={formData.end_date}
                   onChange={(e) => handleFormChange('end_date', e.target.value)}
                   required
+                  className="border-red-200 focus:border-red-500 focus:ring-red-500"
                 />
+                <p className="text-xs text-red-600 mt-1">配送服務結束的最後一天</p>
               </div>
             </div>
 

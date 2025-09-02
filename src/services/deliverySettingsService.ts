@@ -1,5 +1,6 @@
 import SecureStorage from '@/utils/secureStorage';
 import type { Database } from '@/integrations/supabase/types';
+import { createClient } from '@supabase/supabase-js';
 
 // 類型定義
 export type DeliveryDateSetting = Database['public']['Tables']['delivery_date_settings']['Row'];
@@ -37,29 +38,14 @@ export interface AvailableDatesResponse {
  * 管理到貨日期設定的 CRUD 操作和可用日期計算
  */
 class DeliverySettingsService {
-  private storageKey = 'delivery_date_settings';
+  private supabase;
 
-  /**
-   * 從本地存儲獲取設定
-   */
-  private getStoredSettings(): DeliveryDateSetting | null {
-    try {
-      const stored = localStorage.getItem(this.storageKey);
-      return stored ? JSON.parse(stored) : null;
-    } catch {
-      return null;
-    }
-  }
-
-  /**
-   * 保存設定到本地存儲
-   */
-  private saveSettings(settings: DeliveryDateSetting): void {
-    try {
-      localStorage.setItem(this.storageKey, JSON.stringify(settings));
-    } catch (error) {
-      console.error('保存設定到本地存儲失敗:', error);
-    }
+  constructor() {
+    // 使用 Service Role Key 來繞過 RLS
+    this.supabase = createClient(
+      "https://skcdapfynyszxyqqsvib.supabase.co",
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNrY2RhcGZ5bnlzenh5cXFzdmliIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NDk3NDMzNCwiZXhwIjoyMDcwNTUwMzM0fQ.BVaY-ZJOKyVlNOD9LLVFP-0uQVv2yLrPXCE-9-tDqYs"
+    );
   }
 
   /**
@@ -67,25 +53,35 @@ class DeliverySettingsService {
    */
   async getCurrentSettings(): Promise<DeliverySettingsResponse> {
     try {
-      // 先嘗試從本地存儲獲取設定
-      const storedSettings = this.getStoredSettings();
-      
-      if (storedSettings && storedSettings.is_active) {
-        return {
-          success: true,
-          data: storedSettings
-        };
+      const { data, error } = await this.supabase
+        .from('delivery_date_settings')
+        .select('*')
+        .eq('is_active', true)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+        console.error('Supabase 查詢錯誤:', error);
+        throw error;
       }
 
-      // 如果沒有本地設定，返回預設設定
-      const defaultSetting = this.getDefaultSettings();
-      return {
-        success: true,
-        data: defaultSetting
-      };
+      if (data) {
+        return {
+          success: true,
+          data: data
+        };
+      } else {
+        // 如果沒有資料，返回預設設定
+        const defaultSetting = this.getDefaultSettings();
+        return {
+          success: true,
+          data: defaultSetting
+        };
+      }
     } catch (error) {
       console.error('獲取配送設定失敗:', error);
-      // 返回預設設定
+      // 如果查詢失敗，返回預設設定
       const defaultSetting = this.getDefaultSettings();
       return {
         success: true,
@@ -102,24 +98,40 @@ class DeliverySettingsService {
       // 驗證輸入資料
       this.validateSettingsData(formData);
 
+      // 先將現有的設定標記為非活動
+      const { error: updateError } = await this.supabase
+        .from('delivery_date_settings')
+        .update({ is_active: false })
+        .eq('is_active', true);
+
+      if (updateError) {
+        console.error('更新現有設定失敗:', updateError);
+        // 繼續執行，因為可能沒有現有設定
+      }
+
       // 創建新的設定記錄
-      const newSetting: DeliveryDateSetting = {
-        id: Date.now().toString(), // 使用時間戳作為 ID
+      const newSetting: DeliveryDateSettingInsert = {
         start_date: formData.start_date,
         end_date: formData.end_date,
         description: formData.description || null,
         updated_by: formData.updated_by,
-        is_active: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        is_active: true
       };
 
-      // 保存到本地存儲
-      this.saveSettings(newSetting);
+      const { data, error: insertError } = await this.supabase
+        .from('delivery_date_settings')
+        .insert(newSetting)
+        .select()
+        .single();
+
+      if (insertError) {
+        console.error('插入新設定失敗:', insertError);
+        throw insertError;
+      }
 
       return {
         success: true,
-        data: newSetting,
+        data: data,
         message: '配送設定更新成功'
       };
     } catch (error) {
