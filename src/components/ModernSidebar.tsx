@@ -14,16 +14,15 @@ import {
   Home,
   Package,
   TrendingUp,
-  Database,
+  Calendar,
   ShoppingCart
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getDataSource, setDataSourceAndNotify, subscribeDataSourceChange } from '@/services/orderService';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 
 interface ModernSidebarProps {
-  pageMode: 'orders' | 'customers' | 'migration' | 'products';
-  onPageModeChange: (mode: 'orders' | 'customers' | 'migration' | 'products') => void;
+  pageMode: 'orders' | 'customers' | 'products' | 'delivery-settings';
+  onPageModeChange: (mode: 'orders' | 'customers' | 'products' | 'delivery-settings') => void;
   orderStats?: {
     total: number;
     pending: number;
@@ -45,15 +44,6 @@ const ModernSidebar: React.FC<ModernSidebarProps> = ({
 }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
-  const [currentSource, setCurrentSource] = useState(getDataSource());
-
-  // 監聽資料來源變更
-  React.useEffect(() => {
-    const unsub = subscribeDataSourceChange(() => setCurrentSource(getDataSource()));
-    return () => {
-      if (unsub) unsub();
-    };
-  }, []);
 
   const menuItems = [
     {
@@ -84,13 +74,13 @@ const ModernSidebar: React.FC<ModernSidebarProps> = ({
       onClick: () => onPageModeChange('products')
     },
     {
-      id: 'migration' as const,
-      label: '資料遷移',
-      icon: Database,
+      id: 'delivery-settings' as const,
+      label: '設定到貨日期',
+      icon: Calendar,
       badge: 0,
       subBadge: 0,
-      description: 'Google Sheets 同步',
-      onClick: () => onPageModeChange('migration')
+      description: '配置到貨日期設定',
+      onClick: () => onPageModeChange('delivery-settings')
     }
   ];
 
@@ -172,33 +162,6 @@ const ModernSidebar: React.FC<ModernSidebarProps> = ({
             </Button>
           );
         })}
-        
-        {/* 資料來源切換 */}
-        {(!isCollapsed || isMobileOpen) && (
-          <div className="pt-2 mt-2 border-t border-border/50">
-            <div className="text-xs text-muted-foreground mb-2 px-1">資料來源</div>
-            <div className="flex gap-1">
-              <Button
-                variant={currentSource === 'sheets' ? "default" : "outline"}
-                size="sm"
-                className="flex-1 h-8"
-                onClick={() => setDataSourceAndNotify('sheets')}
-              >
-                <Database className="h-3 w-3 mr-1" />
-                Sheets
-              </Button>
-              <Button
-                variant={currentSource === 'supabase' ? "default" : "outline"}
-                size="sm"
-                className="flex-1 h-8"
-                onClick={() => setDataSourceAndNotify('supabase')}
-              >
-                <Database className="h-3 w-3 mr-1" />
-                Supabase
-              </Button>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* 底部資訊 */}

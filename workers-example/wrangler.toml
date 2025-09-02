@@ -5,11 +5,6 @@ name = "sheet-order-api"
 main = "index.js"
 compatibility_date = "2025-08-03"
 
-# 設定自定義域名 (可選)
-# routes = [
-#   { pattern = "api.yourdomain.com/*", zone_name = "yourdomain.com" }
-# ]
-
 # 生產環境設定
 [env.production]
 name = "sheet-order-api"

@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(E:\\cloud\\sheet-order-dashboard-main-cloudflare\\src/**)",
+      "Read(E:\\cloud\\sheet-order-dashboard-main-cloudflare\\src\\pages/**)",
+      "Read(E:\\cloud\\sheet-order-dashboard-main-cloudflare\\src\\services/**)",
+      "Read(E:\\cloud\\sheet-order-dashboard-main-cloudflare\\src\\integrations\\supabase/**)",
+      "Read(E:\\cloud\\sheet-order-dashboard-main-cloudflare\\src\\utils/**)",
+      "Read(E:\\cloud\\sheet-order-dashboard-main-cloudflare\\src\\utils/**)",
+      "Read(E:\\cloud\\sheet-order-dashboard-main-cloudflare\\src\\integrations\\supabase/**)",
+      "Bash(npm run:*)",
+      "Read(E:\\cloud\\sheet-order-dashboard-main-cloudflare\\src\\pages/**)",
+      "Read(E:\\cloud\\sheet-order-dashboard-main-cloudflare\\supabase/**)",
+      "Read(E:\\cloud\\sheet-order-dashboard-main-cloudflare\\supabase\\migrations/**)",
+      "Read(E:\\cloud\\sheet-order-dashboard-main-cloudflare\\supabase\\migrations/**)",
+      "Read(E:\\cloud\\sheet-order-dashboard-main-cloudflare\\supabase\\migrations/**)",
+      "Read(E:\\cloud\\sheet-order-dashboard-main-cloudflare\\supabase\\migrations/**)",
+      "Read(E:\\cloud\\sheet-order-dashboard-main-cloudflare\\supabase\\migrations/**)",
+      "Read(E:\\cloud\\sheet-order-dashboard-main-cloudflare\\supabase\\migrations/**)",
+      "Read(E:\\cloud\\sheet-order-dashboard-main-cloudflare\\src\\integrations\\supabase/**)",
+      "Read(E:\\cloud\\sheet-order-dashboard-main-cloudflare\\supabase\\migrations/**)",
+      "Read(E:\\cloud\\sheet-order-dashboard-main-cloudflare\\supabase\\migrations/**)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
