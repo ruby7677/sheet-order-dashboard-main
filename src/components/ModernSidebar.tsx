@@ -15,15 +15,16 @@ import {
   Package,
   TrendingUp,
   Database,
-  ShoppingCart
+  ShoppingCart,
+  Calendar
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getDataSource, setDataSourceAndNotify, subscribeDataSourceChange } from '@/services/orderService';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 
 interface ModernSidebarProps {
-  pageMode: 'orders' | 'customers' | 'migration' | 'products';
-  onPageModeChange: (mode: 'orders' | 'customers' | 'migration' | 'products') => void;
+  pageMode: 'orders' | 'customers' | 'delivery-settings' | 'products';
+  onPageModeChange: (mode: 'orders' | 'customers' | 'delivery-settings' | 'products') => void;
   orderStats?: {
     total: number;
     pending: number;
@@ -84,13 +85,13 @@ const ModernSidebar: React.FC<ModernSidebarProps> = ({
       onClick: () => onPageModeChange('products')
     },
     {
-      id: 'migration' as const,
-      label: '資料遷移',
-      icon: Database,
+      id: 'delivery-settings' as const,
+      label: '設定到貨日期',
+      icon: Calendar,
       badge: 0,
       subBadge: 0,
-      description: 'Google Sheets 同步',
-      onClick: () => onPageModeChange('migration')
+      description: '設定訂單到貨日期',
+      onClick: () => onPageModeChange('delivery-settings')
     }
   ];
 
