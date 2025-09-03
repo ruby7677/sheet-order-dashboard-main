@@ -390,10 +390,10 @@ const Index: React.FC = () => {
         return;
       }
       // 使用黑貓宅配專用的Excel下載功能，完美解決編碼問題
-      await downloadBlackCatXls(selectedOrders, `黑貓宅配訂單_${new Date().toISOString().split('T')[0]}.xlsx`);
+      await downloadBlackCatXls(selectedOrders, `宅配到府訂單_${new Date().toISOString().split('T')[0]}.xlsx`);
       toast({
         title: '成功',
-        description: 'Excel 檔案已下載（黑貓系統專用格式）',
+        description: 'Excel 檔案已下載（宅配到府系統專用格式）',
       });
     } catch (error) {
       console.error('Failed to download Excel:', error);
@@ -462,7 +462,7 @@ const Index: React.FC = () => {
                     className="h-7 px-3 text-xs border-2 border-blue-400-80 text-blue-600 hover:bg-blue-50 hover:border-blue-500 transition-all font-medium"
                     onClick={handleDownloadBlackCatXls}
                   >
-                    <Download className="h-3 w-3 mr-1" /> 黑貓宅配
+                    <Download className="h-3 w-3 mr-1" /> 宅配到府
                   </Button>
                   <Button
                     variant="outline"
