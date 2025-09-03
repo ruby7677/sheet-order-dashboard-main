@@ -20,7 +20,7 @@ import { FilterCriteria } from '../types/filters';
 import { CustomerFilterCriteria } from '../types/customer';
 import { fetchOrders, detectDuplicateOrders, DuplicateGroup, subscribeDataSourceChange } from '@/services/orderService';
 import { fetchCustomers, getCustomerStats } from '@/services/customerService';
-import { downloadExcelCsv, printOrders } from '@/utils/exportUtils';
+import { downloadBlackCatXls, printOrders } from '@/utils/exportUtils';
 import { downloadQuickStoreXlsx } from '@/utils/exportQuickStoreXlsx';
 import { Download, Printer, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -378,7 +378,7 @@ const Index: React.FC = () => {
     }
   };
 
-  const handleDownloadCsv = async () => {
+  const handleDownloadBlackCatXls = async () => {
     try {
       const allOrders = await fetchOrders();
       const selectedOrders = allOrders.filter(order => selected.includes(order.id));
@@ -389,17 +389,17 @@ const Index: React.FC = () => {
         });
         return;
       }
-      // 使用Excel專用的CSV下載功能，解決中文亂碼問題
-      downloadExcelCsv(selectedOrders, `宅配到府訂單_${new Date().toISOString().split('T')[0]}.csv`);
+      // 使用黑貓宅配專用的Excel下載功能，完美解決編碼問題
+      await downloadBlackCatXls(selectedOrders, `黑貓宅配訂單_${new Date().toISOString().split('T')[0]}.xlsx`);
       toast({
         title: '成功',
-        description: 'CSV檔案已下載（Unicode UTF-8編碼）',
+        description: 'Excel 檔案已下載（黑貓系統專用格式）',
       });
     } catch (error) {
-      console.error('Failed to download CSV:', error);
+      console.error('Failed to download Excel:', error);
       toast({
         title: '錯誤',
-        description: '下載CSV檔案失敗',
+        description: '下載 Excel 檔案失敗',
         variant: 'destructive',
       });
     }
@@ -460,9 +460,9 @@ const Index: React.FC = () => {
                     variant="outline"
                     size="sm"
                     className="h-7 px-3 text-xs border-2 border-blue-400-80 text-blue-600 hover:bg-blue-50 hover:border-blue-500 transition-all font-medium"
-                    onClick={handleDownloadCsv}
+                    onClick={handleDownloadBlackCatXls}
                   >
-                    <Download className="h-3 w-3 mr-1" /> 宅配CSV
+                    <Download className="h-3 w-3 mr-1" /> 黑貓宅配
                   </Button>
                   <Button
                     variant="outline"
