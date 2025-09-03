@@ -21,7 +21,8 @@
       "WebFetch(domain:developers.cloudflare.com)",
       "Bash(npm run dev:*)",
       "Bash(npx tsc:*)",
-      "Bash(npx vite:*)"
+      "Bash(npx vite:*)",
+      "Bash(python:*)"
     ],
     "deny": []
   }
