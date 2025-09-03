@@ -1,6 +1,7 @@
 
 import { Order } from '@/types/order';
 import { exportToCsv } from '@/services/orderService';
+import ExcelJS from 'exceljs';
 
 export const downloadCsv = (orders: Order[], filename: string = 'orders.csv'): void => {
   const csvContent = exportToCsv(orders);
@@ -112,46 +113,203 @@ export const downloadExcelCsv = (orders: Order[], filename: string = 'excel_orde
 /**
  * 下載黑貓系統相容性指南
  */
+/**
+ * 專為黑貓宅配系統設計的 Excel XLS 下載功能
+ * 提供最佳的相容性和編碼支援
+ */
+export const downloadBlackCatXls = async (orders: Order[], filename: string = '黑貓宅配訂單.xlsx'): Promise<void> => {
+  try {
+    // 建立新的工作簿
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('黑貓宅配訂單');
+    
+    // 黑貓宅急便標準欄位
+    const headers = [
+      '訂單編號',
+      '溫層', 
+      '規格',
+      '代收貨款',
+      '收件人-姓名',
+      '收件人-電話',
+      '收件人-地址',
+      '寄件人-姓名',
+      '寄件人-電話',
+      '寄件人-地址',
+      '出貨日期',
+      '希望配達日',
+      '希望配合時段',
+      '品類代碼',
+      '品名',
+      '易碎物品',
+      '備註'
+    ];
+    
+    // 設定標題行樣式
+    const headerRow = worksheet.addRow(headers);
+    headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF366092' } };
+    headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+    
+    // 固定寄件人資訊
+    const senderName = '曾炳傑';
+    const senderPhone = '0937292815';
+    const senderAddress = '雲林縣西螺鎮中山路302-3號';
+    
+    // 工具函數
+    const removeSpecialChars = (str: string) => str.replace(/[^\u4e00-\u9fa5A-Za-z0-9]/g, '');
+    const formatPhone = (phone: string) => /^09\d{8}$/.test(phone) ? phone : '';
+    
+    const today = new Date();
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    const todayStr = `${today.getFullYear()}${pad(today.getMonth() + 1)}${pad(today.getDate())}`;
+    
+    // 產生訂單資料
+    orders.forEach((order, idx) => {
+      // 依勾選順序自動產生訂單編號（A001~A100）
+      const genOrderNumber = `A${(idx + 1).toString().padStart(3, '0')}`;
+      
+      // 希望配達日格式化
+      let wishDate = '';
+      if (order.dueDate) {
+        const d = typeof order.dueDate === 'string' ? new Date(order.dueDate.replace(/-/g, '/')) : order.dueDate;
+        if (!isNaN(d.getTime())) {
+          if (d <= today) {
+            const nextDay = new Date(today);
+            nextDay.setDate(today.getDate() + 1);
+            wishDate = `${nextDay.getFullYear()}${pad(nextDay.getMonth() + 1)}${pad(nextDay.getDate())}`;
+          } else {
+            wishDate = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`;
+          }
+        }
+      }
+      if (!wishDate) {
+        const nextDay = new Date(today);
+        nextDay.setDate(today.getDate() + 1);
+        wishDate = `${nextDay.getFullYear()}${pad(nextDay.getMonth() + 1)}${pad(nextDay.getDate())}`;
+      }
+      
+      // 希望配合時段
+      let wishTime = '';
+      if (order.deliveryTime) {
+        if (order.deliveryTime.includes('上')) wishTime = '1';
+        else if (order.deliveryTime.includes('下')) wishTime = '2';
+      }
+      
+      const rowData = [
+        genOrderNumber,
+        2, // 溫層（固定）
+        0, // 規格（固定）
+        order.paymentStatus === '已收費' ? 0 : (order.paymentMethod === '貨到付款' ? order.total : 0),
+        removeSpecialChars(order.customer.name || ''),
+        formatPhone(order.customer.phone || ''),
+        order.deliveryAddress || '',
+        senderName,
+        senderPhone,
+        senderAddress,
+        todayStr,
+        wishDate,
+        wishTime,
+        '0015', // 品類代碼（固定）
+        '蘿蔔糕', // 品名（固定）
+        'Y', // 易碎物品（固定）
+        order.notes || ''
+      ];
+      
+      const dataRow = worksheet.addRow(rowData);
+      
+      // 設定資料行樣式
+      dataRow.alignment = { vertical: 'middle' };
+      if (idx % 2 === 0) {
+        dataRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8F9FA' } };
+      }
+    });
+    
+    // 自動調整欄寬
+    worksheet.columns.forEach((column, index) => {
+      let maxLength = 0;
+      column.eachCell?.({ includeEmpty: true }, (cell) => {
+        const columnLength = cell.value ? cell.value.toString().length : 10;
+        if (columnLength > maxLength) {
+          maxLength = columnLength;
+        }
+      });
+      column.width = Math.min(maxLength + 2, 50); // 最大寬度限制
+    });
+    
+    // 設定邊框
+    const borderStyle = { style: 'thin', color: { argb: 'FF000000' } };
+    const border = {
+      top: borderStyle,
+      left: borderStyle,
+      bottom: borderStyle,
+      right: borderStyle
+    };
+    
+    worksheet.eachRow((row) => {
+      row.eachCell((cell) => {
+        cell.border = border;
+      });
+    });
+    
+    // 產生檔案並下載
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { 
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+    });
+    
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.href = url;
+    link.download = filename;
+    link.style.display = 'none';
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    
+    console.log('✅ 黑貓宅配 Excel 檔案下載完成');
+  } catch (error) {
+    console.error('❌ Excel 檔案下載失敗:', error);
+    throw error;
+  }
+};
+
 export const downloadBlackCatGuide = (): void => {
-  const guide = `黑貓宅配 CSV 檔案相容性指南
-===========================
+  const guide = `黑貓宅配檔案匯出指南
+===================
 
-系統已針對黑貓宅配系統進行最佳化：
+系統提供兩種匯出格式：
 
-✅ 最佳相容性設定：
-- 檔案格式：application/octet-stream
-- 編碼方式：UTF-8 (無 BOM)
-- 換行符號：CRLF (Windows 標準)
-- 字符處理：自動移除特殊符號
+🎯 Excel XLS 格式 (推薦)
+- 檔案格式：.xlsx
+- 相容性：最佳，支援所有版本的 Excel 和黑貓系統
+- 編碼問題：無，Excel 自動處理編碼
+- 樣式：包含標題樣式、邊框、自動欄寬
 
-📋 下載選項說明：
-1. downloadBlackCatCsv() - 黑貓系統專用格式（推薦）
-2. downloadExcelCsv() - Excel 相容格式 (UTF-8 + BOM)
-3. downloadMultiFormatCsv() - 多格式降級下載
+📄 CSV 格式 (備選)
+- 檔案格式：.csv  
+- 編碼：UTF-8 (無 BOM)
+- 適用：文字編輯器、簡單匯入系統
 
-🔧 如遇亂碼處理步驟：
+🔧 使用建議：
+1. 優先使用 Excel XLS 格式
+2. 黑貓系統可直接匯入 .xlsx 檔案
+3. 如需 CSV 格式，請參考編碼指南
 
-方法一：記事本轉換（最有效）
-1. 用記事本開啟下載的 CSV 檔案
-2. 點選「檔案」→「另存新檔」
-3. 編碼選擇「ANSI」或「Big5」
-4. 儲存後匯入黑貓系統
-
-方法二：系統確認
-1. 確認黑貓系統版本和編碼設定
-2. 聯絡黑貓技術支援確認最新規格
-
-⚡ 技術優化：
-- 無 BOM 輸出：符合傳統系統期待
-- 強制下載：避免瀏覽器編碼干預  
-- 字符標準化：確保系統識別
-- 多層降級：確保下載成功
+📋 欄位對應：
+- 訂單編號：A001~A999 (自動產生)
+- 溫層：2 (冷藏)
+- 代收貨款：根據付款狀態自動計算
+- 收件人資訊：自動清理特殊字符
+- 配送時間：1(上午) / 2(下午)
+- 品名：蘿蔔糕 (固定)
 
 最後更新：${new Date().toLocaleDateString('zh-TW')}
 `;
 
   const blob = new Blob([guide], { type: 'text/plain;charset=utf-8' });
-  downloadBlob(blob, '黑貓宅配CSV相容性指南.txt');
+  downloadBlob(blob, '黑貓宅配檔案匯出指南.txt');
 };
 
 export const printOrders = (orders: Order[]): void => {
