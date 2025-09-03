@@ -6,7 +6,8 @@ import { CustomerWithStats } from '../types/customer';
 import { CustomerFilterCriteria } from '../types/customer';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import CustomerListMobile from './CustomerListMobile'
+import CustomerListMobile from './CustomerListMobile';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface CustomerListProps {
   filters: CustomerFilterCriteria;
@@ -114,7 +115,7 @@ const CustomerList: React.FC<CustomerListProps> = ({
     }
   };
 
-  const isMobile = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 768px)').matches
+  const isMobile = useIsMobile()
 
   return (
     <div className="bg-card border rounded-lg shadow-sm overflow-hidden">

@@ -12,6 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { PaymentStatus } from './PaymentStatusEditor';
 import { cn } from '@/lib/utils';
 import OrderListMobile from './OrderListMobile';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 // OrderList 元件的屬性型別
 import { FilterCriteria } from '@/types/filters';
@@ -321,7 +322,7 @@ const OrderList: React.FC<OrderListProps> = ({ filters, onOrderClick, onOrdersCh
     }
   };
 
-  const isMobile = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 768px)').matches
+  const isMobile = useIsMobile()
 
   return (
     <div className="bg-card border rounded-lg shadow-sm overflow-hidden max-w-7xl mx-auto">
