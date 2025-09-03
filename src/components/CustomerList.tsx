@@ -122,7 +122,7 @@ const CustomerList: React.FC<CustomerListProps> = ({
       {/* 行動版：使用虛擬清單卡片 */}
       {isMobile ? (
         <CustomerListMobile
-          allCustomers={allCustomers}
+          allCustomers={customers} // 修復：傳入分頁後的資料，而非全部資料
           loading={loading}
           selected={selected}
           onToggleSelect={handleSelectCustomer}
@@ -190,12 +190,12 @@ const CustomerList: React.FC<CustomerListProps> = ({
       )}
 
       {/* 分頁控制 */}
-      {!isMobile && !loading && totalPages > 1 && (
-        <div className="p-4 flex justify-between items-center border-t mr-16">
-          <div className="text-sm text-muted-foreground">
+      {!loading && totalPages > 1 && (
+        <div className="p-4 flex flex-col sm:flex-row justify-between items-center gap-3 border-t">
+          <div className="text-sm text-muted-foreground order-2 sm:order-1">
             顯示 {((currentPage - 1) * itemsPerPage) + 1} 至 {Math.min(currentPage * itemsPerPage, allCustomers.length)} 筆，共 {allCustomers.length} 筆
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 order-1 sm:order-2">
             <Button
               variant="outline"
               size="sm"
