@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -20,6 +20,7 @@ import {
   FileText
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import useScrollAwareMenu from '@/hooks/useScrollAwareMenu';
 import { getDataSource, setDataSourceAndNotify, subscribeDataSourceChange } from '@/services/orderService';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 
@@ -48,6 +49,16 @@ const ModernSidebar: React.FC<ModernSidebarProps> = ({
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [currentSource, setCurrentSource] = useState(getDataSource());
+  const [isContentScrolled, setIsContentScrolled] = useState(false);
+  
+  // 滾動感知邏輯
+  const scrollState = useScrollAwareMenu({
+    hideThreshold: 80,
+    showThreshold: 40,
+    hideDelay: 200,
+    hideAtTop: false, // 在頂部也顯示按鈕
+    minScrollDistance: 5
+  });
 
   // 監聽資料來源變更
   React.useEffect(() => {
@@ -55,6 +66,19 @@ const ModernSidebar: React.FC<ModernSidebarProps> = ({
     return () => {
       if (unsub) unsub();
     };
+  }, []);
+
+  // 監聽主內容區域的滾動狀態
+  useEffect(() => {
+    const handleScroll = () => {
+      const scrolled = window.scrollY > 20;
+      setIsContentScrolled(scrolled);
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll(); // 初始檢查
+    
+    return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
   const menuItems = [
@@ -245,17 +269,39 @@ const ModernSidebar: React.FC<ModernSidebarProps> = ({
 
   return (
     <>
-      {/* 手機版選單按鈕 */}
+      {/* 手機版選單按鈕 - 智能顯示/隱藏 */}
       <Button
-        variant="ghost"
+        variant={isContentScrolled ? "default" : "ghost"}
         size="icon"
-        className="lg:hidden fixed top-4 left-4 z-50"
+        className={cn(
+          "lg:hidden fixed transition-all duration-300 ease-in-out z-40",
+          "w-12 h-12 rounded-full shadow-lg backdrop-blur-sm",
+          // 動態位置：根據滾動狀態調整
+          scrollState.isVisible 
+            ? "top-4 left-4 translate-y-0 opacity-100" 
+            : "-top-16 left-4 -translate-y-2 opacity-0",
+          // 背景樣式：根據內容滾動狀態調整
+          isContentScrolled 
+            ? "bg-primary/90 hover:bg-primary border border-primary/20" 
+            : "bg-background/80 hover:bg-accent border border-border/50",
+          // 確保不會遮擋內容
+          "hover:scale-105 active:scale-95"
+        )}
         onClick={() => setIsMobileOpen(true)}
         aria-label="開啟選單"
         aria-expanded={isMobileOpen}
         aria-controls="mobile-sidebar"
+        style={{
+          // 使用 transform 而非 top 來優化性能
+          transform: scrollState.isVisible 
+            ? 'translateY(0) scale(1)' 
+            : 'translateY(-100%) scale(0.9)'
+        }}
       >
-        <Menu className="h-5 w-5" />
+        <Menu className={cn(
+          "h-5 w-5 transition-colors duration-200",
+          isContentScrolled ? "text-primary-foreground" : "text-foreground"
+        )} />
       </Button>
 
       {/* 桌面版側邊欄 */}
