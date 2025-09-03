@@ -20,7 +20,7 @@ export interface VirtualizedListProps<T> {
  */
 export function VirtualizedList<T>({
 	items,
-	requireVirtualCount = 60,
+	requireVirtualCount = 25, // 降低虛擬化門檻，分頁後通常只有20筆資料
 	estimateSize = 56,
 	overscan = 8,
 	renderItem,

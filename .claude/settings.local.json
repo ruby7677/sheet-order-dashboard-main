@@ -20,7 +20,8 @@
       "mcp__ide__getDiagnostics",
       "WebFetch(domain:developers.cloudflare.com)",
       "Bash(npm run dev:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(npx vite:*)"
     ],
     "deny": []
   }
