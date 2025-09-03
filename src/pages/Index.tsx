@@ -390,7 +390,7 @@ const Index: React.FC = () => {
         return;
       }
       // 使用Excel專用的CSV下載功能，解決中文亂碼問題
-      downloadExcelCsv(selectedOrders, `訂單資料_${new Date().toISOString().split('T')[0]}.csv`);
+      downloadExcelCsv(selectedOrders, `宅配到府訂單_${new Date().toISOString().split('T')[0]}.csv`);
       toast({
         title: '成功',
         description: 'CSV檔案已下載（Unicode UTF-8編碼）',
