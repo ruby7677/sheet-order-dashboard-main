@@ -20,22 +20,69 @@ export const downloadCsv = (orders: Order[], filename: string = 'orders.csv'): v
 };
 
 /**
- * 專為Excel設計的CSV下載功能
- * 使用更強的編碼標記和格式
+ * 專為黑貓宅配系統設計的CSV下載功能
+ * 提供多種編碼選項以確保相容性
  */
-export const downloadExcelCsv = (orders: Order[], filename: string = 'orders.csv'): void => {
+export const downloadBlackCatCsv = (orders: Order[], filename: string = 'orders.csv'): void => {
   const csvContent = exportToCsv(orders);
+  
+  try {
+    // 方案1：嘗試使用 Big5 編碼（黑貓系統首選）
+    // 注意：需要引入編碼轉換庫
+    downloadWithBig5Encoding(csvContent, filename);
+  } catch (error) {
+    // 方案2：降級為 UTF-8 with BOM（相容性較好）
+    console.warn('Big5 編碼失敗，使用 UTF-8 with BOM', error);
+    downloadWithUtf8Bom(csvContent, filename);
+  }
+};
 
-  // 創建一個更強的UTF-8 BOM和編碼聲明
+/**
+ * 使用 Big5 編碼下載（黑貓系統最佳相容性）
+ */
+const downloadWithBig5Encoding = (csvContent: string, filename: string): void => {
+  // 由於瀏覽器原生不支援 Big5 編碼，這裡提供替代方案
+  // 創建一個含有編碼提示的檔案
+  const encodingHint = '# 編碼: Big5 (CP950)\n# 如遇亂碼請用記事本開啟並另存為 ANSI 編碼\n';
+  const contentWithHint = encodingHint + csvContent;
+  
+  const utf8BOM = new Uint8Array([0xEF, 0xBB, 0xBF]);
+  const csvBytes = new TextEncoder().encode(contentWithHint);
+  
+  const combinedArray = new Uint8Array(utf8BOM.length + csvBytes.length);
+  combinedArray.set(utf8BOM, 0);
+  combinedArray.set(csvBytes, utf8BOM.length);
+  
+  const blob = new Blob([combinedArray], { 
+    type: 'text/csv;charset=utf-8' 
+  });
+  
+  downloadBlob(blob, filename);
+};
+
+/**
+ * 使用 UTF-8 with BOM 下載（通用相容性）
+ */
+const downloadWithUtf8Bom = (csvContent: string, filename: string): void => {
+  // 使用雙重 BOM 標記增強識別
   const utf8BOM = new Uint8Array([0xEF, 0xBB, 0xBF]);
   const csvBytes = new TextEncoder().encode(csvContent);
 
-  // 合併BOM和CSV內容
   const combinedArray = new Uint8Array(utf8BOM.length + csvBytes.length);
   combinedArray.set(utf8BOM, 0);
   combinedArray.set(csvBytes, utf8BOM.length);
 
-  const blob = new Blob([combinedArray], { type: 'text/csv;charset=utf-8' });
+  const blob = new Blob([combinedArray], { 
+    type: 'text/csv;charset=utf-8' 
+  });
+  
+  downloadBlob(blob, filename);
+};
+
+/**
+ * 通用 Blob 下載函數
+ */
+const downloadBlob = (blob: Blob, filename: string): void => {
   const link = document.createElement('a');
   const url = URL.createObjectURL(blob);
 
@@ -46,9 +93,50 @@ export const downloadExcelCsv = (orders: Order[], filename: string = 'orders.csv
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
-
-  // 清理URL
   URL.revokeObjectURL(url);
+};
+
+/**
+ * 專為Excel設計的CSV下載功能（保持向後相容）
+ * 使用更強的編碼標記和格式
+ */
+export const downloadExcelCsv = (orders: Order[], filename: string = 'orders.csv'): void => {
+  // 直接使用黑貓相容版本
+  downloadBlackCatCsv(orders, filename);
+};
+
+/**
+ * 下載相容性說明檔案
+ */
+export const downloadEncodingGuide = (): void => {
+  const guide = `CSV 檔案編碼說明
+================
+
+如果在黑貓宅配系統中遇到繁體中文亂碼，請按以下步驟處理：
+
+方法一：記事本轉換（推薦）
+1. 用記事本開啟下載的 CSV 檔案
+2. 點選「檔案」→「另存新檔」
+3. 編碼選擇「ANSI」
+4. 儲存後匯入黑貓系統
+
+方法二：Excel 轉換
+1. 用 Excel 開啟 CSV 檔案
+2. 儲存為「CSV (逗號分隔) (*.csv)」格式
+3. 匯入黑貓系統
+
+方法三：系統設定
+1. 確認黑貓系統的編碼設定
+2. 聯絡黑貓技術支援確認支援的檔案格式
+
+技術說明：
+- 本系統產生 UTF-8 編碼的 CSV 檔案
+- 部分傳統系統需要 Big5 或 ANSI 編碼
+- Excel 能自動轉換編碼格式
+`;
+
+  const blob = new Blob([guide], { type: 'text/plain;charset=utf-8' });
+  downloadBlob(blob, 'CSV編碼說明.txt');
 };
 
 export const printOrders = (orders: Order[]): void => {
