@@ -8,7 +8,7 @@ export class CacheService {
 	private kv: KVNamespace;
 	private defaultTTL: number;
 
-	constructor(kv: KVNamespace, defaultTTL: number = 15) {
+	constructor(kv: KVNamespace, defaultTTL: number = 60) {
 		this.kv = kv;
 		this.defaultTTL = defaultTTL;
 	}
@@ -66,9 +66,12 @@ export class CacheService {
 			};
 
 			// 使用 KV 的 expirationTtl 作為備用過期機制
-			// 設定為 TTL 的 2 倍，確保我們的時間戳檢查優先生效
+			// 確保 expirationTtl 至少 60 秒（Cloudflare KV 限制）
+			// 設定為 TTL 的 2 倍，但最少 60 秒
+			const kvExpirationTtl = Math.max(60, actualTTL * 2);
+			
 			await this.kv.put(key, JSON.stringify(cacheData), {
-				expirationTtl: actualTTL * 2
+				expirationTtl: kvExpirationTtl
 			});
 		} catch (error) {
 			console.error(`快取寫入錯誤 (key: ${key}):`, error);
