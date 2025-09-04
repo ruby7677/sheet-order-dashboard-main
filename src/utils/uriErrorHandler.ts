@@ -1,4 +1,22 @@
 // URI 錯誤處理工具
+
+// URI 錯誤詳情介面
+interface UriErrorDetails {
+  type: string;
+  message: string;
+  originalUrl?: string;
+  timestamp?: string;
+}
+
+// URI 錯誤日誌介面
+interface UriErrorLog {
+  message: string;
+  stack?: string;
+  timestamp: string;
+  userAgent: string;
+  url: string;
+}
+
 export class URIErrorHandler {
   private static instance: URIErrorHandler;
   private errorCount = 0;
@@ -40,7 +58,7 @@ export class URIErrorHandler {
 
     // 攔截 XMLHttpRequest
     const originalOpen = XMLHttpRequest.prototype.open;
-    XMLHttpRequest.prototype.open = function(method: string, url: string | URL, ...args: any[]) {
+    XMLHttpRequest.prototype.open = function(method: string, url: string | URL, ...args: unknown[]) {
       try {
         const urlString = typeof url === 'string' ? url : url.toString();
         const safeUrl = URIErrorHandler.getInstance().sanitizeURL(urlString);
@@ -89,14 +107,14 @@ export class URIErrorHandler {
     }
   }
 
-  private isURIError(error: any): boolean {
-    return error && 
+  private isURIError(error: unknown): boolean {
+    return error instanceof Error && 
            (error.message?.includes('URI malformed') || 
             error.message?.includes('Invalid URL') ||
             error.name === 'URIError');
   }
 
-  private handleURIError(error: any, originalInput: RequestInfo | URL): Promise<Response> {
+  private handleURIError(error: unknown, originalInput: RequestInfo | URL): Promise<Response> {
     this.logError(error);
     
     // 返回一個安全的錯誤回應
@@ -117,7 +135,7 @@ export class URIErrorHandler {
     ));
   }
 
-  private logError(error: any): void {
+  private logError(error: unknown): void {
     const now = Date.now();
     
     // 防止錯誤日誌洪水
@@ -132,13 +150,16 @@ export class URIErrorHandler {
       this.lastErrorTime = now;
     }
 
-    console.error('🚨 URI Error handled:', {
-      message: error.message,
-      stack: error.stack,
+    // 類型安全的錯誤日誌
+    const errorLog: UriErrorLog = {
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
       timestamp: new Date().toISOString(),
       userAgent: navigator.userAgent,
       url: window.location.href
-    });
+    };
+
+    console.error('🚨 URI Error handled:', errorLog);
   }
 
   // 公共方法：手動清理 URL
