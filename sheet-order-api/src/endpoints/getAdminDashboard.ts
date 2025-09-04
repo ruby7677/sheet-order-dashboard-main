@@ -161,7 +161,7 @@ export class GetAdminDashboard extends OpenAPIRoute {
 			// 第一行是標題
 			const header = safeArrayAccess(sheetData, 0);
 			if (!header) {
-				return [];
+				return this.getEmptyStats();
 			}
 			
 			const rows = sheetData.slice(1);
@@ -255,17 +255,19 @@ export class GetAdminDashboard extends OpenAPIRoute {
 			// 處理訂單時間統計
 			if (headerMap.orderTime !== undefined && row[headerMap.orderTime]) {
 				const orderTimeStr = row[headerMap.orderTime];
-				const orderDate = this.parseOrderDate(orderTimeStr);
+				if (orderTimeStr && typeof orderTimeStr === 'string') {
+					const orderDate = this.parseOrderDate(orderTimeStr);
 
-				if (orderDate) {
-					// 今日訂單
-					if (orderDate >= today) {
-						todayOrders++;
-					}
+					if (orderDate) {
+						// 今日訂單
+						if (orderDate >= today) {
+							todayOrders++;
+						}
 
-					// 本週訂單
-					if (orderDate >= weekStart) {
-						weekOrders++;
+						// 本週訂單
+						if (orderDate >= weekStart) {
+							weekOrders++;
+						}
 					}
 				}
 			}
