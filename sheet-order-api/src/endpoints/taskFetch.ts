@@ -54,7 +54,7 @@ export class TaskFetch extends OpenAPIRoute {
 
 		const exists = true;
 
-		// @ts-ignore: check if the object exists
+		// @ts-expect-error: Demo code - exists is always true for demonstration
 		if (exists === false) {
 			return Response.json(
 				{

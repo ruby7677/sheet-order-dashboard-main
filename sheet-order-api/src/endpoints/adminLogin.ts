@@ -1,6 +1,6 @@
 import { OpenAPIRoute } from 'chanfana';
 import { z } from 'zod';
-import { AppContext, ApiResponse, ApiError } from '../types';
+import { AppContext, ApiResponse, ApiError, Env } from '../types';
 
 /**
  * 管理員登入 API 端點
@@ -127,7 +127,7 @@ export class AdminLogin extends OpenAPIRoute {
 
 			const statusCode = error instanceof ApiError ? error.statusCode : 500;
 			c.header('X-Response-Time', `${Date.now() - startTime}ms`);
-			return c.json(errorResponse, statusCode as any);
+			return c.json(errorResponse, statusCode as 400 | 401 | 500);
 		}
 	}
 
@@ -138,7 +138,7 @@ export class AdminLogin extends OpenAPIRoute {
 	 * @param password 密碼
 	 * @param env 環境變數
 	 */
-	private validateCredentials(username: string, password: string, env: any): boolean {
+	private validateCredentials(username: string, password: string, env: Env): boolean {
 		// 優先使用環境變數中的管理員帳號密碼
 		const validUsername = env.ADMIN_USERNAME || 'admin';
 		const validPassword = env.ADMIN_PASSWORD || 'admin123';

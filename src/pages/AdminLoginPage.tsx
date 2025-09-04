@@ -27,13 +27,14 @@ const AdminLoginPage: React.FC = () => {
       
       if (result.success) {
         // 登入成功後優先回導原始目的地
-        const from = (location.state as any)?.from?.pathname || '/admin/dashboard';
+        const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/admin/dashboard';
         navigate(from, { replace: true });
       } else {
         setError(result.message || '登入失敗');
       }
-    } catch (err: any) {
-      setError(err.message || '登入失敗');
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : '登入失敗';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }

@@ -1,6 +1,6 @@
 import { OpenAPIRoute } from 'chanfana';
 import { z } from 'zod';
-import { AppContext, Customer, ApiResponse, ApiError } from '../types';
+import { AppContext, Customer, ApiResponse, ApiError, isValidEnv, safeArrayAccess } from '../types';
 import { GoogleSheetsService } from '../services/GoogleSheetsService';
 import { CacheService } from '../services/CacheService';
 
@@ -71,6 +71,18 @@ export class GetCustomersFromSheet extends OpenAPIRoute {
 
 			// 初始化服務
 			const env = c.env;
+			
+			// 驗證環境變數
+			if (!isValidEnv(env)) {
+				c.header('X-Response-Time', `${Date.now() - startTime}ms`);
+				return c.json({
+					success: false,
+					message: '環境配置錯誤：缺少必要的環境變數',
+					timestamp: Math.floor(Date.now() / 1000),
+					request_id: requestId
+				}, 500);
+			}
+			
 			const sheetsService = new GoogleSheetsService(
 				env.GOOGLE_SERVICE_ACCOUNT_KEY,
 				env.GOOGLE_SHEET_ID
@@ -154,7 +166,7 @@ export class GetCustomersFromSheet extends OpenAPIRoute {
 
 			const statusCode = error instanceof ApiError ? error.statusCode : 500;
 			c.header('X-Response-Time', `${Date.now() - startTime}ms`);
-			return c.json(errorResponse, statusCode as any);
+			return c.json(errorResponse, statusCode as 200 | 400 | 401 | 403 | 404 | 422 | 500);
 		}
 	}
 
@@ -162,11 +174,23 @@ export class GetCustomersFromSheet extends OpenAPIRoute {
 	 * 將 Google Sheets 原始資料轉換為客戶物件陣列
 	 * 參考原始 PHP 檔案的轉換邏輯，支援動態標題映射
 	 */
-	private transformSheetDataToCustomers(sheetData: any[][]): any[] {
-		if (sheetData.length === 0) {return [];}
+	private transformSheetDataToCustomers(sheetData: string[][]): Array<z.infer<typeof Customer> & {
+		deliveryMethod?: string;
+		contactMethod?: string;
+		socialId?: string;
+		orderTime?: string;
+		items?: string;
+	}> {
+		if (!sheetData || sheetData.length === 0) {
+			return [];
+		}
 
 		// 第一行是標題
-		const header = sheetData[0];
+		const header = safeArrayAccess(sheetData, 0);
+		if (!header) {
+			return [];
+		}
+		
 		const dataRows = sheetData.slice(1);
 
 		// 建立標題映射（參考原 PHP 邏輯）
@@ -204,31 +228,57 @@ export class GetCustomersFromSheet extends OpenAPIRoute {
 			}
 		});
 
-		const customers = [];
-		dataRows.forEach((row: any[], idx: number) => {
+		const customers: Array<z.infer<typeof Customer> & {
+			deliveryMethod?: string;
+			contactMethod?: string;
+			socialId?: string;
+			orderTime?: string;
+			items?: string;
+		}> = [];
+		
+		dataRows.forEach((row: string[], idx: number) => {
 			// 確保資料完整性
-			if (!row || row.length === 0) {return;}
+			if (!row || row.length === 0) {
+				return;
+			}
 			
 			// 檢查必要欄位
-			if (!headerMap.hasOwnProperty('name') || !row[headerMap['name']] ||
-				!headerMap.hasOwnProperty('phone') || !row[headerMap['phone']]) {
+			const nameIndex = headerMap['name'];
+			const phoneIndex = headerMap['phone'];
+			
+			if (nameIndex === undefined || phoneIndex === undefined) {
+				return;
+			}
+			
+			const name = safeArrayAccess(row, nameIndex);
+			const phone = safeArrayAccess(row, phoneIndex);
+			
+			if (!name || !phone) {
 				return;
 			}
 
 			// 建立客戶物件
-			customers.push({
+			const customer: z.infer<typeof Customer> & {
+				deliveryMethod?: string;
+				contactMethod?: string;
+				socialId?: string;
+				orderTime?: string;
+				items?: string;
+			} = {
 				id: idx,
-				name: row[headerMap['name']] || '',
-				phone: row[headerMap['phone']] || '',
-				address: (headerMap['address'] !== undefined && row[headerMap['address']]) ? row[headerMap['address']] : '',
-				createdAt: (headerMap['orderTime'] !== undefined && row[headerMap['orderTime']]) ? row[headerMap['orderTime']] : '',
+				name: name || '',
+				phone: phone || '',
+				address: headerMap['address'] !== undefined ? (safeArrayAccess(row, headerMap['address']) || '') : '',
+				createdAt: headerMap['orderTime'] !== undefined ? (safeArrayAccess(row, headerMap['orderTime']) || '') : '',
 				// 額外欄位
-				deliveryMethod: (headerMap['deliveryMethod'] !== undefined && row[headerMap['deliveryMethod']]) ? row[headerMap['deliveryMethod']] : '',
-				contactMethod: (headerMap['contactMethod'] !== undefined && row[headerMap['contactMethod']]) ? row[headerMap['contactMethod']] : '',
-				socialId: (headerMap['socialId'] !== undefined && row[headerMap['socialId']]) ? row[headerMap['socialId']] : '',
-				orderTime: (headerMap['orderTime'] !== undefined && row[headerMap['orderTime']]) ? row[headerMap['orderTime']] : '',
-				items: (headerMap['items'] !== undefined && row[headerMap['items']]) ? row[headerMap['items']] : ''
-			});
+				deliveryMethod: headerMap['deliveryMethod'] !== undefined ? (safeArrayAccess(row, headerMap['deliveryMethod']) || '') : '',
+				contactMethod: headerMap['contactMethod'] !== undefined ? (safeArrayAccess(row, headerMap['contactMethod']) || '') : '',
+				socialId: headerMap['socialId'] !== undefined ? (safeArrayAccess(row, headerMap['socialId']) || '') : '',
+				orderTime: headerMap['orderTime'] !== undefined ? (safeArrayAccess(row, headerMap['orderTime']) || '') : '',
+				items: headerMap['items'] !== undefined ? (safeArrayAccess(row, headerMap['items']) || '') : ''
+			};
+			
+			customers.push(customer);
 		});
 
 		return customers;

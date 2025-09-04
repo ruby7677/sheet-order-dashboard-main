@@ -418,7 +418,7 @@ const DeliveryDateSettingsPage: React.FC = () => {
             <Alert>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                <strong>宅配到府：</strong>排除星期日　　
+                <strong>宅配到府：</strong>排除星期日 
                 <strong>7-11門市取貨：</strong>包含星期日
               </AlertDescription>
             </Alert>

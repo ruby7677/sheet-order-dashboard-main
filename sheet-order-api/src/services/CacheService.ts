@@ -18,7 +18,7 @@ export class CacheService {
 	 * @param key 快取鍵
 	 * @returns 快取的資料或 null
 	 */
-	async get<T = any>(key: string): Promise<T | null> {
+	async get<T>(key: string): Promise<T | null> {
 		try {
 			const cached = await this.kv.get(key, 'json');
 			if (!cached) {return null;}
@@ -56,7 +56,7 @@ export class CacheService {
 	 * @param data 要快取的資料
 	 * @param ttl TTL (秒)，預設使用建構函數中的 defaultTTL
 	 */
-	async set<T = any>(key: string, data: T, ttl?: number): Promise<void> {
+	async set<T>(key: string, data: T, ttl?: number): Promise<void> {
 		try {
 			const actualTTL = ttl || this.defaultTTL;
 			const cacheData = {

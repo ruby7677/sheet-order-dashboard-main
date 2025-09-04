@@ -43,7 +43,9 @@ app.use("*", cors({
 			if (host.endsWith(".767780.xyz")) { return requestOrigin; }
 			// 本機
 			if (host === "localhost" || host === "127.0.0.1" || host === "0.0.0.0") { return requestOrigin; }
-		} catch {}
+		} catch (error) {
+			console.warn('Failed to parse URL origin:', error);
+		}
 		return null;
 	},
 	allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -93,7 +95,7 @@ openapi.get("/api/admin/dashboard", GetAdminDashboard);
 class GetProducts extends OpenAPIRoute {
   async handle(c: AppContext) {
     try {
-      const svc = new SupabaseService(c.env as any);
+      const svc = new SupabaseService(c.env);
       const q = c.req.query();
       const data = await svc.getProducts({
         search: q.search,
@@ -103,7 +105,7 @@ class GetProducts extends OpenAPIRoute {
       return c.json({ success: true, data });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      return c.json({ success: false, message: msg }, 500 as any);
+      return c.json({ success: false, message: msg }, 500);
     }
   }
 }
@@ -111,13 +113,13 @@ class GetProducts extends OpenAPIRoute {
 class CreateProduct extends OpenAPIRoute {
   async handle(c: AppContext) {
     try {
-      const svc = new SupabaseService(c.env as any);
+      const svc = new SupabaseService(c.env);
       const payload = await c.req.json();
       const data = await svc.createProduct(payload);
       return c.json({ success: true, data });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      return c.json({ success: false, message: msg }, 500 as any);
+      return c.json({ success: false, message: msg }, 500);
     }
   }
 }
@@ -125,15 +127,15 @@ class CreateProduct extends OpenAPIRoute {
 class UpdateProduct extends OpenAPIRoute {
   async handle(c: AppContext) {
     try {
-      const svc = new SupabaseService(c.env as any);
+      const svc = new SupabaseService(c.env);
       const payload = await c.req.json();
       const id = payload?.id;
-      if (!id) { return c.json({ success: false, message: '缺少 id' }, 400 as any); }
+      if (!id) { return c.json({ success: false, message: '缺少 id' }, 400); }
       const data = await svc.updateProduct(id, payload);
       return c.json({ success: true, data });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      return c.json({ success: false, message: msg }, 500 as any);
+      return c.json({ success: false, message: msg }, 500);
     }
   }
 }
@@ -141,15 +143,15 @@ class UpdateProduct extends OpenAPIRoute {
 class DeleteProduct extends OpenAPIRoute {
   async handle(c: AppContext) {
     try {
-      const svc = new SupabaseService(c.env as any);
+      const svc = new SupabaseService(c.env);
       const q = c.req.query();
       const id = q.id;
-      if (!id) { return c.json({ success: false, message: '缺少 id' }, 400 as any); }
+      if (!id) { return c.json({ success: false, message: '缺少 id' }, 400); }
       await svc.deleteProduct(id);
       return c.json({ success: true });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      return c.json({ success: false, message: msg }, 500 as any);
+      return c.json({ success: false, message: msg }, 500);
     }
   }
 }

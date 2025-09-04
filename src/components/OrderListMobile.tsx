@@ -17,7 +17,7 @@ export interface OrderListMobileProps {
 		updateOrderInList: (
 			orderId: string,
 			newStatus?: '訂單確認中' | '已抄單' | '已出貨' | '取消訂單',
-			newPaymentStatus?: any,
+			newPaymentStatus?: '未收費' | '已收費' | '待轉帳' | '未全款' | '特殊' | '',
 			newItems?: OrderItem[],
 			newTotal?: number
 		) => void
@@ -26,7 +26,7 @@ export interface OrderListMobileProps {
 	updateOrderInList: (
 		orderId: string,
 		newStatus?: '訂單確認中' | '已抄單' | '已出貨' | '取消訂單',
-		newPaymentStatus?: any,
+		newPaymentStatus?: '未收費' | '已收費' | '待轉帳' | '未全款' | '特殊' | '',
 		newItems?: OrderItem[],
 		newTotal?: number
 	) => void
@@ -121,8 +121,8 @@ const OrderListMobile: React.FC<OrderListMobileProps> = ({
 							
 							<div className="flex items-center justify-between">
 								<div className="flex items-center gap-2 flex-wrap">
-									<StatusBadge status={order.status as any} />
-									<PaymentStatusBadge status={order.paymentStatus as any} />
+									<StatusBadge status={order.status} />
+									<PaymentStatusBadge status={order.paymentStatus} />
 								</div>
 								<div className="text-right">
 									<div className="text-lg font-semibold text-slate-900">${order.total}</div>

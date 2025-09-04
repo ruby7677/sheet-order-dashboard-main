@@ -1,6 +1,6 @@
 import { OpenAPIRoute } from 'chanfana';
 import { z } from 'zod';
-import { AppContext, Order, ApiResponse, ApiError } from '../types';
+import { AppContext, Order, ApiResponse, ApiError, isValidEnv, safeArrayAccess } from '../types';
 import { GoogleSheetsService } from '../services/GoogleSheetsService';
 import { CacheService } from '../services/CacheService';
 
@@ -74,6 +74,18 @@ export class GetOrdersFromSheet extends OpenAPIRoute {
 
 			// 初始化服務
 			const env = c.env;
+			
+			// 驗證環境變數
+			if (!isValidEnv(env)) {
+				c.header('X-Response-Time', `${Date.now() - startTime}ms`);
+				return c.json({
+					success: false,
+					message: '環境配置錯誤：缺少必要的環境變數',
+					timestamp: Math.floor(Date.now() / 1000),
+					request_id: requestId
+				}, 500);
+			}
+			
 			const sheetsService = new GoogleSheetsService(
 				env.GOOGLE_SERVICE_ACCOUNT_KEY,
 				env.GOOGLE_SHEET_ID
@@ -155,7 +167,7 @@ export class GetOrdersFromSheet extends OpenAPIRoute {
 
 			const statusCode = error instanceof ApiError ? error.statusCode : 500;
 			c.header('X-Response-Time', `${Date.now() - startTime}ms`);
-			return c.json(errorResponse, statusCode as any);
+			return c.json(errorResponse, statusCode as 200 | 400 | 401 | 403 | 404 | 422 | 500);
 		}
 	}
 
@@ -163,50 +175,59 @@ export class GetOrdersFromSheet extends OpenAPIRoute {
 	 * 將 Google Sheets 原始資料轉換為訂單物件陣列
 	 * 參考原始 PHP 檔案的轉換邏輯
 	 */
-	private transformSheetDataToOrders(sheetData: any[][]): any[] {
-		if (sheetData.length === 0) {return [];}
+	private transformSheetDataToOrders(sheetData: string[][]): Array<z.infer<typeof Order>> {
+		if (!sheetData || sheetData.length === 0) {
+			return [];
+		}
 
 		// 第一列為標題，跳過
-		const orders = [];
+		const orders: Array<z.infer<typeof Order>> = [];
+		
 		for (let idx = 1; idx < sheetData.length; idx++) {
-			const row = sheetData[idx];
+			const row = safeArrayAccess(sheetData, idx);
+			if (!row) continue;
 
+			// 安全存取陣列元素
+			const customerName = safeArrayAccess(row, 1);
+			
 			// 跳過空白列（已刪除訂單或空白）
-			if (!row[1] || row[1].toString().trim() === '') {continue;}
+			if (!customerName || customerName.toString().trim() === '') {
+				continue;
+			}
 
 			// 轉換到貨日期格式
-			const rawDate = row[5] || '';
-			let dueDate = '';
+			const rawDate = safeArrayAccess(row, 5) || '';
+			let dueDate: string = '';
 			if (rawDate) {
 				try {
 					const dt = new Date(rawDate);
 					if (!isNaN(dt.getTime())) {
-						dueDate = dt.toISOString().split('T')[0]; // YYYY-MM-DD 格式
+						dueDate = dt.toISOString().split('T')[0] || ''; // YYYY-MM-DD 格式
 					} else {
-						dueDate = rawDate.toString();
+						dueDate = String(rawDate);
 					}
 				} catch {
-					dueDate = rawDate.toString();
+					dueDate = String(rawDate);
 				}
 			}
 
 			// 建立訂單物件（對應原 PHP 的欄位映射）
 			orders.push({
-				createdAt: row[0] || '', // A欄 訂單時間
+				createdAt: safeArrayAccess(row, 0) || '', // A欄 訂單時間
 				id: idx, // 使用當前行索引作為 ID
 				orderNumber: `ORD-${idx.toString().padStart(3, '0')}`, // 生成格式化的訂單編號
-				customerName: row[1] || '', // B欄 客戶姓名
-				customerPhone: row[2] || '', // C欄 客戶電話
-				items: row[8] || '', // I欄 訂購商品
-				amount: row[9] || '', // J欄 訂單金額
+				customerName: customerName || '', // B欄 客戶姓名
+				customerPhone: safeArrayAccess(row, 2) || '', // C欄 客戶電話
+				items: safeArrayAccess(row, 8) || '', // I欄 訂購商品
+				amount: safeArrayAccess(row, 9) || '', // J欄 訂單金額
 				dueDate: dueDate, // F欄 到貨日期 (已轉為 YYYY-MM-DD)
-				deliveryTime: row[6] || '', // G欄 宅配時段
-				note: row[7] || '', // H欄 備註
-				status: row[14] || '', // O欄 訂單狀態
-				deliveryMethod: row[3] || '', // D欄 配送方式
-				deliveryAddress: row[4] || '', // E欄 配送地址
-				paymentMethod: row[12] || '', // M欄 付款方式
-				paymentStatus: row[15] || '' // P欄 款項狀態
+				deliveryTime: safeArrayAccess(row, 6) || '', // G欄 宅配時段
+				note: safeArrayAccess(row, 7) || '', // H欄 備註
+				status: safeArrayAccess(row, 14) || '', // O欄 訂單狀態
+				deliveryMethod: safeArrayAccess(row, 3) || '', // D欄 配送方式
+				deliveryAddress: safeArrayAccess(row, 4) || '', // E欄 配送地址
+				paymentMethod: safeArrayAccess(row, 12) || '', // M欄 付款方式
+				paymentStatus: safeArrayAccess(row, 15) || '' // P欄 款項狀態
 			});
 		}
 

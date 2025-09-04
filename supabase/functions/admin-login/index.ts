@@ -189,7 +189,7 @@ Deno.serve(async (req) => {
   }
 });
 
-async function generateSecureToken(user: any): Promise<string> {
+async function generateSecureToken(user: { id?: string; email?: string; username?: string }): Promise<string> {
   // 創建 JWT payload
   const header = {
     alg: 'HS256',

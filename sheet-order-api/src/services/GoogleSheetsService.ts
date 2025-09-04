@@ -1,4 +1,4 @@
-import { ApiError } from '../types';
+import { ApiError, GoogleSheetsConfig, GoogleSheetsApiResponse, SpreadsheetInfo } from '../types';
 
 /**
  * Google Sheets API 服務類別
@@ -11,11 +11,11 @@ export class GoogleSheetsService {
 	private tokenExpiry: number = 0;
 
 	constructor(serviceAccountKey: string | undefined, spreadsheetId: string | undefined) {
-		if (!serviceAccountKey) {
-			throw new Error('Google Service Account Key is required but not provided');
+		if (!serviceAccountKey || typeof serviceAccountKey !== 'string' || serviceAccountKey.trim().length === 0) {
+			throw new ApiError(500, 'Google Service Account Key is required but not provided or invalid', 'INVALID_SERVICE_ACCOUNT_KEY');
 		}
-		if (!spreadsheetId) {
-			throw new Error('Google Spreadsheet ID is required but not provided');
+		if (!spreadsheetId || typeof spreadsheetId !== 'string' || spreadsheetId.trim().length === 0) {
+			throw new ApiError(500, 'Google Spreadsheet ID is required but not provided or invalid', 'INVALID_SPREADSHEET_ID');
 		}
 		this.serviceAccountKey = serviceAccountKey;
 		this.spreadsheetId = spreadsheetId;
@@ -80,7 +80,16 @@ export class GoogleSheetsService {
 				throw new ApiError(401, `Google OAuth 認證失敗: ${error}`, 'AUTH_FAILED');
 			}
 
-			const tokenData: any = await response.json();
+			const tokenData = await response.json() as { 
+				access_token: string; 
+				expires_in: number; 
+				token_type: string;
+			};
+			
+			if (!tokenData.access_token) {
+				throw new ApiError(401, 'Google OAuth 回應中缺少 access_token', 'MISSING_ACCESS_TOKEN');
+			}
+			
 			this.accessToken = tokenData.access_token;
 			this.tokenExpiry = Date.now() + (tokenData.expires_in * 1000) - 60000; // 提前1分鐘過期
 
@@ -94,7 +103,7 @@ export class GoogleSheetsService {
 	/**
 	 * 使用 Web Crypto API 建立 JWT
 	 */
-	private async createJWT(payload: any, privateKey: string): Promise<string> {
+	private async createJWT(payload: { iss: string; scope: string; aud: string; exp: number; iat: number }, privateKey: string): Promise<string> {
 		try {
 			// JWT Header
 			const header = {
@@ -157,7 +166,9 @@ export class GoogleSheetsService {
 	 * @param range 要讀取的範圍 (例如: 'Sheet1' 或 'Sheet1!A1:Z100')
 	 * @param retryCount 重試次數
 	 */
-	async getSheetData(range: string, retryCount: number = 3): Promise<any[][]> {
+	async getSheetData(range: string, retryCount: number = 3): Promise<string[][]> {
+		let lastError: ApiError | null = null;
+		
 		for (let attempt = 1; attempt <= retryCount; attempt++) {
 			try {
 				const accessToken = await this.getAccessToken();
@@ -189,26 +200,40 @@ export class GoogleSheetsService {
 					);
 				}
 
-				const data: any = await response.json();
-				return data.values || [];
+				const data = await response.json() as GoogleSheetsApiResponse;
+				
+				// 檢查是否有錯誤
+				if (data.error) {
+					throw new ApiError(
+						data.error.code || 500,
+						`Google Sheets API 錯誤: ${data.error.message}`,
+						'SHEETS_API_ERROR'
+					);
+				}
+				
+				// 確保回傳的資料是字串陣列的陣列格式
+				const values = data.values || [];
+				return values.map(row => 
+					row.map(cell => cell === null || cell === undefined ? '' : String(cell))
+				);
 			} catch (error) {
-				if (error instanceof ApiError) {
-					// 如果是最後一次嘗試，直接拋出錯誤
-					if (attempt === retryCount) {throw error;}
-					
-					// 如果不是認證錯誤，等待後重試
-					if (error.statusCode !== 401) {
-						await this.delay(Math.pow(2, attempt) * 1000); // 指數退避
-					}
-				} else {
-					// 網路錯誤等，等待後重試
-					if (attempt === retryCount) {
-						throw new ApiError(500, `網路錯誤: ${error instanceof Error ? error.message : String(error)}`, 'NETWORK_ERROR');
-					}
+				lastError = error instanceof ApiError ? error : new ApiError(500, `網路錯誤: ${error instanceof Error ? error.message : String(error)}`, 'NETWORK_ERROR');
+				
+				if (error instanceof ApiError && error.statusCode === 401) {
+					// 認證錯誤，清除權杖
+					this.accessToken = null;
+					this.tokenExpiry = 0;
+				}
+				
+				// 如果不是最後一次嘗試，等待後重試
+				if (attempt < retryCount) {
 					await this.delay(Math.pow(2, attempt) * 1000);
 				}
 			}
 		}
+		
+		// 如果所有嘗試都失敗，拋出最後的錯誤
+		throw lastError || new ApiError(500, '所有重試嘗試都失敗，無法讀取 Google Sheets 資料', 'ALL_RETRIES_FAILED');
 	}
 
 	/**
@@ -217,7 +242,9 @@ export class GoogleSheetsService {
 	 * @param values 要更新的值
 	 * @param valueInputOption 值輸入選項
 	 */
-	async updateSheetData(range: string, values: any[][], valueInputOption: 'RAW' | 'USER_ENTERED' = 'RAW', retryCount: number = 3): Promise<void> {
+	async updateSheetData(range: string, values: (string | number)[][], valueInputOption: 'RAW' | 'USER_ENTERED' = 'RAW', retryCount: number = 3): Promise<void> {
+		let lastError: ApiError | null = null;
+		
 		for (let attempt = 1; attempt <= retryCount; attempt++) {
 			try {
 				const accessToken = await this.getAccessToken();
@@ -254,19 +281,20 @@ export class GoogleSheetsService {
 
 				return; // 成功更新
 			} catch (error) {
-				if (error instanceof ApiError) {
-					if (attempt === retryCount) {throw error;}
-					if (error.statusCode !== 401) {
-						await this.delay(Math.pow(2, attempt) * 1000);
-					}
-				} else {
-					if (attempt === retryCount) {
-						throw new ApiError(500, `網路錯誤: ${error instanceof Error ? error.message : String(error)}`, 'NETWORK_ERROR');
-					}
+				lastError = error instanceof ApiError ? error : new ApiError(500, `網路錯誤: ${error instanceof Error ? error.message : String(error)}`, 'NETWORK_ERROR');
+				
+				if (error instanceof ApiError && error.statusCode === 401) {
+					this.accessToken = null;
+					this.tokenExpiry = 0;
+				}
+				
+				if (attempt < retryCount) {
 					await this.delay(Math.pow(2, attempt) * 1000);
 				}
 			}
 		}
+		
+		throw lastError || new ApiError(500, '所有重試嘗試都失敗，無法更新 Google Sheets 資料', 'ALL_RETRIES_FAILED');
 	}
 
 	/**
@@ -276,10 +304,12 @@ export class GoogleSheetsService {
 	 * @param retryCount 重試次數
 	 */
 	async batchUpdateSheetData(
-		updates: Array<{ range: string; values: any[][] }>,
+		updates: Array<{ range: string; values: (string | number)[][] }>,
 		valueInputOption: 'RAW' | 'USER_ENTERED' = 'RAW',
 		retryCount: number = 3
 	): Promise<void> {
+		let lastError: ApiError | null = null;
+		
 		for (let attempt = 1; attempt <= retryCount; attempt++) {
 			try {
 				const accessToken = await this.getAccessToken();
@@ -323,19 +353,20 @@ export class GoogleSheetsService {
 
 				return; // 成功更新
 			} catch (error) {
-				if (error instanceof ApiError) {
-					if (attempt === retryCount) {throw error;}
-					if (error.statusCode !== 401) {
-						await this.delay(Math.pow(2, attempt) * 1000);
-					}
-				} else {
-					if (attempt === retryCount) {
-						throw new ApiError(500, `網路錯誤: ${error instanceof Error ? error.message : String(error)}`, 'NETWORK_ERROR');
-					}
+				lastError = error instanceof ApiError ? error : new ApiError(500, `網路錯誤: ${error instanceof Error ? error.message : String(error)}`, 'NETWORK_ERROR');
+				
+				if (error instanceof ApiError && error.statusCode === 401) {
+					this.accessToken = null;
+					this.tokenExpiry = 0;
+				}
+				
+				if (attempt < retryCount) {
 					await this.delay(Math.pow(2, attempt) * 1000);
 				}
 			}
 		}
+		
+		throw lastError || new ApiError(500, '所有重試嘗試都失敗，無法批次更新 Google Sheets 資料', 'ALL_RETRIES_FAILED');
 	}
 
 	/**
@@ -345,9 +376,20 @@ export class GoogleSheetsService {
 	 * @param retryCount 重試次數
 	 */
 	async batchUpdate(
-		requests: any[],
+		requests: Array<{
+			deleteDimension?: {
+				range: {
+					sheetId: number;
+					dimension: 'ROWS' | 'COLUMNS';
+					startIndex: number;
+					endIndex: number;
+				};
+			};
+		}>,
 		retryCount: number = 3
-	): Promise<any> {
+	): Promise<{ replies: unknown[] }> {
+		let lastError: ApiError | null = null;
+		
 		for (let attempt = 1; attempt <= retryCount; attempt++) {
 			try {
 				const accessToken = await this.getAccessToken();
@@ -385,29 +427,32 @@ export class GoogleSheetsService {
 					);
 				}
 
-				const result = await response.json();
+				const result = await response.json() as { replies: unknown[] };
 				return result;
 			} catch (error) {
-				if (error instanceof ApiError) {
-					if (attempt === retryCount) {throw error;}
-					if (error.statusCode !== 401) {
-						await this.delay(Math.pow(2, attempt) * 1000);
-					}
-				} else {
-					if (attempt === retryCount) {
-						throw new ApiError(500, `網路錯誤: ${error instanceof Error ? error.message : String(error)}`, 'NETWORK_ERROR');
-					}
+				lastError = error instanceof ApiError ? error : new ApiError(500, `網路錯誤: ${error instanceof Error ? error.message : String(error)}`, 'NETWORK_ERROR');
+				
+				if (error instanceof ApiError && error.statusCode === 401) {
+					this.accessToken = null;
+					this.tokenExpiry = 0;
+				}
+				
+				if (attempt < retryCount) {
 					await this.delay(Math.pow(2, attempt) * 1000);
 				}
 			}
 		}
+		
+		throw lastError || new ApiError(500, '所有重試嘗試都失敗，無法執行 batchUpdate 操作', 'ALL_RETRIES_FAILED');
 	}
 
 	/**
 	 * 獲取工作表的基本資訊，包括工作表 ID
 	 * @param retryCount 重試次數
 	 */
-	async getSpreadsheetInfo(retryCount: number = 3): Promise<any> {
+	async getSpreadsheetInfo(retryCount: number = 3): Promise<SpreadsheetInfo> {
+		let lastError: ApiError | null = null;
+		
 		for (let attempt = 1; attempt <= retryCount; attempt++) {
 			try {
 				const accessToken = await this.getAccessToken();
@@ -438,22 +483,23 @@ export class GoogleSheetsService {
 					);
 				}
 
-				const data = await response.json();
+				const data = await response.json() as SpreadsheetInfo;
 				return data;
 			} catch (error) {
-				if (error instanceof ApiError) {
-					if (attempt === retryCount) {throw error;}
-					if (error.statusCode !== 401) {
-						await this.delay(Math.pow(2, attempt) * 1000);
-					}
-				} else {
-					if (attempt === retryCount) {
-						throw new ApiError(500, `網路錯誤: ${error instanceof Error ? error.message : String(error)}`, 'NETWORK_ERROR');
-					}
+				lastError = error instanceof ApiError ? error : new ApiError(500, `網路錯誤: ${error instanceof Error ? error.message : String(error)}`, 'NETWORK_ERROR');
+				
+				if (error instanceof ApiError && error.statusCode === 401) {
+					this.accessToken = null;
+					this.tokenExpiry = 0;
+				}
+				
+				if (attempt < retryCount) {
 					await this.delay(Math.pow(2, attempt) * 1000);
 				}
 			}
 		}
+		
+		throw lastError || new ApiError(500, '所有重試嘗試都失敗，無法獲取工作表資訊', 'ALL_RETRIES_FAILED');
 	}
 
 	/**

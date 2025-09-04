@@ -1,6 +1,6 @@
 import { OpenAPIRoute } from 'chanfana';
 import { z } from 'zod';
-import { AppContext, ApiResponse, ApiError } from '../types';
+import { AppContext, ApiResponse, ApiError, safeArrayAccess } from '../types';
 import { GoogleSheetsService } from '../services/GoogleSheetsService';
 import { CacheService } from '../services/CacheService';
 
@@ -92,13 +92,16 @@ export class GetCustomerOrders extends OpenAPIRoute {
 
 			// 檢查快取
 			const cacheKey = CacheService.generateKey('customer_orders', phone);
-			let cachedData = null;
+			let cachedData: any = null;
 
 			if (!forceRefresh) {
 				cachedData = await cacheService.get(cacheKey);
 				if (cachedData) {
 					c.header('X-Cache', 'HIT');
-					c.header('X-Cache-Age', Math.floor((Date.now() - cachedData.timestamp * 1000) / 1000).toString());
+					// 如果有 timestamp 屬性則計算快取年齡，否則跳過
+					if (cachedData.timestamp) {
+						c.header('X-Cache-Age', Math.floor((Date.now() - cachedData.timestamp * 1000) / 1000).toString());
+					}
 					c.header('X-Response-Time', `${Date.now() - startTime}ms`);
 					return c.json({
 						...cachedData,
@@ -146,7 +149,7 @@ export class GetCustomerOrders extends OpenAPIRoute {
 
 			const statusCode = error instanceof ApiError ? error.statusCode : 500;
 			c.header('X-Response-Time', `${Date.now() - startTime}ms`);
-			return c.json(errorResponse, statusCode as any);
+			return c.json(errorResponse, statusCode as 200 | 400 | 401 | 403 | 404 | 422 | 500);
 		}
 	}
 
@@ -158,7 +161,7 @@ export class GetCustomerOrders extends OpenAPIRoute {
 	private async getCustomerOrdersFromSheet(
 		sheetsService: GoogleSheetsService,
 		phone: string
-	): Promise<any[]> {
+	): Promise<{ id: number; orderTime: string; items: string; name: string }[]> {
 		try {
 			// 從客戶名單工作表獲取資料
 			const sheetName = '客戶名單';
@@ -169,14 +172,18 @@ export class GetCustomerOrders extends OpenAPIRoute {
 			}
 
 			// 第一行是標題
-			const header = sheetData[0];
+			const header = safeArrayAccess(sheetData, 0);
+			if (!header) {
+				return [];
+			}
+			
 			const rows = sheetData.slice(1);
 
 			// 建立標題映射
 			const headerMap = this.buildHeaderMap(header);
 
 			// 確保必要的欄位存在
-			if (!headerMap.phone || !headerMap.orderTime || !headerMap.items) {
+			if (headerMap.phone === undefined || headerMap.orderTime === undefined || headerMap.items === undefined) {
 				throw new ApiError(500, '客戶名單工作表缺少必要欄位', 'MISSING_REQUIRED_FIELDS');
 			}
 
@@ -198,7 +205,7 @@ export class GetCustomerOrders extends OpenAPIRoute {
 	 * 建立標題欄位映射
 	 * @param header 標題行資料
 	 */
-	private buildHeaderMap(header: any[]): { [key: string]: number } {
+	private buildHeaderMap(header: string[]): { [key: string]: number } {
 		const headerMap: { [key: string]: number } = {};
 
 		header.forEach((title, idx) => {
@@ -244,25 +251,48 @@ export class GetCustomerOrders extends OpenAPIRoute {
 	 * @param phone 查詢的電話號碼
 	 */
 	private findMatchingOrders(
-		rows: any[][],
+		rows: string[][],
 		headerMap: { [key: string]: number },
 		phone: string
-	): any[] {
-		const matchingOrders: any[] = [];
+	): Array<{
+		id: number;
+		orderTime: string;
+		items: string;
+		name: string;
+	}> {
+		const matchingOrders: Array<{
+			id: number;
+			orderTime: string;
+			items: string;
+			name: string;
+		}> = [];
 
 		rows.forEach((row, idx) => {
 			// 確保資料完整性
-			if (!row || row.length === 0) {return;}
-			if (!row[headerMap.phone]) {return;}
-
-			// 檢查電話是否匹配
-			const rowPhone = row[headerMap.phone];
+			if (!row || row.length === 0) {
+				return;
+			}
+			
+			const phoneIndex = headerMap.phone;
+			if (phoneIndex === undefined) {
+				return;
+			}
+			
+			const rowPhone = safeArrayAccess(row, phoneIndex);
+			if (!rowPhone) {
+				return;
+			}
 
 			// 使用電話號碼標準化比對
 			if (this.isPhoneMatch(phone, rowPhone)) {
 				// 獲取訂單時間和購買項目
-				const orderTime = row[headerMap.orderTime] || '';
-				const items = row[headerMap.items] || '';
+				const orderTimeIndex = headerMap.orderTime;
+				const itemsIndex = headerMap.items;
+				const nameIndex = headerMap.name;
+				
+				const orderTime = (orderTimeIndex !== undefined ? safeArrayAccess(row, orderTimeIndex) : '') || '';
+				const items = (itemsIndex !== undefined ? safeArrayAccess(row, itemsIndex) : '') || '';
+				const name = (nameIndex !== undefined ? safeArrayAccess(row, nameIndex) : '') || '';
 
 				// 只有當訂單時間或購買項目不為空時才加入結果
 				if (orderTime || items) {
@@ -270,7 +300,7 @@ export class GetCustomerOrders extends OpenAPIRoute {
 						id: idx, // 行索引作為 ID
 						orderTime: orderTime,
 						items: items,
-						name: row[headerMap.name] || ''
+						name: name
 					});
 				}
 			}

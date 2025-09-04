@@ -62,7 +62,7 @@ export class GetOrdersFromSupabase extends OpenAPIRoute {
         }
       }
 
-      const svc = new SupabaseService(c.env as any);
+      const svc = new SupabaseService(c.env);
       const paged = await svc.getOrders(query);
       const orderIdList = paged.data.map((r) => r.id);
       let itemsMap: Record<string, Array<{ product: string; quantity: number; price: number; subtotal: number }>> = {};
@@ -84,15 +84,15 @@ export class GetOrdersFromSupabase extends OpenAPIRoute {
         },
         items: itemsMap[r.id] ?? [],
         total: Number(r.total_amount ?? 0),
-        status: r.status as any,
+        status: r.status ?? 'pending',
         createdAt: r.created_at,
         deliveryMethod: r.delivery_method ?? '',
         deliveryAddress: r.delivery_address ?? '',
         dueDate: r.due_date ?? '',
         deliveryTime: r.delivery_time ?? '',
         paymentMethod: r.payment_method ?? '',
-        notes: (r as any).notes ?? '',
-        paymentStatus: (r.payment_status ?? '') as any,
+        notes: r.notes ?? '',
+        paymentStatus: r.payment_status ?? 'pending',
       }));
 
       const response = {
@@ -111,7 +111,7 @@ export class GetOrdersFromSupabase extends OpenAPIRoute {
       const msg = err instanceof Error ? err.message : String(err);
       console.error('GetOrdersFromSupabase 500:', err);
       c.header('X-Response-Time', `${Date.now() - start}ms`);
-      return c.json({ success: false, message: msg, request_id: requestId }, 500 as any);
+      return c.json({ success: false, message: msg, request_id: requestId }, 500);
     }
   }
 }
