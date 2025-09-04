@@ -1,8 +1,14 @@
 // 錯誤處理工具函數
-export const handleApiError = (error: any) => {
+interface ApiErrorResponse {
+  error: string;
+  message: string;
+  suggestion: string;
+}
+
+export const handleApiError = (error: unknown): ApiErrorResponse => {
   console.error('API Error:', error);
   
-  if (error.name === 'URIError' || error.message?.includes('URI malformed')) {
+  if (error instanceof Error && (error.name === 'URIError' || error.message?.includes('URI malformed'))) {
     console.warn('URI encoding error detected, attempting to fix...');
     return {
       error: 'URI_MALFORMED',
@@ -13,7 +19,7 @@ export const handleApiError = (error: any) => {
   
   return {
     error: 'UNKNOWN_ERROR',
-    message: error.message || '未知錯誤',
+    message: error instanceof Error ? error.message : '未知錯誤',
     suggestion: '請檢查網路連線或聯繫技術支援'
   };
 };
@@ -25,7 +31,7 @@ export const safeEncodeURI = (uri: string): string => {
     const decoded = decodeURIComponent(uri);
     return encodeURIComponent(decoded);
   } catch (error) {
-    console.warn('URI encoding failed, using original:', uri);
+    console.warn('URI encoding failed, using original:', uri, error instanceof Error ? error.message : error);
     return uri;
   }
 };
@@ -43,7 +49,7 @@ export const buildSafeUrl = (base: string, path: string, params?: Record<string,
     
     return url.toString();
   } catch (error) {
-    console.error('URL construction failed:', error);
+    console.error('URL construction failed:', error instanceof Error ? error.message : error);
     return `${base}${path}`;
   }
 };

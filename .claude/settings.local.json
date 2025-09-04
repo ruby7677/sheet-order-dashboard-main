@@ -22,7 +22,9 @@
       "Bash(npm run dev:*)",
       "Bash(npx tsc:*)",
       "Bash(npx vite:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(npm run lint:*)",
+      "Bash(npx eslint:*)"
     ],
     "deny": []
   }
