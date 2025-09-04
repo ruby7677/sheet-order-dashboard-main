@@ -55,9 +55,9 @@ export async function migrateGoogleSheetsData(options: MigrationOptions): Promis
     
     console.log('遷移完成:', result);
     return result as MigrationResult;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('資料遷移錯誤:', error);
-    const errorMessage = error.message || '未知錯誤';
+    const errorMessage = error instanceof Error ? error.message : String(error);
     throw new Error(`資料遷移失敗: ${errorMessage}`);
   }
 }

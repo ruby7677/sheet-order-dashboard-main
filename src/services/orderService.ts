@@ -1,4 +1,11 @@
 import { Order, OrderStats, OrderItem } from '@/types/order';
+import type { 
+  ApiResponse, 
+  SheetRowData, 
+  SupabaseOrderData, 
+  DeleteOrderResponse,
+  BatchDeleteOrdersResponse
+} from '@/types/api';
 // src/services/orderService.ts
 
 // 動態 API 配置系統
@@ -79,7 +86,12 @@ export const subscribeDataSourceChange = (listener: Listener) => {
 
 const notifyDataSourceChange = () => {
   dataSourceListeners.forEach((l) => {
-    try { l(); } catch {}
+    try { 
+      l(); 
+    } catch (error) {
+      // 靜默忽略監聽器錯誤，避免影響其他監聽器
+      console.warn('Data source change listener error:', error);
+    }
   });
 };
 
@@ -208,7 +220,7 @@ export const fetchOrders = async (filters?: {
   let res: Response;
   try {
     res = await apiCallWithFallback(fullEndpoint, { method: 'GET' });
-  } catch (err: any) {
+  } catch (err: unknown) {
     // 任何 Supabase 來源錯誤，皆回退到 Sheets，確保 UI 可用
     if (useSupabase) {
       const fallbackEndpoint = `/api/get_orders_from_sheet.php?${params.toString()}`;
@@ -231,7 +243,7 @@ export const fetchOrders = async (filters?: {
     throw new Error(errorMsg);
   }
 
-  const result = await res.json();
+  const result: ApiResponse<SupabaseOrderData[] | SheetRowData[]> = await res.json();
   if (!result.success) {throw new Error(result.message || '讀取訂單失敗');}
   if (!result.data || !Array.isArray(result.data)) {
     console.warn('API回傳的訂單資料格式不正確，應為陣列:', result.data);
@@ -240,13 +252,13 @@ export const fetchOrders = async (filters?: {
 
   // Supabase：已回傳前端 Order 形狀
   if (useSupabase) {
-    const supabaseOrders: Order[] = (result.data as any[]).map((o: any) => ({
+    const supabaseOrders: Order[] = (result.data as SupabaseOrderData[]).map((o: SupabaseOrderData) => ({
       id: String(o.id),
       orderNumber: String(o.orderNumber),
       customer: { name: String(o.customer?.name || ''), phone: String(o.customer?.phone || '') },
       items: Array.isArray(o.items) ? o.items : [],
       total: Number(o.total || 0),
-      status: String(o.status || '訂單確認中') as any,
+      status: String(o.status || '訂單確認中') as Order['status'],
       createdAt: String(o.createdAt || ''),
       deliveryMethod: String(o.deliveryMethod || ''),
       deliveryAddress: String(o.deliveryAddress || ''),
@@ -254,7 +266,7 @@ export const fetchOrders = async (filters?: {
       deliveryTime: String(o.deliveryTime || ''),
       paymentMethod: String(o.paymentMethod || ''),
       notes: String(o.notes || ''),
-      paymentStatus: String(o.paymentStatus || '') as any,
+      paymentStatus: String(o.paymentStatus || '') as Order['paymentStatus'],
     }));
 
     orderCache = { timestamp: now, data: supabaseOrders };
@@ -262,31 +274,12 @@ export const fetchOrders = async (filters?: {
   }
 
   // Sheets：將資料轉換成前端 Order 型別
-  let orders = result.data.map((row: {
-    createdAt?: string;
-    id?: string;
-    orderNumber?: string;
-    customerName?: string;
-    customerPhone?: string;
-    items?: string | Array<{product: string; quantity: number; price: number}>;
-    amount?: number;
-    dueDate?: string;
-    deliveryTime?: string;
-    note?: string;
-    status?: string;
-    deliveryMethod?: string;
-    deliveryAddress?: string;
-    paymentMethod?: string;
-    paymentStatus?: string;
-    備註?: string;
-    訂單時間?: string;
-    款項?: string;
-  }, idx: number) => {
-    const createdAt = String(row['createdAt'] || row['訂單時間'] || row[0] || new Date().toISOString().split('T')[0]);
+  let orders = (result.data as SheetRowData[]).map((row: SheetRowData, idx: number) => {
+    const createdAt = String(row.createdAt || row.訂單時間 || row[0] || new Date().toISOString().split('T')[0]);
     const id = String(row.id || `generated_id_${idx}`); // 提供預設ID以防萬一
     const orderNumber = String(row.orderNumber || `ORD-${Date.now()}-${idx}`); // 提供預設訂單號
-    const customerName = String(row.customerName || (row as any).customer?.name || row['姓名'] || row[1] || '');
-    const customerPhone = String(row.customerPhone || (row as any).customer?.phone || row['電話'] || row[2] || '');
+    const customerName = String(row.customerName || row.customer?.name || row.姓名 || row[1] || '');
+    const customerPhone = String(row.customerPhone || row.customer?.phone || row.電話 || row[2] || '');
 
     let itemsArray: { product: string; quantity: number; price: number; subtotal: number }[] = [];
     if (typeof row.items === 'string' && row.items.trim() !== '') {
@@ -360,7 +353,7 @@ export const fetchOrders = async (filters?: {
         : itemsArray.reduce((sum, i) => sum + i.subtotal, 0),
       dueDate: formattedDueDate,
       deliveryTime: String(row.deliveryTime || ''),
-      notes: String(row.note || (row as any).customer?.note || row['note'] || row['備註'] || ''),
+      notes: String(row.note || row.customer?.note || row.note || row.備註 || ''),
       status: String(row.status || '訂單確認中'), // 提供預設狀態
       deliveryMethod: String(row.deliveryMethod || ''),
       deliveryAddress: String(row.deliveryAddress || ''),
@@ -696,7 +689,7 @@ export const updateOrderItems = async (id: string, items: OrderItem[], total: nu
 };
 
 // 刪除訂單
-export const deleteOrder = async (id: string): Promise<any> => {
+export const deleteOrder = async (id: string): Promise<DeleteOrderResponse> => {
   // 添加時間戳和隨機數，確保每次請求都是唯一的
   const timestamp = Date.now();
   const nonce = Math.random().toString(36).substring(2, 15);
@@ -738,17 +731,7 @@ export const deleteOrder = async (id: string): Promise<any> => {
 };
 
 // 批次刪除訂單
-export const batchDeleteOrders = async (ids: string[]): Promise<{
-  success: boolean;
-  results: Array<{
-    id: string;
-    success: boolean;
-    message: string;
-    orderNumber?: string;
-  }>;
-  totalDeleted: number;
-  totalFailed: number;
-}> => {
+export const batchDeleteOrders = async (ids: string[]): Promise<BatchDeleteOrdersResponse> => {
   // 添加時間戳和隨機數，確保每次請求都是唯一的
   const timestamp = Date.now();
   const nonce = Math.random().toString(36).substring(2, 15);

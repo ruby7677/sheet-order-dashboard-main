@@ -1,6 +1,35 @@
 import { supabase } from '@/integrations/supabase/client';
 import SecureStorage from '@/utils/secureStorage';
 
+// 產品相關類型定義
+interface Product {
+  id: string;
+  name: string;
+  price: number;
+  category?: string;
+  active?: boolean;
+  description?: string;
+}
+
+interface ProductCreatePayload {
+  name: string;
+  price: number;
+  category?: string;
+  active?: boolean;
+  description?: string;
+}
+
+interface ProductUpdatePayload extends Partial<ProductCreatePayload> {
+  id?: string;
+}
+
+// API 錯誤類型
+interface ApiError {
+  message: string;
+  code?: string;
+  details?: unknown;
+}
+
 class SecureApiService {
   // 兩段式後端：優先 Workers /api，其次 Supabase Edge Functions
   private endpoints: string[] = (() => {
@@ -22,7 +51,7 @@ class SecureApiService {
 
   private async makeSecureRequest(endpoint: string, options: RequestInit = {}): Promise<Response> {
     const token = this.getAuthToken();
-    let lastErr: any = null;
+    let lastErr: ApiError | Error | null = null;
     for (const base of this.endpoints) {
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
@@ -40,8 +69,8 @@ class SecureApiService {
         if (response.ok) { return response; }
         // 非 2xx 也嘗試讀取錯誤訊息，並嘗試下一個端點
         try { lastErr = await response.json(); } catch { lastErr = { message: response.statusText }; }
-      } catch (e: any) {
-        lastErr = e;
+      } catch (e: unknown) {
+        lastErr = e instanceof Error ? e : new Error(String(e));
       }
     }
     throw new Error(lastErr?.message || '後端服務不可用');
@@ -108,7 +137,7 @@ class SecureApiService {
   }
 
   static validatePhone(phone: string): boolean {
-    const phoneRegex = /^[\d\s\-\+\(\)]+$/;
+    const phoneRegex = /^[\d\s\-+()]+$/;
     return phoneRegex.test(phone) && phone.replace(/\D/g, '').length >= 8;
   }
 
@@ -131,7 +160,7 @@ class SecureApiService {
     return json.data;
   }
 
-  async createProduct(payload: any) {
+  async createProduct(payload: ProductCreatePayload): Promise<Product> {
     const res = await this.makeSecureRequest('products', {
       method: 'POST',
       body: JSON.stringify(payload)
@@ -141,7 +170,7 @@ class SecureApiService {
     return json.data;
   }
 
-  async updateProduct(id: string, payload: any) {
+  async updateProduct(id: string, payload: ProductUpdatePayload): Promise<Product> {
     const res = await this.makeSecureRequest('products', {
       method: 'PUT',
       body: JSON.stringify({ id, ...payload })
