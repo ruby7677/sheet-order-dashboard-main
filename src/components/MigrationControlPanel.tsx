@@ -23,7 +23,7 @@ export function MigrationControlPanel({ className }: MigrationControlPanelProps)
   const [isLoading, setIsLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [migrationResult, setMigrationResult] = useState<MigrationResult | null>(null);
-  const [validationData, setValidationData] = useState<any>(null);
+  const [validationData, setValidationData] = useState<unknown>(null);
   const [strategy, setStrategy] = useState<'auto' | 'replace' | 'upsert'>('auto');
   const [replaceWindowDays, setReplaceWindowDays] = useState<number>(21);
 
@@ -177,7 +177,7 @@ export function MigrationControlPanel({ className }: MigrationControlPanelProps)
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1">
               <Label className="text-sm">遷移策略</Label>
-              <Select value={strategy} onValueChange={(v: any) => setStrategy(v)}>
+              <Select value={strategy} onValueChange={(v: 'auto' | 'replace' | 'upsert') => setStrategy(v)}>
                 <SelectTrigger className="h-9">
                   <SelectValue placeholder="選擇策略" />
                 </SelectTrigger>

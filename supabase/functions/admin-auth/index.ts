@@ -178,7 +178,7 @@ Deno.serve(async (req) => {
   }
 });
 
-async function generateJWT(payload: any): Promise<string> {
+async function generateJWT(payload: { user_id?: string; email?: string; exp: number; iat: number }): Promise<string> {
   const header = { alg: 'HS256', typ: 'JWT' };
   
   const encodedHeader = btoa(JSON.stringify(header)).replace(/=/g, '');

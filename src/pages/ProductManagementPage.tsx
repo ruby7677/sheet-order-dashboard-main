@@ -76,7 +76,7 @@ const ProductManagementPage: React.FC = () => {
       console.error('載入商品失敗:', error);
       toast({
         title: '錯誤',
-        description: (error as any)?.message || '載入商品資料失敗',
+        description: error instanceof Error ? error.message : '載入商品資料失敗',
         variant: 'destructive',
       });
     } finally {
@@ -137,7 +137,7 @@ const ProductManagementPage: React.FC = () => {
           await new SecureApiService().updateProduct(editingProduct.id, {
             ...formData,
             // 確保儲存為英文枚舉值
-            stock_status: formData.stock_status as any
+            stock_status: formData.stock_status as StockStatus
           });
         } catch (_) {
           const { error, status, statusText } = await supabase
@@ -159,12 +159,12 @@ const ProductManagementPage: React.FC = () => {
         try {
           await new SecureApiService().createProduct({
             ...formData,
-            stock_status: formData.stock_status as any
+            stock_status: formData.stock_status as StockStatus
           });
         } catch (_) {
           const { error, status, statusText } = await supabase
             .from('products')
-            .insert([formData as any]);
+            .insert([formData]);
           if (error) { throw new Error(`[${status} ${statusText}] ${error.message}`); }
         }
         
@@ -176,11 +176,12 @@ const ProductManagementPage: React.FC = () => {
 
       setIsModalOpen(false);
       loadProducts();
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : '儲存商品失敗';
       console.error('儲存商品失敗:', error);
       toast({
         title: '錯誤',
-        description: error?.message || '儲存商品失敗',
+        description: errorMessage,
         variant: 'destructive',
       });
     }
@@ -208,11 +209,12 @@ const ProductManagementPage: React.FC = () => {
         description: '商品已刪除',
       });
       loadProducts();
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : '刪除商品失敗';
       console.error('刪除商品失敗:', error);
       toast({
         title: '錯誤',
-        description: error?.message || '刪除商品失敗',
+        description: errorMessage,
         variant: 'destructive',
       });
     }
@@ -221,7 +223,7 @@ const ProductManagementPage: React.FC = () => {
   // 快速更新庫存狀態（從表格直接選擇）
   const handleQuickStockUpdate = async (product: Product, stockStatus: StockStatus, stockQuantity?: number) => {
     try {
-      const updateData: any = { stock_status: stockStatus };
+      const updateData: Partial<Product> = { stock_status: stockStatus };
       if (stockQuantity !== undefined) {
         updateData.stock_quantity = stockQuantity;
       }
@@ -241,11 +243,12 @@ const ProductManagementPage: React.FC = () => {
         description: '庫存狀態已更新',
       });
       loadProducts();
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : '更新庫存失敗';
       console.error('更新庫存失敗:', error);
       toast({
         title: '錯誤',
-        description: error?.message || '更新庫存失敗',
+        description: errorMessage,
         variant: 'destructive',
       });
     }

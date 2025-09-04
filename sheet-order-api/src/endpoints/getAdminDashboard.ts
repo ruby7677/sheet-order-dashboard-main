@@ -1,6 +1,6 @@
 import { OpenAPIRoute } from 'chanfana';
 import { z } from 'zod';
-import { AppContext, ApiResponse, ApiError } from '../types';
+import { AppContext, ApiResponse, ApiError, safeArrayAccess, DashboardStats } from '../types';
 import { GoogleSheetsService } from '../services/GoogleSheetsService';
 import { CacheService } from '../services/CacheService';
 
@@ -84,13 +84,16 @@ export class GetAdminDashboard extends OpenAPIRoute {
 
 			// 檢查快取
 			const cacheKey = CacheService.generateKey('admin_dashboard');
-			let cachedData = null;
+			let cachedData: any = null;
 
 			if (!forceRefresh) {
 				cachedData = await cacheService.get(cacheKey);
 				if (cachedData) {
 					c.header('X-Cache', 'HIT');
-					c.header('X-Cache-Age', Math.floor((Date.now() - cachedData.timestamp * 1000) / 1000).toString());
+					// 如果有 timestamp 屬性則計算快取年齡，否則跳過
+					if (cachedData.timestamp) {
+						c.header('X-Cache-Age', Math.floor((Date.now() - cachedData.timestamp * 1000) / 1000).toString());
+					}
 					c.header('X-Response-Time', `${Date.now() - startTime}ms`);
 					return c.json({
 						...cachedData,
@@ -135,7 +138,7 @@ export class GetAdminDashboard extends OpenAPIRoute {
 
 			const statusCode = error instanceof ApiError ? error.statusCode : 500;
 			c.header('X-Response-Time', `${Date.now() - startTime}ms`);
-			return c.json(errorResponse, statusCode as any);
+			return c.json(errorResponse, statusCode as 200 | 400 | 401 | 403 | 404 | 422 | 500);
 		}
 	}
 
@@ -145,7 +148,7 @@ export class GetAdminDashboard extends OpenAPIRoute {
 	 */
 	private async getDashboardStatsFromSheet(
 		sheetsService: GoogleSheetsService
-	): Promise<any> {
+	): Promise<DashboardStats> {
 		try {
 			// 從訂單工作表獲取資料
 			const sheetName = '訂單';
@@ -156,7 +159,11 @@ export class GetAdminDashboard extends OpenAPIRoute {
 			}
 
 			// 第一行是標題
-			const header = sheetData[0];
+			const header = safeArrayAccess(sheetData, 0);
+			if (!header) {
+				return [];
+			}
+			
 			const rows = sheetData.slice(1);
 
 			// 建立標題映射
@@ -183,7 +190,7 @@ export class GetAdminDashboard extends OpenAPIRoute {
 	 * 建立標題欄位映射
 	 * @param header 標題行資料
 	 */
-	private buildHeaderMap(header: any[]): { [key: string]: number } {
+	private buildHeaderMap(header: string[]): { [key: string]: number } {
 		const headerMap: { [key: string]: number } = {};
 
 		header.forEach((title, idx) => {
@@ -212,7 +219,7 @@ export class GetAdminDashboard extends OpenAPIRoute {
 	 * @param rows 資料行
 	 * @param headerMap 標題映射
 	 */
-	private calculateStats(rows: any[][], headerMap: { [key: string]: number }): any {
+	private calculateStats(rows: string[][], headerMap: { [key: string]: number }) {
 		const now = new Date();
 		const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 		const weekStart = new Date(today);
@@ -226,9 +233,12 @@ export class GetAdminDashboard extends OpenAPIRoute {
 
 		const statusBreakdown = {
 			confirming: 0,
-			copied: 0,
-			shipped: 0,
-			cancelled: 0
+			processing: 0,
+			shipping: 0,
+			delivered: 0,
+			cancelled: 0,
+			completed: 0,
+			pending: 0
 		};
 
 		const paymentBreakdown = {
@@ -266,14 +276,22 @@ export class GetAdminDashboard extends OpenAPIRoute {
 				switch (status) {
 					case '訂單確認中':
 						statusBreakdown.confirming++;
+						statusBreakdown.pending++;
 						pendingOrders++;
 						break;
 					case '已抄單':
-						statusBreakdown.copied++;
+						statusBreakdown.processing++;
+						statusBreakdown.pending++;
 						pendingOrders++;
 						break;
 					case '已出貨':
-						statusBreakdown.shipped++;
+						statusBreakdown.shipping++;
+						statusBreakdown.completed++;
+						completedOrders++;
+						break;
+					case '已送達':
+						statusBreakdown.delivered++;
+						statusBreakdown.completed++;
 						completedOrders++;
 						break;
 					case '取消訂單':
@@ -320,8 +338,9 @@ export class GetAdminDashboard extends OpenAPIRoute {
 			pendingOrders,
 			completedOrders,
 			totalOrders,
+			totalCustomers: 0, // 會在調用方處更新
 			statusBreakdown,
-			paymentBreakdown
+			dailyStats: [] // TODO: 實現每日統計數據
 		};
 	}
 
@@ -383,7 +402,7 @@ export class GetAdminDashboard extends OpenAPIRoute {
 	/**
 	 * 取得空的統計資料
 	 */
-	private getEmptyStats(): any {
+	private getEmptyStats(): DashboardStats {
 		return {
 			todayOrders: 0,
 			weekOrders: 0,
@@ -393,15 +412,14 @@ export class GetAdminDashboard extends OpenAPIRoute {
 			totalCustomers: 0,
 			statusBreakdown: {
 				confirming: 0,
-				copied: 0,
-				shipped: 0,
-				cancelled: 0
+				processing: 0,
+				shipping: 0,
+				delivered: 0,
+				cancelled: 0,
+				completed: 0,
+				pending: 0
 			},
-			paymentBreakdown: {
-				paid: 0,
-				unpaid: 0,
-				partial: 0
-			}
+			dailyStats: []
 		};
 	}
 

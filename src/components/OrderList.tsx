@@ -357,7 +357,7 @@ const OrderList: React.FC<OrderListProps> = ({ filters, onOrderClick, onOrdersCh
                     if (!batchOrderStatus || selected.length === 0) {return;}
                     setBatchLoading(true);
                     try {
-                      await batchUpdateOrderStatus(selected, batchOrderStatus as any);
+                      await batchUpdateOrderStatus(selected, batchOrderStatus as '訂單確認中' | '已抄單' | '已出貨' | '取消訂單');
                       toast({
                         title: '成功',
                         description: '訂單狀態已批次更新',
@@ -403,7 +403,7 @@ const OrderList: React.FC<OrderListProps> = ({ filters, onOrderClick, onOrdersCh
                     if (!batchPaymentStatus || selected.length === 0) {return;}
                     setBatchLoading(true);
                     try {
-                      await batchUpdateOrderPaymentStatus(selected, batchPaymentStatus as any);
+                      await batchUpdateOrderPaymentStatus(selected, batchPaymentStatus);
                       toast({
                         title: '成功',
                         description: '款項狀態已批次更新',

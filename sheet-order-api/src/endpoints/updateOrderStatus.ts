@@ -1,6 +1,6 @@
 import { OpenAPIRoute } from 'chanfana';
 import { z } from 'zod';
-import { AppContext, ApiResponse, ApiError } from '../types';
+import { AppContext, ApiResponse, ApiError, safeArrayAccess } from '../types';
 import { GoogleSheetsService } from '../services/GoogleSheetsService';
 import { CacheService } from '../services/CacheService';
 
@@ -91,7 +91,7 @@ export class UpdateOrderStatus extends OpenAPIRoute {
 			}
 
 			// 驗證狀態值是否合法（參考原 PHP 邏輯）
-			if (!this.VALID_STATUSES.includes(status as any)) {
+			if (!this.VALID_STATUSES.includes(status)) {
 				c.header('X-Response-Time', `${Date.now() - startTime}ms`);
 				return c.json({
 					success: false,
@@ -126,7 +126,17 @@ export class UpdateOrderStatus extends OpenAPIRoute {
 			}
 
 			// 尋找標題行中的 id 和 status 欄位索引
-			const header = sheetData[0];
+			const header = safeArrayAccess(sheetData, 0);
+			if (!header) {
+				c.header('X-Response-Time', `${Date.now() - startTime}ms`);
+				return c.json({
+					success: false,
+					message: '無法讀取工作表標題行',
+					timestamp: Math.floor(Date.now() / 1000),
+					request_id: requestId
+				}, 500);
+			}
+			
 			const idCol = header.indexOf('id');
 			const statusCol = header.indexOf('status');
 
@@ -193,7 +203,7 @@ export class UpdateOrderStatus extends OpenAPIRoute {
 
 			const statusCode = error instanceof ApiError ? error.statusCode : 500;
 			c.header('X-Response-Time', `${Date.now() - startTime}ms`);
-			return c.json(errorResponse, statusCode as any);
+			return c.json(errorResponse, statusCode as 200 | 400 | 401 | 403 | 404 | 422 | 500);
 		}
 	}
 

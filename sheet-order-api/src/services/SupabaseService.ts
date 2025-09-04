@@ -7,13 +7,7 @@
 */
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
-import { ApiError } from '../types'
-
-// Env 型別：從 worker-configuration.d.ts 繼承
-export type SupabaseEnv = Env & {
-  SUPABASE_URL?: string
-  SUPABASE_SERVICE_ROLE_KEY?: string
-}
+import { ApiError, Env } from '../types'
 
 // 通用：分頁與排序
 export interface Pagination {
@@ -77,6 +71,19 @@ export interface PagedResult<T> {
   total: number
 }
 
+// 訂單項目資料模型
+export interface OrderItemRecord {
+  id?: string
+  order_id: string
+  product_name?: string
+  product?: string
+  unit_price?: number
+  price?: number
+  quantity?: number
+  total_price?: number
+  subtotal?: number
+}
+
 // 產品資料模型
 export interface ProductRecord {
   id: string
@@ -103,7 +110,7 @@ export interface ProductRecord {
 export class SupabaseService {
   private client: SupabaseClient
 
-  constructor(env: SupabaseEnv) {
+  constructor(env: Env) {
     const url = env.SUPABASE_URL
     const key = env.SUPABASE_SERVICE_ROLE_KEY
     if (!url) {throw new ApiError(500, 'SUPABASE_URL 未設定', 'ENV_MISSING')}
@@ -254,9 +261,9 @@ export class SupabaseService {
     if (error) {throw new ApiError(500, `查詢 order_items 失敗: ${error.message}`, 'DB_QUERY_ERROR')}
 
     for (const row of data ?? []) {
-      const oid = String((row as any).order_id)
+      const r = row as OrderItemRecord
+      const oid = String(r.order_id)
       if (!result[oid]) {result[oid] = []}
-      const r: any = row as any
       const product = r.product_name ?? r.product ?? ''
       const price = r.unit_price ?? r.price ?? 0
       const subtotal = r.total_price ?? r.subtotal ?? (Number(price) * Number(r.quantity ?? 0))
@@ -288,15 +295,15 @@ export class SupabaseService {
     if (!payload.product_id || !payload.name || typeof payload.price !== 'number') {
       throw new ApiError(400, '缺少必要欄位: product_id/name/price', 'VALIDATION_ERROR')
     }
-    const row = { ...payload, updated_at: new Date().toISOString() }
-    const { data, error } = await this.client.from('products').insert([row as any]).select('*').single()
+    const row = { ...payload, updated_at: new Date().toISOString() } as Partial<ProductRecord>
+    const { data, error } = await this.client.from('products').insert([row]).select('*').single()
     if (error) { throw new ApiError(500, `新增商品失敗: ${error.message}`, 'DB_INSERT_ERROR') }
     return data as unknown as ProductRecord
   }
 
   async updateProduct(id: string, payload: Partial<ProductRecord>): Promise<ProductRecord> {
-    const row = { ...payload, updated_at: new Date().toISOString() }
-    const { data, error } = await this.client.from('products').update(row as any).eq('id', id).select('*').single()
+    const row = { ...payload, updated_at: new Date().toISOString() } as Partial<ProductRecord>
+    const { data, error } = await this.client.from('products').update(row).eq('id', id).select('*').single()
     if (error) { throw new ApiError(500, `更新商品失敗: ${error.message}`, 'DB_UPDATE_ERROR') }
     return data as unknown as ProductRecord
   }

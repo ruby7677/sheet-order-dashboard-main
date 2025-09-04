@@ -1,6 +1,6 @@
 import { OpenAPIRoute } from 'chanfana';
 import { z } from 'zod';
-import { AppContext, ApiResponse, ApiError } from '../types';
+import { AppContext, ApiResponse, ApiError, safeArrayAccess } from '../types';
 import { GoogleSheetsService } from '../services/GoogleSheetsService';
 import { CacheService } from '../services/CacheService';
 
@@ -185,7 +185,7 @@ export class BatchDeleteOrders extends OpenAPIRoute {
 
 			const statusCode = error instanceof ApiError ? error.statusCode : 500;
 			c.header('X-Response-Time', `${Date.now() - startTime}ms`);
-			return c.json(errorResponse, statusCode as any);
+			return c.json(errorResponse, statusCode as 200 | 400 | 401 | 403 | 404 | 422 | 500);
 		}
 	}
 
@@ -194,7 +194,7 @@ export class BatchDeleteOrders extends OpenAPIRoute {
 	 * @param ids 要驗證的 ID 陣列
 	 * @param sheetData 工作表資料
 	 */
-	private validateOrderIds(ids: string[], sheetData: any[][]) {
+	private validateOrderIds(ids: string[], sheetData: string[][]) {
 		const validIds: number[] = [];
 		const invalidIds: string[] = [];
 		const orderNumbers: { [key: number]: string } = {};
@@ -229,7 +229,7 @@ export class BatchDeleteOrders extends OpenAPIRoute {
 			const spreadsheetInfo = await sheetsService.getSpreadsheetInfo();
 			
 			// 尋找指定名稱的工作表
-			const sheet = spreadsheetInfo.sheets?.find((s: any) => 
+			const sheet = spreadsheetInfo.sheets?.find(s => 
 				s.properties?.title === sheetName
 			);
 			
@@ -260,7 +260,7 @@ export class BatchDeleteOrders extends OpenAPIRoute {
 		// 按照行號從大到小排序，這樣刪除時不會影響其他行的索引
 		const sortedIds = [...validIds].sort((a, b) => b - a);
 		
-		const results: any[] = [];
+		const results: Array<{ id: string; success: boolean; message: string; orderNumber: string }> = [];
 		let deletedCount = 0;
 		let failedCount = 0;
 
@@ -272,7 +272,7 @@ export class BatchDeleteOrders extends OpenAPIRoute {
 					deleteDimension: {
 						range: {
 							sheetId: sheetId,
-							dimension: 'ROWS',
+							dimension: 'ROWS' as const,
 							startIndex: targetRowIndex, // 0-based index
 							endIndex: targetRowIndex + 1 // 刪除一行
 						}
@@ -333,7 +333,10 @@ export class BatchDeleteOrders extends OpenAPIRoute {
 			// 從第二行開始（跳過標題行），重新分配 ID
 			for (let i = 1; i < rows.length; i++) {
 				// 檢查該行是否有資料（避免更新空白行）
-				if (!rows[i] || !rows[i][1] || String(rows[i][1]).trim() === '') {
+				const currentRow = safeArrayAccess(rows, i);
+				const customerName = currentRow ? safeArrayAccess(currentRow, 1) : undefined;
+				
+				if (!currentRow || !customerName || String(customerName).trim() === '') {
 					continue;
 				}
 

@@ -1,6 +1,6 @@
 import { OpenAPIRoute } from 'chanfana';
 import { z } from 'zod';
-import { AppContext, ApiResponse, ApiError } from '../types';
+import { AppContext, ApiResponse, ApiError, safeArrayAccess } from '../types';
 import { GoogleSheetsService } from '../services/GoogleSheetsService';
 import { CacheService } from '../services/CacheService';
 
@@ -171,7 +171,7 @@ export class DeleteOrder extends OpenAPIRoute {
 
 			const statusCode = error instanceof ApiError ? error.statusCode : 500;
 			c.header('X-Response-Time', `${Date.now() - startTime}ms`);
-			return c.json(errorResponse, statusCode as any);
+			return c.json(errorResponse, statusCode as 200 | 400 | 401 | 403 | 404 | 422 | 500);
 		}
 	}
 
@@ -186,7 +186,7 @@ export class DeleteOrder extends OpenAPIRoute {
 			const spreadsheetInfo = await sheetsService.getSpreadsheetInfo();
 			
 			// 尋找指定名稱的工作表
-			const sheet = spreadsheetInfo.sheets?.find((s: any) => 
+			const sheet = spreadsheetInfo.sheets?.find(s => 
 				s.properties?.title === sheetName
 			);
 			
@@ -218,7 +218,7 @@ export class DeleteOrder extends OpenAPIRoute {
 				deleteDimension: {
 					range: {
 						sheetId: sheetId,
-						dimension: 'ROWS',
+						dimension: 'ROWS' as const,
 						startIndex: rowIndex, // 0-based index
 						endIndex: rowIndex + 1 // 刪除一行
 					}
@@ -278,7 +278,10 @@ export class DeleteOrder extends OpenAPIRoute {
 				if (i === 0) {continue;} // 跳過標題行
 
 				// 檢查該行是否有資料（避免更新空白行）
-				if (!rows[i] || !rows[i][1] || String(rows[i][1]).trim() === '') {
+				const currentRow = safeArrayAccess(rows, i);
+				const customerName = currentRow ? safeArrayAccess(currentRow, 1) : undefined;
+				
+				if (!currentRow || !customerName || String(customerName).trim() === '') {
 					continue;
 				}
 
