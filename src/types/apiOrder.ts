@@ -1,3 +1,5 @@
+import { OrderStatus, PaymentStatus } from './order';
+
 // API 返回的原始訂單資料結構
 export interface ApiOrder {
   id: string | number;
@@ -61,7 +63,7 @@ export function transformApiOrder(apiOrder: ApiOrder): import('./order').Order {
     },
     items: parsedItems,
     total: typeof apiOrder.amount === 'string' ? parseFloat(apiOrder.amount) || 0 : apiOrder.amount,
-    status: apiOrder.status as any,
+    status: validateOrderStatus(apiOrder.status),
     createdAt: apiOrder.createdAt,
     deliveryMethod: apiOrder.deliveryMethod,
     deliveryAddress: apiOrder.deliveryAddress,
@@ -69,6 +71,32 @@ export function transformApiOrder(apiOrder: ApiOrder): import('./order').Order {
     deliveryTime: apiOrder.deliveryTime,
     paymentMethod: apiOrder.paymentMethod,
     notes: apiOrder.note,
-    paymentStatus: (apiOrder.paymentStatus || '') as any
+    paymentStatus: validatePaymentStatus(apiOrder.paymentStatus || '')
   };
+}
+
+// 類型安全的狀態驗證函數
+function validateOrderStatus(status: string): OrderStatus {
+  const validStatuses: OrderStatus[] = ['訂單確認中', '已抄單', '已出貨', '取消訂單'];
+  
+  if (validStatuses.includes(status as OrderStatus)) {
+    return status as OrderStatus;
+  }
+  
+  // 預設值或映射邏輯
+  console.warn(`Invalid order status: ${status}, using default '訂單確認中'`);
+  return '訂單確認中';
+}
+
+// 類型安全的付款狀態驗證函數  
+function validatePaymentStatus(status: string): PaymentStatus {
+  const validPaymentStatuses: PaymentStatus[] = ['未收費', '已收費', '待轉帳', '未全款', '特殊', ''];
+  
+  if (validPaymentStatuses.includes(status as PaymentStatus)) {
+    return status as PaymentStatus;
+  }
+  
+  // 預設值或映射邏輯
+  console.warn(`Invalid payment status: ${status}, using default '未收費'`);
+  return '未收費';
 }

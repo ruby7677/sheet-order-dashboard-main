@@ -24,7 +24,8 @@
       "Bash(npx vite:*)",
       "Bash(python:*)",
       "Bash(npm run lint:*)",
-      "Bash(npx eslint:*)"
+      "Bash(npx eslint:*)",
+      "Bash(npm run test:run:*)"
     ],
     "deny": []
   }
