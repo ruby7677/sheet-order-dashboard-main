@@ -12,7 +12,7 @@ export class GetOrdersFromSheet extends OpenAPIRoute {
 	schema = {
 		tags: ['Orders'],
 		summary: '從 Google Sheets 讀取訂單資料',
-		description: '讀取 Google Sheets 中的所有訂單資料，支援 15 秒快取和強制刷新',
+		description: '讀取 Google Sheets 中的所有訂單資料，支援 60 秒快取和強制刷新',
 		request: {
 			query: z.object({
 				refresh: z.string().optional().describe('強制刷新快取 (設為 "1" 啟用)'),
