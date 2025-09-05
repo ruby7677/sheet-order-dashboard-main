@@ -12,21 +12,21 @@ export async function downloadQuickStoreXlsx(orders: Order[], filename = '快速
   const worksheet = workbook.addWorksheet('B2S訂單');
 
   // 標題行
-  //const headers = [
-  //  '訂單編號',
-  //  '收件人姓名(必填)',
-  //  '收件人手機(必填)',
-  //  'FB名稱',
-  //  '訂單備註',
-  //  '代收金額',
-  //  '門市編號(必填)',
-  //  '匯款帳戶後五碼',
-  //  '列印張數',
-  //  '溫層'
-  //];
+  const headers = [
+    '訂單編號',
+    '收件人姓名(必填)',
+    '收件人手機(必填)',
+    'FB名稱',
+    '訂單備註',
+    '代收金額',
+    '門市編號(必填)',
+    '匯款帳戶後五碼',
+    '列印張數',
+    '溫層'
+  ];
 
   // 設定標題行
-  //worksheet.addRow(headers);
+  worksheet.addRow(headers);
 
   // 產生資料行
   orders.forEach((order, idx) => {
