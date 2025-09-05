@@ -117,38 +117,38 @@ export const downloadExcelCsv = (orders: Order[], filename: string = 'excel_orde
  * 專為黑貓宅配系統設計的 Excel XLS 下載功能
  * 提供最佳的相容性和編碼支援
  */
-export const downloadBlackCatXls = async (orders: Order[], filename: string = '黑貓宅配訂單.xlsx'): Promise<void> => {
+export const downloadBlackCatXls = async (orders: Order[], filename: string = '宅配到府訂單.xlsx'): Promise<void> => {
   try {
     // 建立新的工作簿
     const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('黑貓宅配訂單');
+    const worksheet = workbook.addWorksheet('宅配到府訂單');
     
     // 黑貓宅急便標準欄位
-    const headers = [
-      '訂單編號',
-      '溫層', 
-      '規格',
-      '代收貨款',
-      '收件人-姓名',
-      '收件人-電話',
-      '收件人-地址',
-      '寄件人-姓名',
-      '寄件人-電話',
-      '寄件人-地址',
-      '出貨日期',
-      '希望配達日',
-      '希望配合時段',
-      '品類代碼',
-      '品名',
-      '易碎物品',
-      '備註'
-    ];
+    //const headers = [
+    //  '訂單編號',
+    //  '溫層', 
+    //  '規格',
+    //  '代收貨款',
+    //  '收件人-姓名',
+    //  '收件人-電話',
+    //  '收件人-地址',
+    //  '寄件人-姓名',
+    //  '寄件人-電話',
+    //  '寄件人-地址',
+    //  '出貨日期',
+    //  '希望配達日',
+    //  '希望配合時段',
+    //  '品類代碼',
+    //  '品名',
+    //  '易碎物品',
+    //  '備註'
+    //];
     
     // 設定標題行樣式
-    const headerRow = worksheet.addRow(headers);
-    headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF366092' } };
-    headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+    //const headerRow = worksheet.addRow(headers);
+    //headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    //headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF366092' } };
+    //headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
     
     // 固定寄件人資訊
     const senderName = '曾炳傑';
@@ -237,7 +237,7 @@ export const downloadBlackCatXls = async (orders: Order[], filename: string = '�
     });
     
     // 設定邊框
-    const borderStyle = { style: 'thin', color: { argb: 'FF000000' } };
+    /*const borderStyle = { style: 'thin', color: { argb: 'FF000000' } };
     const border = {
       top: borderStyle,
       left: borderStyle,
@@ -249,7 +249,7 @@ export const downloadBlackCatXls = async (orders: Order[], filename: string = '�
       row.eachCell((cell) => {
         cell.border = border;
       });
-    });
+    });*/
     
     // 產生檔案並下載
     const buffer = await workbook.xlsx.writeBuffer();
