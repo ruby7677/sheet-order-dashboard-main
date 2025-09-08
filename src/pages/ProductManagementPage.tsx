@@ -21,7 +21,6 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import SecureApiService from '@/services/secureApiService';
 import { getStockStatusLabel, getStockStatusVariant, STOCK_STATUS_OPTIONS, type StockStatus } from '@/utils/stockStatusUtils';
 
 interface Product {
@@ -59,19 +58,15 @@ const ProductManagementPage: React.FC = () => {
   const loadProducts = async () => {
     try {
       setLoading(true);
-      // 優先走安全 Edge Function（帶有 admin JWT），避免 RLS/匿名權限問題
-      try {
-        const data = await new SecureApiService().listProducts();
-        setProducts((data as Product[]) || []);
-      } catch (e) {
-        // 後備：若未登入或 Edge Function 尚未部署，才直接走 anon supabase
-        const { data, error, status, statusText } = await supabase
-          .from('products')
-          .select('*')
-          .order('sort_order', { ascending: true });
-        if (error) { throw new Error(`[${status} ${statusText}] ${error.message}`); }
-        setProducts((data as Product[]) || []);
+      // 直接使用 Supabase 匿名存取（與到貨日期設定一致）
+      const { data, error, status, statusText } = await supabase
+        .from('products')
+        .select('*')
+        .order('sort_order', { ascending: true });
+      if (error) { 
+        throw new Error(`[${status} ${statusText}] ${error.message}`); 
       }
+      setProducts((data as Product[]) || []);
     } catch (error) {
       console.error('載入商品失敗:', error);
       toast({
@@ -132,22 +127,17 @@ const ProductManagementPage: React.FC = () => {
       }
 
       if (editingProduct) {
-        // 更新（優先 Edge Function，失敗回退 supabase 直連）
-        try {
-          await new SecureApiService().updateProduct(editingProduct.id, {
+        // 更新商品（直接使用 Supabase）
+        const { error, status, statusText } = await supabase
+          .from('products')
+          .update({
             ...formData,
-            // 確保儲存為英文枚舉值
-            stock_status: formData.stock_status as StockStatus
-          });
-        } catch (_) {
-          const { error, status, statusText } = await supabase
-            .from('products')
-            .update({
-              ...formData,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', editingProduct.id);
-          if (error) { throw new Error(`[${status} ${statusText}] ${error.message}`); }
+            stock_status: formData.stock_status as StockStatus,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', editingProduct.id);
+        if (error) { 
+          throw new Error(`[${status} ${statusText}] ${error.message}`); 
         }
         
         toast({
@@ -155,17 +145,15 @@ const ProductManagementPage: React.FC = () => {
           description: '商品已更新',
         });
       } else {
-        // 新增（優先 Edge Function，失敗回退 supabase 直連）
-        try {
-          await new SecureApiService().createProduct({
+        // 新增商品（直接使用 Supabase）
+        const { error, status, statusText } = await supabase
+          .from('products')
+          .insert([{
             ...formData,
             stock_status: formData.stock_status as StockStatus
-          });
-        } catch (_) {
-          const { error, status, statusText } = await supabase
-            .from('products')
-            .insert([formData]);
-          if (error) { throw new Error(`[${status} ${statusText}] ${error.message}`); }
+          }]);
+        if (error) { 
+          throw new Error(`[${status} ${statusText}] ${error.message}`); 
         }
         
         toast({
@@ -194,14 +182,13 @@ const ProductManagementPage: React.FC = () => {
     }
 
     try {
-      try {
-        await new SecureApiService().deleteProduct(product.id);
-      } catch (_) {
-        const { error, status, statusText } = await supabase
-          .from('products')
-          .delete()
-          .eq('id', product.id);
-        if (error) { throw new Error(`[${status} ${statusText}] ${error.message}`); }
+      // 刪除商品（直接使用 Supabase）
+      const { error, status, statusText } = await supabase
+        .from('products')
+        .delete()
+        .eq('id', product.id);
+      if (error) { 
+        throw new Error(`[${status} ${statusText}] ${error.message}`); 
       }
       
       toast({
@@ -228,14 +215,13 @@ const ProductManagementPage: React.FC = () => {
         updateData.stock_quantity = stockQuantity;
       }
 
-      try {
-        await new SecureApiService().updateProduct(product.id, updateData);
-      } catch (_) {
-        const { error, status, statusText } = await supabase
-          .from('products')
-          .update(updateData)
-          .eq('id', product.id);
-        if (error) { throw new Error(`[${status} ${statusText}] ${error.message}`); }
+      // 快速更新庫存（直接使用 Supabase）
+      const { error, status, statusText } = await supabase
+        .from('products')
+        .update(updateData)
+        .eq('id', product.id);
+      if (error) { 
+        throw new Error(`[${status} ${statusText}] ${error.message}`); 
       }
       
       toast({
