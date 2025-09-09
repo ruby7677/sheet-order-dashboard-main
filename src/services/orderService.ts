@@ -8,11 +8,58 @@ import type {
 } from '@/types/api';
 // src/services/orderService.ts
 
-// Linus式修复：移除过度复杂的配置逻辑
-import { getApiUrl, apiCall } from './apiConfig';
+// 動態 API 配置系統
+const getApiConfig = () => {
+  const hostname = window.location.hostname;
+  const port = window.location.port;
+  const protocol = window.location.protocol;
+  
+  // 檢查是否在 Cloudflare Pages 環境
+  const isCloudflarePages = hostname.includes('.pages.dev') || 
+                           hostname.includes('lopokao.767780.xyz') ||
+                           hostname.includes('node.767780.xyz');
+  
+  // 本地開發環境
+  const isLocalDev = hostname === 'localhost' || hostname === '127.0.0.1';
+  
+  console.log('🌍 環境檢測:', {
+    hostname,
+    port,
+    protocol,
+    isCloudflarePages,
+    isLocalDev
+  });
+  
+  return {
+    isLocalDev,
+    isCloudflarePages,
+    // Workers API 端點 (生產環境)
+    workersApiUrl: 'https://sheet-order-api.ruby7677.workers.dev',
+    // 本地 Workers API (開發時)
+    localWorkersApiUrl: 'http://127.0.0.1:5714',
+    // 傳統 PHP API (後備方案)
+    legacyApiBase: isLocalDev && port === '8080' 
+      ? '/sheet-order-dashboard-main/api' 
+      : '/api'
+  };
+};
 
-// Linus式修复：简化为一行
-const getApiEndpoint = getApiUrl;
+// 根據環境動態選擇 API 端點
+const getApiEndpoint = (endpoint: string) => {
+  const config = getApiConfig();
+  
+  // 優先嘗試 Workers API
+  if (config.isCloudflarePages || !config.isLocalDev) {
+    // 生產環境或 Cloudflare Pages: 使用生產 Workers API
+    return `${config.workersApiUrl}${endpoint}`;
+  } else if (config.isLocalDev) {
+    // 本地開發: 嘗試本地 Workers API，失敗則降級到傳統 API
+    return `${config.localWorkersApiUrl}${endpoint}`;
+  }
+  
+  // 後備方案: 傳統 PHP API
+  return `${config.legacyApiBase}${endpoint}`;
+};
 
 // 資料來源切換
 export type DataSource = 'sheets' | 'supabase';
@@ -55,8 +102,55 @@ export const setDataSourceAndNotify = (source: DataSource) => {
   notifyDataSourceChange();
 };
 
-// Linus式修复：移除复杂的重试机制，使用简单的API调用
-const apiCallWithFallback = apiCall;
+// 建立一個錯誤處理和重試機制
+const apiCallWithFallback = async (endpoint: string, options: RequestInit = {}) => {
+  const config = getApiConfig();
+  let lastError: Error | null = null;
+  
+  // 嘗試順序: Workers API -> 傳統 API
+  const endpoints = [];
+  
+  if (config.isCloudflarePages || !config.isLocalDev) {
+    endpoints.push(`${config.workersApiUrl}${endpoint}`);
+  } else if (config.isLocalDev) {
+    endpoints.push(`${config.localWorkersApiUrl}${endpoint}`);
+    endpoints.push(`${config.legacyApiBase}${endpoint}`);
+  } else {
+    endpoints.push(`${config.legacyApiBase}${endpoint}`);
+  }
+  
+  console.log('🔗 API 嘗試順序:', endpoints);
+  
+  for (const apiUrl of endpoints) {
+    try {
+      console.log('📡 嘗試 API:', apiUrl);
+      
+      const response = await fetch(apiUrl, {
+        ...options,
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+          ...options.headers
+        }
+      });
+      
+      if (response.ok) {
+        console.log('✅ API 成功:', apiUrl);
+        return response;
+      } else {
+        console.log('❌ API 失敗:', apiUrl, response.status, response.statusText);
+        lastError = new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+    } catch (error) {
+      console.log('❌ API 錯誤:', apiUrl, error);
+      lastError = error instanceof Error ? error : new Error(String(error));
+    }
+  }
+  
+  // 所有端點都失敗
+  throw lastError || new Error('所有 API 端點都無法連接');
+};
 
 // 快取機制 
 interface OrderCache {

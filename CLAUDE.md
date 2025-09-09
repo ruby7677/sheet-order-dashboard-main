@@ -73,12 +73,6 @@ npm run clean
 ```powershell
 # ESLint 檢查和修復
 npm run lint
-
-# 測試相關指令
-npm run test          # 啟動測試監視模式
-npm run test:ui       # 啟動測試 UI
-npm run test:run      # 執行所有測試
-npm run test:coverage # 執行測試並產生覆蓋率報告
 ```
 
 ### Cloudflare Workers API
@@ -153,26 +147,12 @@ supabase gen types typescript --local > src/integrations/supabase/types.ts
 - 檔案大小限制: 單檔嚴格控制在 500 行以內
 - TypeScript 嚴格模式啟用
 - 主動將過大檔案拆分為邏輯清晰的小模組
-- 使用 ESLint 確保程式碼品質，執行 `npm run lint` 進行檢查
-
-### 測試策略
-- 使用 Vitest 作為測試框架，支援 React Testing Library
-- 執行 `npm run test:run` 進行完整測試
-- 使用 `npm run test:coverage` 檢查測試覆蓋率
-- 建議為核心商業邏輯和 API 服務層編寫單元測試
 
 ### API 開發策略
 - **優先順序**: Cloudflare Workers API > PHP API
 - **降級機制**: 自動檢測和降級，確保服務穩定性
 - **統一管理**: 所有 API 調用透過對應的 service 檔案管理
 - **快取策略**: 前端 TanStack Query + Workers KV 雙層快取
-
-### 管理頁面權限控制
-- **商品管理** (`ProductManagementPage.tsx`): 使用直接 Supabase 匿名存取，無需管理員登入
-- **到貨日期設定** (`DeliveryDateSettingsPage.tsx`): 使用直接 Supabase 匿名存取，無需管理員登入
-- **訂單管理**: 使用雙重降級機制，優先 SecureApiService，失敗降級到 Supabase
-- **客戶管理**: 使用雙重降級機制，優先 SecureApiService，失敗降級到 Supabase
-- **一致性原則**: 新增管理功能時，確保權限控制策略與現有頁面保持一致
 
 ### 客戶訂單歷史
 - **數據來源**: Google Sheets「客戶名單」工作表（非訂單表）
@@ -190,12 +170,10 @@ supabase gen types typescript --local > src/integrations/supabase/types.ts
 - 透過 PostMessage API 進行父子窗口通信
 - 簡化界面在 iframe 模式下隱藏不必要的導航元素
 
-### 多模式界面
+### 雙模式界面
 - **訂單模式**: 訂單管理、篩選、統計、批量操作
-- **客戶模式**: 客戶管理、統計、訂單歷史查詢  
-- **商品管理模式**: 商品資料管理、庫存狀態更新、價格設定
-- **到貨日期設定模式**: 設定可選擇的到貨日期範圍
-- 模式切換透過 `ModernSidebar` 組件控制，所有模式均在同一主頁面 (`src/pages/Index.tsx`) 中
+- **客戶模式**: 客戶管理、統計、訂單歷史查詢
+- 模式切換透過 `ModernSidebar` 組件控制
 
 ## TypeScript 配置
 
