@@ -2,7 +2,8 @@ import type {OrderItem}from '@/types/order';
 export interface MutationReceipt {success:boolean;id:string;revision:string;items?:OrderItem[];total?:number;warning?:string;message?:string;reused?:boolean;}
 const uuid=/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 export async function mutateOrder(id:string,revision:string|undefined,intent:Record<string,unknown>):Promise<MutationReceipt>{
- if(!uuid.test(id)||!revision||!/^[a-f0-9]{64}$/.test(revision))throw new Error('訂單資料版本不足，請重新載入後再操作');
+ if(!uuid.test(id))throw new Error('此訂單缺少 Q 欄識別，後台無法安全修改；請先在 Google Sheets 核對或清除舊訂單');
+ if(!revision||!/^[a-f0-9]{64}$/.test(revision))throw new Error('訂單資料版本不足，請重新載入後再操作');
  const fingerprint=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify({id,...intent}))))).map(x=>x.toString(16).padStart(2,'0')).join('');
  const key='lopokao-admin-operation:'+id;let saved:{operation_id:string;expected_revision:string;fingerprint:string}|null=null;
  try{saved=JSON.parse(sessionStorage.getItem(key)||'null');}catch{throw new Error('操作紀錄無法確認，請先至待辦對帳頁核對');}
