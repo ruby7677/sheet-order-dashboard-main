@@ -2,19 +2,12 @@ import { useAuth } from '@/components/AuthProvider';
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent } from '@/components/ui/card';
 import { 
   ShoppingBag, 
   Users, 
-  BarChart3, 
-  Settings, 
   Menu,
-  X,
   ChevronLeft,
   ChevronRight,
-  Home,
-  TrendingUp,
-  ShoppingCart,
   Package,
   Calendar,
   FileText,
@@ -22,7 +15,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import useScrollAwareMenu from '@/hooks/useScrollAwareMenu';
-import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
 
 interface ModernSidebarProps {
   pageMode: 'orders' | 'customers' | 'products' | 'delivery-settings' | 'operations';
@@ -97,14 +90,18 @@ const ModernSidebar: React.FC<ModernSidebarProps> = ({
     {id:'delivery-settings' as const,label:'到貨日期設定',icon:Calendar,badge:0,subBadge:0,description:'前台可選到貨日期',onClick:()=>onPageModeChange('delivery-settings')},
   ];
 
-  const SidebarContent = () => (
-    <div className="flex flex-col h-screen" role="navigation" aria-label="主選單">
+  const SidebarContent = () => {
+    const showFullContent = !isCollapsed || isMobileOpen;
+    const isCompact = isCollapsed && !isMobileOpen;
+
+    return (
+    <div className="flex h-full min-h-0 min-w-0 flex-col" role="navigation" aria-label="主選單">
       {/* 標題區域 */}
-      <div className="p-4 border-b border-border/50">
-        <div className="flex items-center justify-between">
-          {!isCollapsed && (
-            <div>
-              <h2 className="text-lg font-bold text-foreground">蘿蔔糕訂單系統</h2>
+      <div className="shrink-0 p-4 border-b border-border/50">
+        <div className="flex min-w-0 items-center justify-between gap-2">
+          {showFullContent && (
+            <div className="min-w-0 flex-1">
+              <h2 className="whitespace-normal break-words text-lg font-bold text-foreground">蘿蔔糕訂單系統</h2>
               <p className="text-xs text-muted-foreground">管理後台</p>
             </div>
           )}
@@ -112,7 +109,7 @@ const ModernSidebar: React.FC<ModernSidebarProps> = ({
             variant="ghost"
             size="icon"
             onClick={() => setIsCollapsed(!isCollapsed)}
-            className="h-8 w-8 hidden lg:flex"
+            className="h-8 w-8 shrink-0 hidden lg:flex"
             aria-label={isCollapsed ? '展開側邊欄' : '收合側邊欄'}
           >
             {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
@@ -121,7 +118,7 @@ const ModernSidebar: React.FC<ModernSidebarProps> = ({
       </div>
 
       {/* 導航選單 */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-2">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 space-y-2">
         {menuItems.map((item) => {
           const Icon = item.icon;
           const isActive = pageMode === item.id;
@@ -130,43 +127,45 @@ const ModernSidebar: React.FC<ModernSidebarProps> = ({
             <Button
               key={item.id}
               variant={isActive ? "default" : "ghost"}
+              aria-label={isCompact ? item.label : undefined}
+              title={isCompact ? item.label : undefined}
               className={cn(
-                "w-full justify-start h-auto p-3 transition-all duration-200",
+                "w-full min-w-0 whitespace-normal justify-start h-auto p-3 transition-all duration-200",
                 isActive 
                   ? "bg-primary text-primary-foreground shadow-md" 
                   : "hover:bg-accent hover:text-accent-foreground",
-                isCollapsed && "justify-center px-2"
+                isCompact && "justify-center px-2"
               )}
               onClick={() => {
                 item.onClick();
                 setIsMobileOpen(false);
               }}
             >
-              <div className="flex items-center gap-3 w-full">
+              <div className="flex w-full min-w-0 items-start gap-3">
                 <Icon className={cn("h-5 w-5 flex-shrink-0", isActive && "text-primary-foreground")} />
                 
-                {(!isCollapsed || isMobileOpen) && (
-                  <div className="flex-1 text-left">
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium">{item.label}</span>
-                        <div className="flex items-center gap-1">
-                          {item.subBadge > 0 && (
-                            <Badge 
-                              variant={isActive ? "secondary" : "default"} 
-                              className="h-5 px-2 text-xs"
-                            >
-                              {item.subBadge}
-                            </Badge>
-                          )}
-                          <Badge 
-                            variant={isActive ? "outline" : "secondary"} 
-                            className="h-5 px-2 text-xs"
+                {showFullContent && (
+                  <div className="min-w-0 flex-1 text-left">
+                    <div className="flex min-w-0 items-start justify-between gap-2">
+                      <span className="min-w-0 flex-1 whitespace-normal break-words font-medium">{item.label}</span>
+                      <div className="ml-auto flex shrink-0 items-center gap-1">
+                        {item.subBadge > 0 && (
+                          <Badge
+                            variant={isActive ? "secondary" : "default"}
+                            className="h-5 min-w-5 shrink-0 px-1.5 text-xs tabular-nums"
                           >
-                            {item.badge}
+                            {item.subBadge}
                           </Badge>
-                        </div>
+                        )}
+                        <Badge
+                          variant={isActive ? "outline" : "secondary"}
+                          className="h-5 min-w-5 shrink-0 px-1.5 text-xs tabular-nums"
+                        >
+                          {item.badge}
+                        </Badge>
+                      </div>
                     </div>
-                    <p className="text-xs opacity-70 mt-1">{item.description}</p>
+                    <p className="mt-1 whitespace-normal break-words text-xs opacity-70">{item.description}</p>
                   </div>
                 )}
               </div>
@@ -175,20 +174,20 @@ const ModernSidebar: React.FC<ModernSidebarProps> = ({
         })}
 
         {/* 手抄單連結按鈕 */}
-        {(!isCollapsed || isMobileOpen) && (
+        {showFullContent && (
           <div className="pt-2 mt-2 border-t border-border/50">
             <Button
               variant="ghost"
-              className="w-full justify-start h-auto p-3 transition-all duration-200 hover:bg-accent hover:text-accent-foreground"
+              className="w-full min-w-0 whitespace-normal justify-start h-auto p-3 transition-all duration-200 hover:bg-accent hover:text-accent-foreground"
               onClick={() => window.open('https://767780.xyz/pos8-test.php', '_blank', 'width=800,height=900,scrollbars=yes,resizable=yes')}
             >
-              <div className="flex items-center gap-3 w-full">
+              <div className="flex w-full min-w-0 items-start gap-3">
                 <FileText className="h-5 w-5 flex-shrink-0" />
-                <div className="flex-1 text-left">
+                <div className="min-w-0 flex-1 text-left">
                   <div className="flex items-center justify-between">
-                    <span className="font-medium">手抄單</span>
+                    <span className="whitespace-normal break-words font-medium">手抄單</span>
                   </div>
-                  <p className="text-xs opacity-70 mt-1">開啟手抄單頁面</p>
+                  <p className="mt-1 whitespace-normal break-words text-xs opacity-70">開啟手抄單頁面</p>
                 </div>
               </div>
             </Button>
@@ -196,32 +195,17 @@ const ModernSidebar: React.FC<ModernSidebarProps> = ({
         )}
       </div>
 
-      <div className="p-3 border-t border-border/50">
-        {(!isCollapsed || isMobileOpen) && <p className="text-xs text-muted-foreground truncate mb-2" title={user?.email}>{user?.email}</p>}
+      <div className="shrink-0 p-3 border-t border-border/50">
+        {showFullContent && <p className="text-xs text-muted-foreground truncate mb-2" title={user?.email}>{user?.email}</p>}
         <Button type="button" variant="outline" className="w-full" onClick={logout} aria-label="登出管理後台" title="登出管理後台">
           <LogOut className="h-4 w-4" />
-          {(!isCollapsed || isMobileOpen) && <span className="ml-2">登出</span>}
+          {showFullContent && <span className="ml-2">登出</span>}
         </Button>
       </div>
 
-      {/* 底部系統狀態 */}
-      {!isCollapsed && (
-        <div className="p-3 border-t border-border/50">
-          <Card className="bg-muted/30">
-            <CardContent className="p-3">
-              <div className="flex items-center gap-2 text-sm">
-                <TrendingUp className="h-4 w-4 text-green-600" />
-                <div>
-                  <p className="font-medium">系統狀態</p>
-                  <p className="text-xs text-muted-foreground">運行正常</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
     </div>
-  );
+    );
+  };
 
   return (
     <>
@@ -266,16 +250,17 @@ const ModernSidebar: React.FC<ModernSidebarProps> = ({
         isCollapsed ? "w-16" : "w-64",
         className
       )}>
-        <nav aria-label="主選單"><SidebarContent /></nav>
+        <nav aria-label="主選單" className="min-h-0 flex-1"><SidebarContent /></nav>
       </div>
 
       {/* 手機版側邊欄：使用 Sheet 以獲得焦點鎖定與 ESC 關閉 */}
       <Sheet open={isMobileOpen} onOpenChange={setIsMobileOpen}>
-        <SheetContent side="left" className="w-64 bg-card border-r border-border/50 p-0" id="mobile-sidebar">
-          <div className="flex items-center justify-between p-4 border-b border-border/50">
-            <h2 className="text-lg font-bold">選單</h2>
+        <SheetContent side="left" className="flex min-h-0 w-64 flex-col bg-card border-r border-border/50 p-0" id="mobile-sidebar">
+          <div className="shrink-0 flex min-w-0 items-center justify-between gap-2 p-4 border-b border-border/50">
+            <SheetTitle className="min-w-0 flex-1 whitespace-normal break-words text-lg font-bold">選單</SheetTitle>
+            <SheetDescription className="sr-only">選擇管理頁面或登出</SheetDescription>
           </div>
-          <nav aria-label="主選單"><SidebarContent /></nav>
+          <nav aria-label="主選單" className="min-h-0 flex-1"><SidebarContent /></nav>
         </SheetContent>
       </Sheet>
     </>
