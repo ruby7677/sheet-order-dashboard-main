@@ -70,6 +70,13 @@ export interface CacheOptions {
 
 // Cloudflare Workers 環境變數類型
 export interface Env {
+  ACCESS_TEAM_DOMAIN?: string;
+  ACCESS_AUDIENCE?: string;
+  ADMIN_EMAILS?: string;
+  ALLOWED_ORIGINS?: string;
+  TEST_SHEET_ID?: string;
+  PRODUCTION_SHEET_ID?: string;
+
 	CACHE_KV: KVNamespace;
 	GOOGLE_SHEET_ID?: string;
 	GOOGLE_SERVICE_ACCOUNT_KEY?: string;
@@ -78,8 +85,6 @@ export interface Env {
 	DEBUG_MODE?: string;
 	ADMIN_USERNAME?: string;
 	ADMIN_PASSWORD?: string;
-	SUPABASE_URL?: string;
-	SUPABASE_SERVICE_ROLE_KEY?: string;
 	// 其他環境變數...
 }
 

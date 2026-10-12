@@ -1,95 +1,90 @@
-/**
- * Cloudflare Workers 配置檔案
- * 用於部署 Sheet Order Dashboard API
- * For more details on how to configure Wrangler, refer to:
- * https://developers.cloudflare.com/workers/wrangler/configuration/
- */
 {
-	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "sheet-order-api",
-	"main": "src/index.ts",
-	"compatibility_date": "2025-08-03",
-	"observability": {
-		"enabled": true
-	},
-	/**
-	 * Smart Placement
-	 * Docs: https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
-	 */
-	// "placement": { "mode": "smart" },
-
-	/**
-	 * Bindings
-	 * Bindings allow your Worker to interact with resources on the Cloudflare Developer Platform, including
-	 * databases, object storage, AI inference, real-time communication and more.
-	 * https://developers.cloudflare.com/workers/runtime-apis/bindings/
-	 */
-	"env": {
-		"production": {
-			"name": "sheet-order-api",
-			"kv_namespaces": [
-				{
-					"binding": "CACHE_KV",
-					"id": "37c85c7f1aa84365810dc5ddb4015d47"
-				}
-			],
-			"vars": {
-				"GOOGLE_SHEET_ID": "10MMALrfBonchPGjb-ps6Knw7MV6lllrrKRCTeafCIuo",
-				"APP_ENV": "production",
-				"CACHE_DURATION": "15",
-				"DEBUG_MODE": "false"
-			}
-		},
-		"development": {
-			"name": "sheet-order-api-dev",
-			"kv_namespaces": [
-				{
-					"binding": "CACHE_KV",
-					"id": "9e131cdce1674b5e946c19ece9efef0c"
-				}
-			],
-			"vars": {
-				"GOOGLE_SHEET_ID": "10MMALrfBonchPGjb-ps6Knw7MV6lllrrKRCTeafCIuo",
-				"APP_ENV": "development",
-				"CACHE_DURATION": "15",
-				"DEBUG_MODE": "true"
-			}
-		}
-	},
-	
-	// 預設環境變數（開發時使用）
-	"kv_namespaces": [
-		{
-			"binding": "CACHE_KV",
-			"id": "9e131cdce1674b5e946c19ece9efef0c"
-		}
-	],
-	"vars": {
-		"GOOGLE_SHEET_ID": "10MMALrfBonchPGjb-ps6Knw7MV6lllrrKRCTeafCIuo",
-		"APP_ENV": "development",
-		"CACHE_DURATION": "15",
-		"DEBUG_MODE": "true"
-	}
-
-	/**
-	 * Environment Variables
-	 * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
-	 */
-	// "vars": { "MY_VARIABLE": "production_value" },
-	/**
-	 * Note: Use secrets to store sensitive data.
-	 * https://developers.cloudflare.com/workers/configuration/secrets/
-	 */
-
-	/**
-	 * Static Assets
-	 * https://developers.cloudflare.com/workers/static-assets/binding/
-	 */
-	// "assets": { "directory": "./public/", "binding": "ASSETS" },
-
-	/**
-	 * Service Bindings (communicate between multiple Workers)
-	 * https://developers.cloudflare.com/workers/wrangler/configuration/#service-bindings
-	 */
-	// "services": [{ "binding": "MY_SERVICE", "service": "my-service" }]
+  "name": "sheet-order-api-dev",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-08-03",
+  "observability": {
+    "enabled": true,
+    "redact_query_string": true
+  },
+  "workers_dev": false,
+  "preview_urls": false,
+  "vars": {
+    "APP_ENV": "development",
+    "GOOGLE_SHEET_ID": "1I6ADzKL4nPPUEVAZvm7zIRy486wX6UaUTE0Ru4Lh2Xs",
+    "PRODUCTION_SHEET_ID": "10MMALrfBonchPGjb-ps6Knw7MV6lllrrKRCTeafCIuo",
+    "TEST_SHEET_ID": "1I6ADzKL4nPPUEVAZvm7zIRy486wX6UaUTE0Ru4Lh2Xs",
+    "CACHE_DURATION": "15",
+    "DEBUG_MODE": "false",
+    "ACCESS_TEAM_DOMAIN": "767780.cloudflareaccess.com",
+    "ACCESS_AUDIENCE": "",
+    "ADMIN_EMAILS": "",
+    "ALLOWED_ORIGINS": "http://localhost:8080,http://127.0.0.1:8080",
+    "ORDER_WRITE_READY": "0",
+    "ADMIN_WRITE_EMAILS": "",
+    "ADMIN_DELETE_EMAILS": "",
+    "ADMIN_PRICING_EMAILS": ""
+  },
+  "kv_namespaces": [
+    {
+      "binding": "CACHE_KV",
+      "id": "9e131cdce1674b5e946c19ece9efef0c"
+    }
+  ],
+  "services": [
+    {
+      "binding": "CATALOG_API",
+      "service": "lopokao-catalog-test"
+    }
+  ],
+  "env": {
+    "production": {
+      "name": "sheet-order-api",
+      "workers_dev": false,
+      "preview_urls": false,
+      "kv_namespaces": [
+        {
+          "binding": "CACHE_KV",
+          "id": "37c85c7f1aa84365810dc5ddb4015d47"
+        }
+      ],
+      "services": [
+        {
+          "binding": "CATALOG_API",
+          "service": "lopokao-catalog"
+        }
+      ],
+      "vars": {
+        "APP_ENV": "production",
+        "GOOGLE_SHEET_ID": "10MMALrfBonchPGjb-ps6Knw7MV6lllrrKRCTeafCIuo",
+        "CACHE_DURATION": "15",
+        "DEBUG_MODE": "false",
+        "ACCESS_TEAM_DOMAIN": "767780.cloudflareaccess.com",
+        "ACCESS_AUDIENCE": "acba9bfaa5b6ea9abaac4bfd10b052aba1c0cec6a99166d995f5f95353099438",
+        "ADMIN_EMAILS": "ruby7677@gmail.com,wade7616@gmail.com",
+        "ALLOWED_ORIGINS": "https://sheet-order-dashboard-main.pages.dev",
+        "PRODUCTION_SHEET_ID": "10MMALrfBonchPGjb-ps6Knw7MV6lllrrKRCTeafCIuo",
+        "TEST_SHEET_ID": "",
+        "ORDER_WRITE_READY": "1",
+        "ADMIN_WRITE_EMAILS": "ruby7677@gmail.com,wade7616@gmail.com",
+        "ADMIN_DELETE_EMAILS": "ruby7677@gmail.com,wade7616@gmail.com",
+        "ADMIN_PRICING_EMAILS": "ruby7677@gmail.com,wade7616@gmail.com"
+      },
+      "d1_databases": [
+        {
+          "binding": "CATALOG_DB",
+          "database_name": "lopokao-catalog-production",
+          "database_id": "5105db35-6b7a-4a42-a3fc-9596093ae4d4",
+          "migrations_dir": "migrations"
+        }
+      ]
+    }
+  },
+  "d1_databases": [
+    {
+      "binding": "CATALOG_DB",
+      "database_name": "lopokao-catalog-test",
+      "database_id": "4d2301a9-8c1d-40fb-be33-063eb1cfb6fd",
+      "migrations_dir": "migrations"
+    }
+  ]
 }

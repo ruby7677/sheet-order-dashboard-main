@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import StatCard from './StatCard';
-import { fetchCustomers, getCustomerStats, clearCustomerCache } from '../services/customerService';
+import { fetchCustomers, getCustomerStats } from '../services/customerService';
 import { CustomerStats } from '../types/customer';
 
 interface CustomerDashboardProps {
@@ -20,11 +20,14 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ refreshTrigger = 
   });
 
   const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState('');
+  const [hasLoadedStats, setHasLoadedStats] = useState(false);
   const [topRegions, setTopRegions] = useState<{name: string, count: number}[]>([]);
 
   // 載入統計數據
   const loadStats = async (immediate = false) => {
     setLoading(true);
+    setError('');
 
     // 如果需要立即更新，則不延遲
     if (!immediate) {
@@ -33,11 +36,10 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ refreshTrigger = 
     }
 
     try {
-      // 清除快取，確保獲取最新數據
-      clearCustomerCache();
-      const customers = await fetchCustomers();
+      const customers = await fetchCustomers(undefined, { forceRefresh: immediate });
       const customerStats = getCustomerStats(customers);
       setStats(customerStats);
+      setHasLoadedStats(true);
 
       // 計算前三大地區
       const sortedRegions = Object.entries(customerStats.regions)
@@ -47,11 +49,13 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ refreshTrigger = 
 
       setTopRegions(sortedRegions);
     } catch (error) {
-      console.error('載入統計數據失敗:', error);
+      setError(error instanceof Error ? error.message : '客戶統計目前無法讀取，請重新載入。');
     } finally {
       setLoading(false);
     }
   };
+
+  const statValue = (value: string | number) => loading ? '...' : error && !hasLoadedStats ? '—' : value;
 
   // 初次載入和 refreshTrigger 變化時重新載入數據
   useEffect(() => {
@@ -63,31 +67,31 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ refreshTrigger = 
     <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 sm:gap-3">
       <StatCard
         title="總客戶數"
-        value={loading ? '...' : stats.total}
+        value={statValue(stats.total)}
         compact={true}
         className="bg-card"
       />
       <StatCard
         title="購買 1 次"
-        value={loading ? '...' : stats.purchaseCounts['1']}
+        value={statValue(stats.purchaseCounts['1'])}
         compact={true}
         className="bg-blue-50 dark:bg-blue-900/30 border-blue-500"
       />
       <StatCard
         title="購買 2-5 次"
-        value={loading ? '...' : stats.purchaseCounts['2-5']}
+        value={statValue(stats.purchaseCounts['2-5'])}
         compact={true}
         className="bg-orange-50 dark:bg-orange-900/30 border-orange-500"
       />
       <StatCard
         title="購買 5 次以上"
-        value={loading ? '...' : stats.purchaseCounts['5+']}
+        value={statValue(stats.purchaseCounts['5+'])}
         compact={true}
         className="bg-green-50 dark:bg-green-900/30 border-green-500"
       />
       <StatCard
         title={`主要地區: ${topRegions[0]?.name || '無資料'}`}
-        value={loading ? '...' : topRegions[0]?.count || 0}
+        value={statValue(topRegions[0]?.count || 0)}
         compact={true}
         className="bg-purple-50 dark:bg-purple-900/30 border-purple-500"
       />
@@ -96,12 +100,18 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ refreshTrigger = 
 
   // 緊湊模式只返回統計卡片
   if (compact) {
-    return statsGrid;
+    return (
+      <div className="space-y-2">
+        {error && <p role="alert" className="text-sm text-destructive">客戶統計載入失敗：{error}</p>}
+        {statsGrid}
+      </div>
+    );
   }
 
   // 完整模式包含外層容器
   return (
     <div className="mb-4">
+      {error && <p role="alert" className="mb-2 text-sm text-destructive">客戶統計載入失敗：{error}</p>}
       {statsGrid}
     </div>
   );

@@ -6,6 +6,7 @@ import { CustomerWithStats } from '@/types/customer'
 export interface CustomerListMobileProps {
 	allCustomers: CustomerWithStats[]
 	loading: boolean
+	error?: string
 	selected: string[]
 	onToggleSelect: (id: string) => void
 	onCustomerClick: (customer: CustomerWithStats) => void
@@ -18,6 +19,7 @@ export interface CustomerListMobileProps {
 const CustomerListMobile: React.FC<CustomerListMobileProps> = ({
 	allCustomers,
 	loading,
+	error = '',
 	selected,
 	onToggleSelect,
 	onCustomerClick,
@@ -27,6 +29,14 @@ const CustomerListMobile: React.FC<CustomerListMobileProps> = ({
 			<div className="p-4 text-center" aria-label="載入中">
 				<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
 				<p className="mt-2 text-sm text-muted-foreground">載入客戶資料中...</p>
+			</div>
+		)
+	}
+
+	if (allCustomers.length === 0 && error) {
+		return (
+			<div className="p-8 text-center text-destructive" role="alert">
+				客戶資料無法載入，請重新讀取。
 			</div>
 		)
 	}
@@ -75,6 +85,7 @@ const CustomerListMobile: React.FC<CustomerListMobileProps> = ({
 									</div>
 									<div className="text-xs text-slate-500 font-mono mb-2 truncate">
 										{customer.phone}
+						{customer.normalizedPhone === null && <span className="ml-2 text-amber-700">電話待核對</span>}
 									</div>
 									<div className="text-xs text-slate-600 mb-2 truncate">
 										{customer.region} • {customer.address}

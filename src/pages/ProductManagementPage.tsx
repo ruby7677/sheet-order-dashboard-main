@@ -20,7 +20,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { listSettingsProducts, saveSettingsProduct, deleteSettingsProduct, updateSettingsStock } from '@/services/settingsApi';
 import { getStockStatusLabel, getStockStatusVariant, STOCK_STATUS_OPTIONS, type StockStatus } from '@/utils/stockStatusUtils';
 
 interface Product {
@@ -28,7 +28,7 @@ interface Product {
   product_id: string;
   name: string;
   price: number;
-  weight?: number;
+  weight?: string | number;
   unit: string;
   description?: string;
   detailed_description?: string;
@@ -50,6 +50,9 @@ const ProductManagementPage: React.FC = () => {
   
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [readOnly,setReadOnly]=useState(true);
+  const [revision,setRevision]=useState(0);
+  const [saving,setSaving]=useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [formData, setFormData] = useState<Partial<Product>>({});
@@ -58,15 +61,8 @@ const ProductManagementPage: React.FC = () => {
   const loadProducts = async () => {
     try {
       setLoading(true);
-      // 直接使用 Supabase 匿名存取（與到貨日期設定一致）
-      const { data, error, status, statusText } = await supabase
-        .from('products')
-        .select('*')
-        .order('sort_order', { ascending: true });
-      if (error) { 
-        throw new Error(`[${status} ${statusText}] ${error.message}`); 
-      }
-      setProducts((data as Product[]) || []);
+      const result = await listSettingsProducts();
+      setProducts(result.data);setRevision(result.revision);setReadOnly(result.readOnly);
     } catch (error) {
       console.error('載入商品失敗:', error);
       toast({
@@ -101,7 +97,7 @@ const ProductManagementPage: React.FC = () => {
       sort_order: products.length + 1,
       stock_quantity: 0,
       is_active: true,
-      stock_status: 'available' as StockStatus,
+      stock_status: 'in_stock' as StockStatus,
       category: '蘿蔔糕'
     });
     setIsModalOpen(true);
@@ -114,131 +110,10 @@ const ProductManagementPage: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  // 儲存商品
-  const handleSave = async () => {
-    try {
-      if (!formData.product_id || !formData.name || !formData.price) {
-        toast({
-          title: '錯誤',
-          description: '請填寫必要欄位',
-          variant: 'destructive',
-        });
-        return;
-      }
-
-      if (editingProduct) {
-        // 更新商品（直接使用 Supabase）
-        const { error, status, statusText } = await supabase
-          .from('products')
-          .update({
-            ...formData,
-            stock_status: formData.stock_status as StockStatus,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', editingProduct.id);
-        if (error) { 
-          throw new Error(`[${status} ${statusText}] ${error.message}`); 
-        }
-        
-        toast({
-          title: '成功',
-          description: '商品已更新',
-        });
-      } else {
-        // 新增商品（直接使用 Supabase）
-        const { error, status, statusText } = await supabase
-          .from('products')
-          .insert([{
-            ...formData,
-            stock_status: formData.stock_status as StockStatus
-          }]);
-        if (error) { 
-          throw new Error(`[${status} ${statusText}] ${error.message}`); 
-        }
-        
-        toast({
-          title: '成功',
-          description: '商品已新增',
-        });
-      }
-
-      setIsModalOpen(false);
-      loadProducts();
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : '儲存商品失敗';
-      console.error('儲存商品失敗:', error);
-      toast({
-        title: '錯誤',
-        description: errorMessage,
-        variant: 'destructive',
-      });
-    }
-  };
-
-  // 刪除商品
-  const handleDelete = async (product: Product) => {
-    if (!confirm(`確定要刪除商品「${product.name}」嗎？`)) {
-      return;
-    }
-
-    try {
-      // 刪除商品（直接使用 Supabase）
-      const { error, status, statusText } = await supabase
-        .from('products')
-        .delete()
-        .eq('id', product.id);
-      if (error) { 
-        throw new Error(`[${status} ${statusText}] ${error.message}`); 
-      }
-      
-      toast({
-        title: '成功',
-        description: '商品已刪除',
-      });
-      loadProducts();
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : '刪除商品失敗';
-      console.error('刪除商品失敗:', error);
-      toast({
-        title: '錯誤',
-        description: errorMessage,
-        variant: 'destructive',
-      });
-    }
-  };
-
-  // 快速更新庫存狀態（從表格直接選擇）
-  const handleQuickStockUpdate = async (product: Product, stockStatus: StockStatus, stockQuantity?: number) => {
-    try {
-      const updateData: Partial<Product> = { stock_status: stockStatus };
-      if (stockQuantity !== undefined) {
-        updateData.stock_quantity = stockQuantity;
-      }
-
-      // 快速更新庫存（直接使用 Supabase）
-      const { error, status, statusText } = await supabase
-        .from('products')
-        .update(updateData)
-        .eq('id', product.id);
-      if (error) { 
-        throw new Error(`[${status} ${statusText}] ${error.message}`); 
-      }
-      
-      toast({
-        title: '成功',
-        description: '庫存狀態已更新',
-      });
-      loadProducts();
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : '更新庫存失敗';
-      console.error('更新庫存失敗:', error);
-      toast({
-        title: '錯誤',
-        description: errorMessage,
-        variant: 'destructive',
-      });
-    }
-  };
+  const writeError=(error:unknown)=>toast({title:'操作失敗',description:error instanceof Error?error.message:'請重新載入後再試',variant:'destructive'});
+  const handleSave=async()=>{if(readOnly||saving)return;setSaving(true);try{await saveSettingsProduct({...formData,product_id:editingProduct?.product_id||formData.product_id},revision,!editingProduct);setIsModalOpen(false);await loadProducts();toast({title:'商品已儲存',description:'前台與下單驗證會讀取同一份設定。'});}catch(error){writeError(error);}finally{setSaving(false);}};
+  const handleDelete=async(product:Product)=>{if(readOnly||saving)return;setSaving(true);try{await deleteSettingsProduct(product.id,revision);await loadProducts();toast({title:'商品已下架'});}catch(error){writeError(error);}finally{setSaving(false);}};
+  const handleQuickStockUpdate=async(product:Product,status:StockStatus,quantity?:number)=>{if(readOnly||saving)return;setSaving(true);try{await updateSettingsStock(product.id,status,quantity??product.stock_quantity,revision);await loadProducts();}catch(error){writeError(error);}finally{setSaving(false);}};
 
   // 渲染庫存狀態Badge（使用中文顯示）
   const renderStockStatusBadge = (status: string) => {
@@ -251,6 +126,7 @@ const ProductManagementPage: React.FC = () => {
   const renderStockStatusSelect = (product: Product) => {
     return (
       <Select
+        disabled={readOnly || saving}
         value={product.stock_status}
         onValueChange={(value: StockStatus) => handleQuickStockUpdate(product, value)}
       >
@@ -296,6 +172,7 @@ const ProductManagementPage: React.FC = () => {
           </div>
         </div>
         
+        <Alert className="mb-4"><AlertDescription>{readOnly?'前後台資料來源尚未完成切換，暫停儲存。':'商品、價格與庫存與前台共用；若其他管理員或訂單已更新庫存，請重新載入後再修改。'}</AlertDescription></Alert>
         {/* 商品列表卡片 */}
         <Card className="shadow-lg">
           <CardContent className="p-6">
@@ -360,7 +237,7 @@ const ProductManagementPage: React.FC = () => {
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => handleDelete(product)}
+                              onClick={() => handleDelete(product)} disabled={readOnly || saving}
                               className="text-red-600 hover:text-red-700"
                             >
                               <Trash2 className="h-4 w-4" />
@@ -392,6 +269,7 @@ const ProductManagementPage: React.FC = () => {
                 <Label htmlFor="product_id">商品 ID *</Label>
                 <Input
                   id="product_id"
+                  disabled={Boolean(editingProduct)}
                   value={formData.product_id || ''}
                   onChange={(e) => setFormData({ ...formData, product_id: e.target.value })}
                   placeholder="請輸入商品 ID"
@@ -423,10 +301,10 @@ const ProductManagementPage: React.FC = () => {
                 <Label htmlFor="weight">重量</Label>
                 <Input
                   id="weight"
-                  type="number"
-                  min="0"
-                  value={formData.weight || 0}
-                  onChange={(e) => setFormData({ ...formData, weight: Number(e.target.value) })}
+                  type="text"
+                  
+                  value={formData.weight ?? ''}
+                  onChange={(e) => setFormData({ ...formData, weight: e.target.value })}
                   placeholder="例如: 1500"
                 />
               </div>
@@ -589,7 +467,7 @@ const ProductManagementPage: React.FC = () => {
                 <X className="h-4 w-4 mr-2" />
                 取消
               </Button>
-              <Button onClick={handleSave}>
+              <Button onClick={handleSave} disabled={readOnly || saving}>
                 <Save className="h-4 w-4 mr-2" />
                 儲存
               </Button>

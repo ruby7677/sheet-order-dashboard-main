@@ -1,3 +1,4 @@
+import { parsePaymentUpdate } from '../security/payment';
 import { OpenAPIRoute } from 'chanfana';
 import { z } from 'zod';
 import { AppContext, ApiResponse, ApiError } from '../types';
@@ -19,7 +20,7 @@ export class UpdatePaymentStatus extends OpenAPIRoute {
 					'application/json': {
 						schema: z.object({
 							id: z.string().describe('訂單 ID'),
-							status: z.enum(['', '未收費', '已收費', '待轉帳', '未全款', '特殊']).describe('新的付款狀態')
+							status: z.enum(['未收費', '已收費', '待轉帳', '未全款', '特殊']).describe('新的付款狀態')
 						})
 					}
 				}
@@ -66,30 +67,11 @@ export class UpdatePaymentStatus extends OpenAPIRoute {
 		try {
 			// 解析請求體
 			const body = await c.req.json();
-			const { id: rowId, status: paymentStatus } = body;
-
-			// 驗證必要參數
-			if (rowId === null || rowId === undefined || !paymentStatus) {
-				c.header('X-Response-Time', `${Date.now() - startTime}ms`);
-				return c.json({
-					success: false,
-					message: '缺少必要參數',
-					timestamp: Math.floor(Date.now() / 1000),
-					request_id: requestId
-				}, 400);
-			}
-
-			// 驗證 rowId 是否為有效的非負整數
-			const parsedRowId = parseInt(rowId.toString());
-			if (isNaN(parsedRowId) || parsedRowId < 0) {
-				c.header('X-Response-Time', `${Date.now() - startTime}ms`);
-				return c.json({
-					success: false,
-					message: '行 ID 必須為非負整數',
-					timestamp: Math.floor(Date.now() / 1000),
-					request_id: requestId
-				}, 400);
-			}
+			let update: { rowIndex: number; status: string };
+			try { update = parsePaymentUpdate(body); }
+			catch { return c.json({ success: false, message: '訂單 ID 或付款狀態不正確' }, 400); }
+			const parsedRowId = update.rowIndex;
+			const paymentStatus = update.status;
 
 			// 初始化服務
 			const env = c.env;
@@ -102,14 +84,19 @@ export class UpdatePaymentStatus extends OpenAPIRoute {
 				parseInt(env.CACHE_DURATION || '15')
 			);
 
+			const rows = await sheetsService.getSheetData('Sheet1');
+			if (parsedRowId >= rows.length || !rows[parsedRowId]?.[1]) {
+				return c.json({ success: false, message: '找不到指定訂單' }, 404);
+			}
+
 			// 計算要更新的儲存格範圍
 			// 參考原 PHP 邏輯：款項在 P 欄（index 15），rowId 對應實際行號（+1 因為有標題列）
 			const actualRowNumber = parsedRowId + 1; // 加上標題行
 			const rangeToUpdate = `Sheet1!P${actualRowNumber}`; // P 欄是付款狀態欄位
 
 			// 更新 Google Sheets 中的付款狀態
-			// 使用 USER_ENTERED 模式（參考原 PHP 檔案）
-			await sheetsService.updateSheetData(rangeToUpdate, [[paymentStatus]], 'USER_ENTERED');
+			// 付款狀態只能作為文字，禁止公式解讀。
+			await sheetsService.updateSheetData(rangeToUpdate, [[paymentStatus]], 'RAW');
 
 			// 更新成功後清除相關快取（參考原 PHP 邏輯）
 			await this.clearRelatedCache(cacheService);

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
-import { fetchCustomers, clearCustomerCache } from '../services/customerService';
+import { fetchCustomers } from '../services/customerService';
 import { CustomerWithStats } from '../types/customer';
 import { CustomerFilterCriteria } from '../types/customer';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
@@ -29,6 +29,7 @@ const CustomerList: React.FC<CustomerListProps> = ({
   const [customers, setCustomers] = useState<CustomerWithStats[]>([]);
   const [allCustomers, setAllCustomers] = useState<CustomerWithStats[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const itemsPerPage = 20;
@@ -42,10 +43,9 @@ const CustomerList: React.FC<CustomerListProps> = ({
   // 載入客戶的共用函式
   const reloadCustomers = async () => {
     setLoading(true);
+    setLoadError('');
     try {
-      // 先清除快取，確保從伺服器獲取最新資料
-      clearCustomerCache();
-      const data = await fetchCustomers(filters);
+      const data = await fetchCustomers(filters, { forceRefresh: true });
       setAllCustomers(data); // 儲存所有客戶
       setTotalPages(Math.ceil(data.length / itemsPerPage)); // 計算總頁數
 
@@ -74,10 +74,11 @@ const CustomerList: React.FC<CustomerListProps> = ({
         onTotalCountChange(data.length);
       }
     } catch (error) {
-      console.error('Failed to load customers:', error);
+      const message = error instanceof Error ? error.message : '客戶資料目前無法讀取，請重新載入。';
+      setLoadError(message);
       toast({
         title: '錯誤',
-        description: '載入客戶資料失敗',
+        description: message,
         variant: 'destructive',
       });
     } finally {
@@ -119,6 +120,7 @@ const CustomerList: React.FC<CustomerListProps> = ({
 
   return (
     <div className="bg-card border rounded-lg shadow-sm overflow-hidden">
+      {loadError && <p role="alert" className="border-b bg-destructive/10 p-3 text-sm text-destructive">客戶資料載入失敗：{loadError}</p>}
       {/* 行動版：使用虛擬清單卡片 */}
       {isMobile ? (
         <CustomerListMobile
@@ -127,6 +129,7 @@ const CustomerList: React.FC<CustomerListProps> = ({
           selected={selected}
           onToggleSelect={handleSelectCustomer}
           onCustomerClick={onCustomerClick}
+          error={loadError}
         />
       ) : (
       <div className="overflow-x-auto">
@@ -153,6 +156,10 @@ const CustomerList: React.FC<CustomerListProps> = ({
               <tr>
                 <td colSpan={7} className="p-4 text-center">載入中...</td>
               </tr>
+            ) : customers.length === 0 && loadError ? (
+              <tr>
+                <td colSpan={7} className="p-4 text-center text-destructive">客戶資料無法載入，請重新讀取。</td>
+              </tr>
             ) : customers.length === 0 ? (
               <tr>
                 <td colSpan={7} className="p-4 text-center">無客戶資料</td>
@@ -172,7 +179,10 @@ const CustomerList: React.FC<CustomerListProps> = ({
                     />
                   </td>
                   <td className="p-3">{customer.name}</td>
-                  <td className="p-3">{customer.phone}</td>
+                  <td className="p-3">
+                    {customer.phone}
+                    {customer.normalizedPhone === null && <span className="ml-2 text-xs text-amber-700" title="電話格式無法安全比對">電話待核對</span>}
+                  </td>
                   <td className="p-3">{customer.region}</td>
                   <td className="p-3 truncate max-w-[300px]" title={customer.address}>
                     {customer.address}

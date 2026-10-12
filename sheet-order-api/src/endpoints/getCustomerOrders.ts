@@ -1,8 +1,12 @@
 import { OpenAPIRoute } from 'chanfana';
+import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { z } from 'zod';
 import { AppContext, ApiResponse, ApiError, safeArrayAccess } from '../types';
 import { GoogleSheetsService } from '../services/GoogleSheetsService';
-import { CacheService } from '../services/CacheService';
+import { normalizePhoneIdentity, PhoneIdentityError, tryNormalizePhoneIdentity } from '../services/PhoneIdentity';
+import { getCustomerSheetName } from '../services/SheetNames';
+import { OrderConflict } from '../services/OrderContract';
+import { publicApiError } from '../services/PublicApiError';
 
 /**
  * 客戶訂單歷史查詢 API 端點
@@ -27,7 +31,7 @@ export class GetCustomerOrders extends OpenAPIRoute {
 					'application/json': {
 						schema: ApiResponse.extend({
 							data: z.array(z.object({
-								id: z.number().describe('訂單行號'),
+								id: z.string().describe('訂單行號'),
 								orderTime: z.string().describe('訂單時間'),
 								items: z.string().describe('購買項目'),
 								name: z.string().describe('客戶姓名')
@@ -66,7 +70,6 @@ export class GetCustomerOrders extends OpenAPIRoute {
 		try {
 			// 獲取查詢參數
 			const phone = c.req.query('phone');
-			const forceRefresh = c.req.query('refresh') === '1';
 
 			// 驗證必要參數
 			if (!phone) {
@@ -78,6 +81,20 @@ export class GetCustomerOrders extends OpenAPIRoute {
 					request_id: requestId
 				}, 400);
 			}
+			let normalizedPhone: string;
+			try {
+				normalizedPhone = normalizePhoneIdentity(phone);
+			} catch (error) {
+				if (!(error instanceof PhoneIdentityError)) throw error;
+				c.header('X-Response-Time', `${Date.now() - startTime}ms`);
+				return c.json({
+					success: false,
+					code: error.code,
+					message: error.message,
+					timestamp: Math.floor(Date.now() / 1000),
+					request_id: requestId
+				}, 400);
+			}
 
 			// 初始化服務
 			const env = c.env;
@@ -85,41 +102,12 @@ export class GetCustomerOrders extends OpenAPIRoute {
 				env.GOOGLE_SERVICE_ACCOUNT_KEY,
 				env.GOOGLE_SHEET_ID
 			);
-			const cacheService = new CacheService(
-				env.CACHE_KV,
-				parseInt(env.CACHE_DURATION || '15')
-			);
-
-			// 檢查快取
-			const cacheKey = CacheService.generateKey('customer_orders', phone);
-			let cachedData: any = null;
-
-			if (!forceRefresh) {
-				cachedData = await cacheService.get(cacheKey);
-				if (cachedData) {
-					c.header('X-Cache', 'HIT');
-					// 如果有 timestamp 屬性則計算快取年齡，否則跳過
-					if (cachedData.timestamp) {
-						c.header('X-Cache-Age', Math.floor((Date.now() - cachedData.timestamp * 1000) / 1000).toString());
-					}
-					c.header('X-Response-Time', `${Date.now() - startTime}ms`);
-					return c.json({
-						...cachedData,
-						request_id: requestId
-					});
-				}
-			}
-
-			// 快取未命中或強制刷新
-			c.header('X-Cache', 'MISS');
-			if (forceRefresh) {
-				c.header('X-Cache-Refresh', 'Forced');
-			}
 
 			// 從 Google Sheets 獲取客戶名單資料
 			const customerData = await this.getCustomerOrdersFromSheet(
 				sheetsService,
-				phone
+				normalizedPhone,
+				getCustomerSheetName(env)
 			);
 
 			// 準備回應資料
@@ -130,26 +118,27 @@ export class GetCustomerOrders extends OpenAPIRoute {
 				request_id: requestId
 			};
 
-			// 更新快取
-			await cacheService.set(cacheKey, response);
-
 			c.header('X-Response-Time', `${Date.now() - startTime}ms`);
 			return c.json(response);
 
 		} catch (error) {
-			console.error('GetCustomerOrders 錯誤:', error);
-
+			console.error('get_customer_orders.failed');
+			if (error instanceof OrderConflict) {
+				return c.json({ success: false, code: error.code, message: error.message }, error.status as 400 | 403 | 404 | 409 | 503);
+			}
+			const publicError = error instanceof ApiError
+				? publicApiError(error, '無法從 Google Sheets 獲取客戶訂單資料')
+				: { status: 500, code: 'CUSTOMER_ORDERS_READ_FAILED', message: '無法從 Google Sheets 獲取客戶訂單資料' };
 			const errorResponse = {
 				success: false,
-				message: error instanceof ApiError ? error.message : '無法從 Google Sheets 獲取客戶訂單資料',
-				error: error instanceof Error ? error.message : String(error),
+				code: publicError.code,
+				message: publicError.message,
 				timestamp: Math.floor(Date.now() / 1000),
 				request_id: requestId
 			};
 
-			const statusCode = error instanceof ApiError ? error.statusCode : 500;
 			c.header('X-Response-Time', `${Date.now() - startTime}ms`);
-			return c.json(errorResponse, statusCode as 200 | 400 | 401 | 403 | 404 | 422 | 500);
+			return c.json(errorResponse, publicError.status as ContentfulStatusCode);
 		}
 	}
 
@@ -160,12 +149,12 @@ export class GetCustomerOrders extends OpenAPIRoute {
 	 */
 	private async getCustomerOrdersFromSheet(
 		sheetsService: GoogleSheetsService,
-		phone: string
-	): Promise<{ id: number; orderTime: string; items: string; name: string }[]> {
+		phone: string,
+		customerSheetName: string
+	): Promise<{ id: string; orderTime: string; items: string; name: string }[]> {
 		try {
 			// 從客戶名單工作表獲取資料
-			const sheetName = '客戶名單';
-			const sheetData = await sheetsService.getSheetData(sheetName);
+			const sheetData = await sheetsService.getSheetData(customerSheetName);
 
 			if (!sheetData || sheetData.length === 0) {
 				return [];
@@ -190,14 +179,14 @@ export class GetCustomerOrders extends OpenAPIRoute {
 			// 查找匹配的訂單
 			const matchingOrders = this.findMatchingOrders(rows, headerMap, phone);
 
-			// 根據列數排序（列數越小的為最早訂購的資訊）
-			matchingOrders.sort((a, b) => a.id - b.id);
+			// 依訂購時間排序，不以 UUID 當作時間或行位置
+			matchingOrders.sort((a, b) => a.orderTime.localeCompare(b.orderTime,undefined,{numeric:true}));
 
 			return matchingOrders;
 
 		} catch (error) {
 			if (error instanceof ApiError) {throw error;}
-			throw new ApiError(500, `獲取客戶訂單資料失敗: ${error instanceof Error ? error.message : String(error)}`, 'SHEET_ACCESS_ERROR');
+			throw new ApiError(500, '無法從 Google Sheets 獲取客戶訂單資料', 'SHEET_ACCESS_ERROR');
 		}
 	}
 
@@ -255,19 +244,20 @@ export class GetCustomerOrders extends OpenAPIRoute {
 		headerMap: { [key: string]: number },
 		phone: string
 	): Array<{
-		id: number;
+		id: string;
 		orderTime: string;
 		items: string;
 		name: string;
 	}> {
 		const matchingOrders: Array<{
-			id: number;
+			id: string;
 			orderTime: string;
 			items: string;
 			name: string;
 		}> = [];
 
 		rows.forEach((row, idx) => {
+            if(row[17])return;
 			// 確保資料完整性
 			if (!row || row.length === 0) {
 				return;
@@ -297,7 +287,7 @@ export class GetCustomerOrders extends OpenAPIRoute {
 				// 只有當訂單時間或購買項目不為空時才加入結果
 				if (orderTime || items) {
 					matchingOrders.push({
-						id: idx, // 行索引作為 ID
+						id: row[16]||`legacy-${idx}`, // 行索引作為 ID
 						orderTime: orderTime,
 						items: items,
 						name: name
@@ -316,20 +306,8 @@ export class GetCustomerOrders extends OpenAPIRoute {
 	 * @param rowPhone 資料行中的電話號碼
 	 */
 	private isPhoneMatch(queryPhone: string, rowPhone: string): boolean {
-		// 標準化電話號碼，只保留數字
-		const normalizedQueryPhone = queryPhone.replace(/[^0-9]/g, '');
-		const normalizedRowPhone = rowPhone.replace(/[^0-9]/g, '');
-
-		// 取得後九碼進行比較（如果電話號碼長度大於9）
-		const lastNineQuery = normalizedQueryPhone.length >= 9 
-			? normalizedQueryPhone.slice(-9) 
-			: normalizedQueryPhone;
-		const lastNineRow = normalizedRowPhone.length >= 9 
-			? normalizedRowPhone.slice(-9) 
-			: normalizedRowPhone;
-
-		// 比較電話號碼的後九碼
-		return lastNineQuery === lastNineRow;
+		const normalizedRowPhone = tryNormalizePhoneIdentity(rowPhone);
+		return normalizedRowPhone !== null && normalizedRowPhone === queryPhone;
 	}
 
 	/**

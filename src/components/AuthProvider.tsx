@@ -1,130 +1,16 @@
 import { createContext, useContext, useEffect, useMemo, useState, ReactNode } from 'react';
-import SecureStorage from '@/utils/secureStorage';
-
-interface User {
-  id: string;
-  username: string;
-  email: string;
-  full_name: string;
-  role: string;
-}
-
-interface AuthContextType {
-  user: User | null;
-  token: string | null;
-  login: (username: string, password: string) => Promise<{ success: boolean; message?: string }>;
-  logout: () => void;
-  isAuthenticated: boolean;
-  isLoading: boolean;
-}
-
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-};
-
-interface AuthProviderProps {
-  children: ReactNode;
-}
-
-export const AuthProvider = ({ children }: AuthProviderProps) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    const storedToken = SecureStorage.getItem('admin_token');
-    const storedUser = SecureStorage.getItem('admin_user');
-    
-    if (storedToken && storedUser) {
-      try {
-        const userData = JSON.parse(storedUser);
-        if (isTokenValid(storedToken)) {
-          setToken(storedToken);
-          setUser(userData);
-        } else {
-          SecureStorage.removeItem('admin_token');
-          SecureStorage.removeItem('admin_user');
-        }
-      } catch (error) {
-        console.error('解析用戶資料失敗:', error);
-        SecureStorage.removeItem('admin_token');
-        SecureStorage.removeItem('admin_user');
-      }
-    }
-    
-    setIsLoading(false);
-  }, []);
-
-  const login = async (username: string, password: string): Promise<{ success: boolean; message?: string }> => {
-    try {
-      // 與 hooks/useAuth.ts 統一：使用 admin-auth 以簽發自有 JWT
-      const response = await fetch('https://skcdapfynyszxyqqsvib.supabase.co/functions/v1/admin-auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
-      });
-
-      const result = await response.json();
-
-      if (result.success && result.token && result.user) {
-        setToken(result.token);
-        setUser(result.user);
-        SecureStorage.setItem('admin_token', result.token);
-        SecureStorage.setItem('admin_user', JSON.stringify(result.user));
-        return { success: true };
-      } else {
-        return { success: false, message: result.message || '登入失敗' };
-      }
-    } catch (error) {
-      console.error('登入錯誤:', error);
-      return { success: false, message: '連接伺服器失敗' };
-    }
-  };
-
-  const logout = () => {
-    setUser(null);
-    setToken(null);
-    SecureStorage.removeItem('admin_token');
-    SecureStorage.removeItem('admin_user');
-  };
-
-  const isAuthenticated = !!user && !!token;
-
-  const value: AuthContextType = useMemo(() => ({
-    user,
-    token,
-    login,
-    logout,
-    isAuthenticated,
-    isLoading
-  }), [user, token, isAuthenticated, isLoading]);
-
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
-};
-
-function isTokenValid(token: string): boolean {
-  try {
-    const parts = token.split('.');
-    if (parts.length !== 3) {return false;}
-
-    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
-    
-    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
-      return false;
-    }
-
-    return true;
-  } catch {
-    return false;
-  }
+import { adminFetch } from '@/services/adminApi';
+interface User { id:string; username:string; email:string; full_name:string; role:string }
+interface AuthContextType { user:User|null; token:null; login:(username?:string,password?:string)=>Promise<{success:boolean;message?:string}>; logout:()=>void; isAuthenticated:boolean; isLoading:boolean }
+const AuthContext=createContext<AuthContextType|undefined>(undefined);
+export const useAuth=()=>{const value=useContext(AuthContext);if(!value)throw new Error('AuthProvider is required');return value;};
+export function AuthProvider({children}:{children:ReactNode}) {
+ const [user,setUser]=useState<User|null>(null); const [isLoading,setIsLoading]=useState(true);
+ useEffect(()=>{let active=true; for(const key of ['admin_token','admin_user','secure_admin_token','secure_admin_user','data_source','sb-skcdapfynyszxyqqsvib-auth-token'])localStorage.removeItem(key);
+  adminFetch('/auth/me').then(async r=>{if(!r.ok)return null;const result=await r.json();return result.success&&result.logged_in?result.user:null;}).then(value=>{if(active)setUser(value);}).catch(()=>{if(active)setUser(null);}).finally(()=>{if(active)setIsLoading(false);});return ()=>{active=false;};},[]);
+ const value=useMemo<AuthContextType>(()=>({user,token:null,isLoading,isAuthenticated:!!user,
+  login:async()=>{window.location.assign('/');return {success:false,message:'請使用 Cloudflare Access 管理員登入。'};},
+  logout:()=>{setUser(null);window.location.assign('/cdn-cgi/access/logout');}
+ }),[user,isLoading]);
+ return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

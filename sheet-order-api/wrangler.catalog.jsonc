@@ -1,0 +1,47 @@
+{
+  "name": "lopokao-catalog-test",
+  "main": "src/catalogWorker.ts",
+  "compatibility_date": "2025-08-03",
+  "workers_dev": true,
+  "preview_urls": false,
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    "APP_ENV": "development",
+    "ACCESS_TEAM_DOMAIN": "",
+    "ACCESS_AUDIENCE": "",
+    "ADMIN_EMAILS": "",
+    "ALLOWED_ORIGINS": "http://localhost:8080,http://127.0.0.1:8080"
+  },
+  "d1_databases": [
+    {
+      "binding": "CATALOG_DB",
+      "database_name": "lopokao-catalog-test",
+      "database_id": "4d2301a9-8c1d-40fb-be33-063eb1cfb6fd",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "env": {
+    "production": {
+      "name": "lopokao-catalog",
+      "workers_dev": true,
+      "preview_urls": false,
+      "vars": {
+        "APP_ENV": "production",
+        "ACCESS_TEAM_DOMAIN": "767780.cloudflareaccess.com",
+        "ACCESS_AUDIENCE": "acba9bfaa5b6ea9abaac4bfd10b052aba1c0cec6a99166d995f5f95353099438",
+        "ADMIN_EMAILS": "ruby7677@gmail.com,wade7616@gmail.com",
+        "ALLOWED_ORIGINS": "https://sheet-order-dashboard-main.pages.dev"
+      },
+      "d1_databases": [
+        {
+          "binding": "CATALOG_DB",
+          "database_name": "lopokao-catalog-production",
+          "database_id": "5105db35-6b7a-4a42-a3fc-9596093ae4d4",
+          "migrations_dir": "migrations"
+        }
+      ]
+    }
+  }
+}

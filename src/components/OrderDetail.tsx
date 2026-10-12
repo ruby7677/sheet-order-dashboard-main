@@ -1,3 +1,4 @@
+import HistoricalPriceSetup from './HistoricalPriceSetup';
 
 import React, { useState } from 'react';
 import {
@@ -34,7 +35,8 @@ interface OrderDetailProps {
     newStatus?: '訂單確認中' | '已抄單' | '已出貨' | '取消訂單',
     newPaymentStatus?: import('./PaymentStatusEditor').PaymentStatus,
     newItems?: OrderItem[],
-    newTotal?: number
+    newTotal?: number,
+    newRevision?: string
   ) => void;
 }
 
@@ -49,6 +51,7 @@ const OrderDetail: React.FC<OrderDetailProps> = ({
   const [paymentStatus, setPaymentStatus] = useState<import('./PaymentStatusEditor').PaymentStatus>('');
   const [isDeleting, setIsDeleting] = useState(false);
   const [isEditingItems, setIsEditingItems] = useState(false);
+  const [isPricing, setIsPricing] = useState(false);
   const [currentOrder, setCurrentOrder] = useState<Order | null>(null);
   const { toast } = useToast();
 
@@ -65,23 +68,25 @@ const OrderDetail: React.FC<OrderDetailProps> = ({
 
     setIsUpdating(true);
     try {
-      await updateOrderStatus(
+      const receipt=await updateOrderStatus(
         order.id,
-        newStatus as '訂單確認中' | '已抄單' | '已出貨' | '取消訂單'
+        newStatus as '訂單確認中' | '已抄單' | '已出貨' | '取消訂單',
+        (currentOrder||order).revision
       );
       setStatus(newStatus);
+      setCurrentOrder(o=>o?{...o,status:newStatus,revision:receipt.revision}:null);
       toast({
         title: '成功',
-        description: '訂單狀態已更新',
+        description: receipt.warning||'訂單狀態已更新',
       });
       if (order && typeof onOrderStatusUpdate === 'function') {
-        onOrderStatusUpdate(order.id, newStatus);
+        onOrderStatusUpdate(order.id, newStatus,undefined,undefined,undefined,receipt.revision);
       }
     } catch (error) {
       console.error('Failed to update order status:', error);
       toast({
         title: '錯誤',
-        description: '更新訂單狀態失敗',
+        description: error instanceof Error?error.message:'更新訂單狀態失敗',
         variant: 'destructive',
       });
     } finally {
@@ -99,7 +104,7 @@ const OrderDetail: React.FC<OrderDetailProps> = ({
 
     // 顯示確認對話框
     const confirmed = window.confirm(
-      `確定要刪除訂單 ${order.orderNumber} 嗎？\n\n⚠️ 注意：此操作將會從 Google Sheets 中永久刪除該訂單資料，無法復原！`
+      `確定要刪除訂單 ${order.orderNumber} 嗎？\n\n⚠️ 注意：此操作會將訂單存檔；未出貨且有扣庫存紀錄的商品會自動回補。`
     );
 
     if (!confirmed) {
@@ -109,17 +114,9 @@ const OrderDetail: React.FC<OrderDetailProps> = ({
     setIsDeleting(true);
     try {
       // 清除快取並刪除訂單
-      const result = await deleteOrder(order.id);
+      const result = await deleteOrder(order.id,(currentOrder||order).revision);
 
-      // 檢查是否有重排序結果
-      let description = `訂單 ${order.orderNumber} 已從 Google Sheets 中永久刪除`;
-      if (result && result.reorder_result) {
-        if (result.reorder_result.success && result.reorder_result.updated_rows > 0) {
-          description += `，已重新排序 ${result.reorder_result.updated_rows} 個後續訂單的ID`;
-        } else if (result.reorder_result.updated_rows === 0) {
-          description += `，無需重新排序後續訂單`;
-        }
-      }
+      const description = result.warning||'訂單已存檔並從清單移除';
 
       toast({
         title: '成功',
@@ -152,7 +149,8 @@ const OrderDetail: React.FC<OrderDetailProps> = ({
     setIsUpdating(true);
     try {
       // 使用 orderService 中的統一 API 呼叫邏輯
-      await updateOrderPaymentStatus(order.id, newPaymentStatus);
+      const receipt=await updateOrderPaymentStatus(order.id, newPaymentStatus,(currentOrder||order).revision);
+      setCurrentOrder(o=>o?{...o,paymentStatus:newPaymentStatus,revision:receipt.revision}:null);
       setPaymentStatus(newPaymentStatus);
       toast({
         title: '成功',
@@ -160,7 +158,7 @@ const OrderDetail: React.FC<OrderDetailProps> = ({
       });
       // 通知父組件刷新主頁 OrderList 欄位
       if (order && typeof onOrderStatusUpdate === 'function') {
-        onOrderStatusUpdate(order.id, undefined, newPaymentStatus); // 讓主頁即時同步款項狀態
+        onOrderStatusUpdate(order.id, undefined, newPaymentStatus,undefined,undefined,receipt.revision); // 讓主頁即時同步款項狀態
       }
     } catch (error) {
       console.error('Failed to update payment status:', error);
@@ -176,6 +174,7 @@ const OrderDetail: React.FC<OrderDetailProps> = ({
 
   // 商品編輯處理
   const handleEditItems = () => {
+    if(!(currentOrder||order)?.can_edit_items){setIsPricing(true);return;}
     setIsEditingItems(true);
   };
 
@@ -184,13 +183,14 @@ const OrderDetail: React.FC<OrderDetailProps> = ({
 
     setIsUpdating(true);
     try {
-      await updateOrderItems(currentOrder.id, newItems, newTotal);
+      const receipt=await updateOrderItems(currentOrder.id, newItems, newTotal,currentOrder.revision);
 
       // 更新本地狀態
       const updatedOrder = {
         ...currentOrder,
-        items: newItems,
-        total: newTotal
+        items: receipt.items||newItems,
+        total: receipt.total??newTotal,
+        revision:receipt.revision
       };
       setCurrentOrder(updatedOrder);
 
@@ -201,7 +201,7 @@ const OrderDetail: React.FC<OrderDetailProps> = ({
 
       // 通知父組件刷新清單與統計，同步更新列表中該筆訂單的 items/total
       if (typeof onOrderStatusUpdate === 'function') {
-        onOrderStatusUpdate(currentOrder.id, status, undefined, newItems, newTotal);
+        onOrderStatusUpdate(currentOrder.id, status, undefined,receipt.items||newItems,receipt.total??newTotal,receipt.revision);
       }
 
       setIsEditingItems(false);
@@ -260,10 +260,10 @@ const OrderDetail: React.FC<OrderDetailProps> = ({
                 variant="outline"
                 size="sm"
                 onClick={handleEditItems}
-                disabled={isUpdating}
+                disabled={isUpdating||order.operation_pending||order.can_manage===false||(!order.historical&&!order.can_edit_items)}
               >
                 <Edit className="h-4 w-4 mr-2" />
-                編輯商品
+                {(currentOrder||order).can_edit_items?'編輯商品':'確認成交單價'}
               </Button>
             </div>
             <div className="border rounded-md overflow-hidden">
@@ -280,9 +280,9 @@ const OrderDetail: React.FC<OrderDetailProps> = ({
                   {(currentOrder || order).items.map((item, index) => (
                     <tr key={index} className="border-t">
                       <td className="p-2">{item.product}</td>
-                      <td className="p-2 text-right">${item.price}</td>
+                      <td className="p-2 text-right">{(currentOrder||order).unitPricesConfirmed===false?'未確認':'NT$ '+item.price}</td>
                       <td className="p-2 text-right">{item.quantity}</td>
-                      <td className="p-2 text-right">${item.subtotal}</td>
+                      <td className="p-2 text-right">{(currentOrder||order).unitPricesConfirmed===false?'未確認':'$'+item.subtotal}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -314,7 +314,7 @@ const OrderDetail: React.FC<OrderDetailProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <h3 className="font-medium mb-2">訂單狀態</h3>
-              <Select value={status} onValueChange={handleStatusChange} disabled={isUpdating}>
+              <Select value={status} onValueChange={handleStatusChange} disabled={isUpdating||order.operation_pending||order.can_manage===false}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="選擇狀態" />
                 </SelectTrigger>
@@ -328,7 +328,7 @@ const OrderDetail: React.FC<OrderDetailProps> = ({
             </div>
             <div>
               <h3 className="font-medium mb-2">款項狀態</h3>
-              <PaymentStatusEditor value={paymentStatus} onChange={handlePaymentStatusChange} disabled={isUpdating} />
+              <PaymentStatusEditor value={paymentStatus} onChange={handlePaymentStatusChange} disabled={isUpdating||order.operation_pending||order.can_manage===false} />
             </div>
           </div>
         </div>
@@ -338,7 +338,7 @@ const OrderDetail: React.FC<OrderDetailProps> = ({
             <Button
               variant="destructive"
               onClick={handleDelete}
-              disabled={isDeleting}
+              disabled={isDeleting||order.operation_pending||order.can_manage===false}
             >
               <Trash className="h-4 w-4 mr-2" />
               刪除訂單
@@ -357,13 +357,18 @@ const OrderDetail: React.FC<OrderDetailProps> = ({
 
       {/* 商品編輯對話框 */}
       {currentOrder && (
-        <OrderItemEditor
+        <>
+        <HistoricalPriceSetup order={currentOrder||order} open={isPricing} onClose={()=>setIsPricing(false)} onSaved={()=>{window.dispatchEvent(new Event('orders:reload'));onClose();onOrderStatusUpdate(order.id);}}/>
+      <OrderItemEditor
+          availableProducts={currentOrder.price_options||[]}
+          deliveryMethod={currentOrder.deliveryMethod}
           items={currentOrder.items}
           open={isEditingItems}
           onClose={() => setIsEditingItems(false)}
           onSave={handleSaveItems}
           isLoading={isUpdating}
         />
+        </>
       )}
     </Dialog>
   );

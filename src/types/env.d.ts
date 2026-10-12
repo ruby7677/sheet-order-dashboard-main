@@ -2,6 +2,7 @@
 
 // 環境變數類型定義
 interface ImportMetaEnv {
+  readonly VITE_ENVIRONMENT?: string
   readonly VITE_APP_ENV: string
   readonly VITE_API_BASE_URL: string
   readonly VITE_API_HOST: string

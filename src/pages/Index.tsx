@@ -1,3 +1,6 @@
+import OrderOperationsPage from './OrderOperationsPage';
+import ProductManagementPage from './ProductManagementPage';
+import DeliveryDateSettingsPage from './DeliveryDateSettingsPage';
 import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import Dashboard from '@/components/Dashboard';
@@ -12,13 +15,11 @@ import CompactControlPanel from '@/components/CompactControlPanel';
 import ModernSidebar from '@/components/ModernSidebar';
 import ScrollToTopButton from '@/components/ScrollToTopButton';
 import DuplicateOrdersDialog from '@/components/DuplicateOrdersDialog';
-import ProductManagementPage from '../pages/ProductManagementPage';
-import DeliveryDateSettingsPage from '../pages/DeliveryDateSettingsPage';
 import { Order, PaymentStatus, OrderItem } from '@/types/order';
 import { CustomerWithStats } from '../types/customer';
 import { FilterCriteria } from '../types/filters';
 import { CustomerFilterCriteria } from '../types/customer';
-import { fetchOrders, detectDuplicateOrders, DuplicateGroup, subscribeDataSourceChange } from '@/services/orderService';
+import { fetchOrders, detectDuplicateOrders, DuplicateGroup } from '@/services/orderService';
 import { fetchCustomers, getCustomerStats } from '@/services/customerService';
 import { downloadBlackCatXls, printOrders } from '@/utils/exportUtils';
 import { downloadQuickStoreXlsx } from '@/utils/exportQuickStoreXlsx';
@@ -30,7 +31,7 @@ const Index: React.FC = () => {
   const [isInIframe, setIsInIframe] = useState(false);
 
   // 頁面模式：'orders'、'customers'、'delivery-settings' 或 'products'
-  const [pageMode, setPageMode] = useState<'orders' | 'customers' | 'delivery-settings' | 'products'>('orders');
+  const [pageMode, setPageMode] = useState<'orders' | 'customers' | 'products' | 'delivery-settings' | 'operations'>('orders');
 
   // 訂單相關狀態
   // 已選擇訂單 id 陣列
@@ -102,7 +103,7 @@ const Index: React.FC = () => {
   });
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
-  const [orderListRef, setOrderListRef] = useState<((orderId: string, newStatus?: '訂單確認中' | '已抄單' | '已出貨' | '取消訂單', newPaymentStatus?: PaymentStatus, newItems?: OrderItem[], newTotal?: number) => void) | null>(null);
+  const [orderListRef, setOrderListRef] = useState<((orderId: string, newStatus?: '訂單確認中' | '已抄單' | '已出貨' | '取消訂單', newPaymentStatus?: PaymentStatus, newItems?: OrderItem[], newTotal?: number, newRevision?: string) => void) | null>(null);
   const [stats, setStats] = useState({
     total: 0,
     processing: 0,
@@ -165,13 +166,14 @@ const Index: React.FC = () => {
 
     // 處理來自父視窗的訊息
     const handleMessage = (event: MessageEvent) => {
+      if(event.source!==window.parent||![window.location.origin,'https://lopokao.767780.xyz'].includes(event.origin))return;
       // 確保事件來源是期望的父視窗，如果需要更強的安全性
       // if (event.origin !== 'YOUR_PARENT_DOMAIN') {
       //   return;
       // }
 
       if (event.data && typeof event.data === 'object' && event.data.type === 'SET_PAGE_MODE') {
-        if (event.data.mode === 'orders' || event.data.mode === 'customers' || event.data.mode === 'delivery-settings') {
+        if (event.data.mode === 'orders' || event.data.mode === 'customers') {
           setPageMode(event.data.mode);
         }
       }
@@ -183,24 +185,6 @@ const Index: React.FC = () => {
       window.removeEventListener('message', handleMessage);
     };
   }, [hasShownInitialDuplicateAlert]); // 依賴項包含相關狀態
-
-  // 監聽資料來源變更：清空快取並重新載入
-  useEffect(() => {
-    const unsub = subscribeDataSourceChange(() => {
-      setSelected([]);
-      setSelectedCustomers([]);
-      setDashboardRefreshTrigger(prev => prev + 1);
-      setCustomerDashboardRefreshTrigger(prev => prev + 1);
-      // 觸發 OrderList 重新載入（filters 物件引用變更）
-      setFilters(prev => ({ ...prev }));
-      // 重新整理客戶統計
-      updateCustomerStats();
-    });
-    return () => {
-      if (unsub) unsub();
-    };
-  }, []);
-
 
   // 一般的統計更新（不會觸發自動警示）
   const updateStats = async () => {
@@ -261,7 +245,7 @@ const Index: React.FC = () => {
           newStatus?: '訂單確認中' | '已抄單' | '已出貨' | '取消訂單',
           newPaymentStatus?: PaymentStatus,
           newItems?: OrderItem[],
-          newTotal?: number
+          newTotal?: number, newRevision?: string
         ) => {
           console.log('訂單更新:', orderId, newStatus, newPaymentStatus, newItems, newTotal);
         });
@@ -307,7 +291,7 @@ const Index: React.FC = () => {
       newStatus?: '訂單確認中' | '已抄單' | '已出貨' | '取消訂單',
       newPaymentStatus?: PaymentStatus,
       newItems?: OrderItem[],
-      newTotal?: number
+      newTotal?: number, newRevision?: string
     ) => void
   ) => {
     setSelectedOrder({ ...order });
@@ -425,9 +409,9 @@ const Index: React.FC = () => {
       )}
 
       {/* 主內容區域 */}
-      <div className="flex-1 flex flex-col min-h-screen">
+      <div className="flex-1 min-w-0 flex flex-col min-h-screen">
         {/* 只在非 iframe 模式下顯示頂部工具欄 */}
-        <main className={`flex-1 ${isInIframe ? 'p-3' : 'p-6'}`}>
+        <main className={`flex-1 min-w-0 ${isInIframe ? 'p-3' : 'p-6'}`}>
 
         {/* 訂單頁面 */}
         {pageMode === 'orders' && (
@@ -492,8 +476,9 @@ const Index: React.FC = () => {
               order={selectedOrder}
               open={isDetailOpen}
               onClose={handleCloseDetail}
-              onOrderStatusUpdate={(orderId, newStatus, newPaymentStatus, newItems?: OrderItem[], newTotal?: number) => {
-                if (orderListRef) {orderListRef(orderId, newStatus, newPaymentStatus, newItems, newTotal);}
+              onOrderStatusUpdate={(orderId, newStatus, newPaymentStatus, newItems?: OrderItem[], newTotal?: number, newRevision?: string) => {
+                if (orderListRef) {orderListRef(orderId, newStatus, newPaymentStatus, newItems, newTotal,newRevision);}
+                setSelectedOrder(previous=>previous&&previous.id===orderId?{...previous,revision:newRevision||previous.revision,status:newStatus||previous.status,paymentStatus:newPaymentStatus??previous.paymentStatus,items:newItems||previous.items,total:newTotal??previous.total}:previous);
                 handleOrdersChange();
               }}
             />
@@ -535,15 +520,9 @@ const Index: React.FC = () => {
           </>
         )}
 
-        {/* 商品管理頁面 */}
-        {pageMode === 'products' && (
-          <ProductManagementPage />
-        )}
-
-        {/* 到貨日期設定頁面 */}
-        {pageMode === 'delivery-settings' && (
-          <DeliveryDateSettingsPage />
-        )}
+        {pageMode === 'operations' && <OrderOperationsPage />}
+        {pageMode === 'products' && <ProductManagementPage />}
+        {pageMode === 'delivery-settings' && <DeliveryDateSettingsPage />}
         </main>
       </div>
 

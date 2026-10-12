@@ -20,20 +20,14 @@ import { OrderItem } from '@/types/order';
 import { Plus, Minus, Trash2, ShoppingCart } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-// 可用商品清單及價格
-const AVAILABLE_PRODUCTS = [
-  { name: '原味蘿蔔糕', price: 250 },
-  { name: '芋頭粿', price: 350 },
-  { name: '台式鹹蘿蔔糕', price: 350 },
-  { name: '鳳梨豆腐乳', price: 350 },
-] as const;
-
 interface OrderItemEditorProps {
   items: OrderItem[];
   open: boolean;
   onClose: () => void;
   onSave: (items: OrderItem[], newTotal: number) => void;
   isLoading?: boolean;
+  availableProducts?: Array<{product_id:string;name:string;price:number}>;
+  deliveryMethod?:string;
 }
 
 /**
@@ -45,11 +39,14 @@ const OrderItemEditor: React.FC<OrderItemEditorProps> = ({
   open,
   onClose,
   onSave,
-  isLoading = false
+  isLoading = false,
+  availableProducts = [],
+  deliveryMethod='宅配到府'
 }) => {
   const [editedItems, setEditedItems] = useState<OrderItem[]>([]);
   const [newProductName, setNewProductName] = useState<string>('');
   const { toast } = useToast();
+  const AVAILABLE_PRODUCTS = availableProducts;
 
   // 當對話框開啟時，初始化編輯項目
   useEffect(() => {
@@ -63,14 +60,15 @@ const OrderItemEditor: React.FC<OrderItemEditorProps> = ({
    * 計算總金額
    */
   const calculateTotal = (itemList: OrderItem[]): number => {
-    return itemList.reduce((total, item) => total + item.subtotal, 0);
+    const subtotal=itemList.reduce((total, item) => total + item.subtotal, 0);
+    return subtotal+(['門市取貨','來店自取'].includes(deliveryMethod)||subtotal>=350?0:100);
   };
 
   /**
    * 更新商品數量
    */
   const updateQuantity = (index: number, newQuantity: number) => {
-    if (newQuantity < 1) {return;}
+    if (!Number.isInteger(newQuantity)||newQuantity < 1||newQuantity>100) {return;}
 
     const updatedItems = [...editedItems];
     updatedItems[index] = {
@@ -130,6 +128,7 @@ const OrderItemEditor: React.FC<OrderItemEditorProps> = ({
     } else {
       // 新增商品項目
       const newItem: OrderItem = {
+        product_id: product.product_id,
         product: product.name,
         price: product.price,
         quantity: 1,
