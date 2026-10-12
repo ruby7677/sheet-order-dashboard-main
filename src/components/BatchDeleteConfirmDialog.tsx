@@ -109,7 +109,7 @@ const BatchDeleteConfirmDialog: React.FC<BatchDeleteConfirmDialogProps> = ({
                 <ul className="list-disc list-inside space-y-1 text-red-700">
                   <li>此操作將從 Google Sheets 中永久刪除這些訂單</li>
                   <li>刪除後無法復原，請確認您真的要執行此操作</li>
-                  <li>後續訂單的ID將會自動重新排序</li>
+                  <li>刪除不會回補庫存，請管理員自行調整庫存數量</li>
                 </ul>
               </div>
             </div>
