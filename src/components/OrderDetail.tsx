@@ -104,7 +104,7 @@ const OrderDetail: React.FC<OrderDetailProps> = ({
 
     // 顯示確認對話框
     const confirmed = window.confirm(
-      `確定要刪除訂單 ${order.orderNumber} 嗎？\n\n⚠️ 注意：此操作會將訂單存檔；未出貨且有扣庫存紀錄的商品會自動回補。`
+      `確定要刪除訂單 ${order.orderNumber} 嗎？\n\n⚠️ 注意：此操作會同步刪除 Google Sheets 的訂單資料，無法從後台復原。刪除不會回補庫存，請管理員自行調整。`
     );
 
     if (!confirmed) {

@@ -15,7 +15,7 @@ export const mutation=z.discriminatedUnion('kind',[
 ]);
 export type Mutation=z.infer<typeof mutation>;
 export interface PricedItem {product_id:string;product:string;quantity:number;unit_price:number;price:number;subtotal:number;}
-export interface InventoryProof {prices:Record<string,{name:string;price:number}>;quantities:Record<string,number>;allocations:Record<string,number>;historical:boolean;restored:boolean;shipping:number;has_shipped?:boolean;}
+export interface InventoryProof {prices:Record<string,{name:string;price:number}>;quantities:Record<string,number>;allocations:Record<string,number>;historical:boolean;restored:boolean;shipping:number;has_shipped?:boolean;deleted_without_restock?:boolean;}
 export type OrderRow=[string,string,string,string,string,string,string,string,string,string,string,string,string,string,string,string,string,string];
 export function rowCells(input:ReadonlyArray<unknown>):OrderRow {const v=(i:number)=>String(input[i]??'');return [v(0),v(1),v(2),v(3),v(4),v(5),v(6),v(7),v(8),v(9),v(10),v(11),v(12),v(13),v(14),v(15),v(16),v(17)];}
 export async function rowRevision(input:string[]):Promise<string>{const v=rowCells(input);v[7]='';return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(v))))).map(x=>x.toString(16).padStart(2,'0')).join('');}
@@ -41,11 +41,14 @@ export function inventoryChange(proof:InventoryProof,input:Mutation,status:strin
   if(['門市取貨','來店自取'].includes(deliveryMethod))next.shipping=0;
   else if(['宅配到府','7-11門市'].includes(deliveryMethod))next.shipping=subtotal>=35000?0:100;
   else throw new OrderConflict(409,'DELIVERY_RULE_REQUIRED','歷史配送方式需先核對，暫停修改商品');
- }else if(input.kind==='delete'||(input.kind==='status'&&input.status==='取消訂單')){
+ }else if(input.kind==='delete'){
+  next.deleted_without_restock=true;
+ }else if(input.kind==='status'&&input.status==='取消訂單'){
   if(status!=='已出貨'&&!proof.has_shipped&&!proof.restored){for(const [id,q]of Object.entries(proof.allocations))if(q>0)delta[id]=q;next.allocations={};next.restored=true;}
- }else if(input.kind==='status'&&status==='取消訂單'&&input.status!=='取消訂單'){
+ }else if(input.kind==='status'&&input.status==='取消訂單'&&input.status!=='取消訂單'){
   throw new OrderConflict(409,'CANCELLED_ORDER_CLOSED','已取消訂單不能直接恢復，請建立新訂單');
  }
  if(input.kind==='status'&&input.status==='已出貨')next.has_shipped=true;
- return {next,delta,...(proof.historical&&(input.kind==='delete'||(input.kind==='status'&&input.status==='取消訂單'))?{warning:'歷史訂單原始庫存不自動回補，請人工盤點；僅回補可驗證的後續追加扣庫存量。'}:{})};
+ if(input.kind==='delete')return {next,delta,warning:'刪除訂單不會自動回補庫存，請由管理員手動調整庫存。'};
+ return {next,delta,...(proof.historical&&input.kind==='status'&&input.status==='取消訂單'?{warning:'歷史訂單原始庫存不自動回補，請人工盤點；僅回補可驗證的後續追加扣庫存量。'}:{})};
 }

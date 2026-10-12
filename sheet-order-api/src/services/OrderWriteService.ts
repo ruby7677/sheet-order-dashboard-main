@@ -5,9 +5,12 @@ import {MAX_OPERATIONS_SNAPSHOT_BYTES,MAX_OPERATIONS_SNAPSHOT_ROWS,paginateOpera
 import type {OperationsPage} from './OperationsPagination';
 interface Operation {id:string;order_id:string;expected_hash:string;fingerprint:string;actor:string;kind:string;before_fields:string;after_fields:string;phase:string;result:string;created_at:string;}
 interface Plan {fields:Record<number,string|number>;next:InventoryProof;delta:Record<string,number>;after_hash:string;warning?:string;reason?:string;}
-export interface OrderStore {locate(id:string):Promise<string[]>;write(id:string,fields:Record<number,string|number>):Promise<void>;rows():Promise<string[][]>;}
+export interface OrderStore {locate(id:string):Promise<string[]>;locateForDelete?(id:string):Promise<string[]>;clearOrder?(id:string):Promise<void>;write(id:string,fields:Record<number,string|number>):Promise<void>;rows():Promise<string[][]>; }
 const now=()=>new Date().toISOString();
 const aliases:Record<string,string>={radish:'原味蘿蔔糕',taro:'芋頭粿',hongkong:'台式鹹蘿蔔糕'};
+const blankRow=(row:string[])=>row.length===18&&row.every(cell=>cell==='');
+const hasInventoryDelta=(delta:Record<string,number>)=>Object.values(delta).some(value=>value!==0);
+const deleteStockReview=()=>new OrderConflict(409,'DELETE_PLAN_NEEDS_MANUAL_STOCK_REVIEW','舊刪除操作含庫存回補計畫，已停止自動重試；請人工核對庫存與訂單。');
 function assertStoredItemStructure(value:string,expected:ReturnType<typeof pricedItems>):void{
  const actual=sheetItems(value);
  if(actual.length!==expected.length)throw new OrderConflict(409,'INVENTORY_PROOF_CONFLICT','商品明細與庫存核對紀錄不一致，請先對帳');
@@ -56,20 +59,24 @@ export class OrderWriteService {
    ({next,delta,warning}=inventoryChange(before,input,row[14],row[3]));
    if(input.kind==='status')fields[14]=input.status;
    if(input.kind==='payment')fields[15]=input.status;
-   if(input.kind==='delete')fields[17]=now();
    if(input.kind==='items'){fields[8]=pricedItems(next).map(i=>`${i.product} x ${i.quantity}`).join(', ');fields[9]=total(next);}
   }
-  const updated=rowCells(row);for(const [col,v]of Object.entries(fields))updated[Number(col)]=String(v);
+  const updated=input.kind==='delete'?Array(18).fill('') as string[]:rowCells(row);for(const [col,v]of Object.entries(fields))updated[Number(col)]=String(v);
   return {fields,next,delta,after_hash:await rowRevision(updated),warning,...(input.kind==='pricing'?{reason:input.reason}: {})};
  }
  async mutate(raw:unknown,actor:string):Promise<Record<string,unknown>>{
   const parsed=mutation.safeParse(raw);if(!parsed.success)throw new OrderConflict(400,'INVALID_ORDER_MUTATION','操作格式錯誤，請重新載入並確認欄位');const input=parsed.data;
   const fingerprint=await rowRevision([JSON.stringify(input)]);
+  if(input.kind==='delete'&&(!this.sheets.locateForDelete||!this.sheets.clearOrder))throw new OrderConflict(503,'ORDER_DELETE_UNAVAILABLE','訂單清除功能尚未配置，沒有變更資料或庫存。');
   return this.lease(async()=>{
    let op=await this.operation(input.operation_id);
    if(op){if(op.actor!==actor||op.order_id!==input.id||op.fingerprint!==fingerprint)throw new OrderConflict(409,'OPERATION_ID_REUSED','操作識別已使用');if(op.phase==='completed')return {...JSON.parse(op.result),reused:true};if(op.phase==='rejected')throw new OrderConflict(409,'OPERATION_REJECTED','此操作已撤回，請重新載入');}
-   let row=rowCells(await this.sheets.locate(input.id));let plan:Plan;
-   if(!op){
+   let row:string[]=[],plan:Plan;
+   if(op){
+    plan=JSON.parse(op.after_fields);
+    if(op.kind==='delete'&&hasInventoryDelta(plan.delta))throw deleteStockReview();
+   }else{
+    row=rowCells(await this.sheets.locate(input.id));
     const pending=await this.db.prepare("SELECT id FROM order_operations WHERE order_id=? AND phase IN ('prepared','sheet_submitting','pending') LIMIT 1").bind(input.id).first();if(pending)throw new OrderConflict(409,'ORDER_RECONCILIATION_REQUIRED','訂單有結果待確認的操作，請先對帳');
     if(row[17])throw new OrderConflict(409,'ORDER_ARCHIVED','訂單已刪除，請重新載入');if(await rowRevision(row)!==input.expected_revision)throw new OrderConflict(409,'STALE_ORDER','訂單已更新，請重新載入後再操作');
     const before=await this.proof(input.id,row);plan=await this.plan(input,row,before);const date=now();
@@ -85,7 +92,24 @@ export class OrderWriteService {
     }
     try{op=await this.operation(input.operation_id);}catch{throw new OrderConflict(503,'ORDER_OPERATION_RESULT_UNKNOWN','訂單操作結果尚待確認；請保留本次操作識別並重試，不要建立新操作');}
     if(!op)throw new OrderConflict(503,'ORDER_OPERATION_RESULT_UNKNOWN','訂單操作結果尚待確認；請保留本次操作識別並重試，不要建立新操作');
-   }else plan=JSON.parse(op.after_fields);
+   }
+   if(op.kind==='delete'){
+    if(hasInventoryDelta(plan.delta))throw deleteStockReview();
+    try{row=rowCells(await this.sheets.locateForDelete!(input.id));}
+    catch{await this.setPhase(op.id,'pending');throw new OrderConflict(409,'ORDER_RECONCILIATION_REQUIRED','無法唯一定位刪除訂單，操作保留待人工核對；不會改動庫存');}
+    if(!blankRow(row)){
+     if(row[16]!==input.id||await rowRevision(row)!==op.expected_hash)throw new OrderConflict(409,'ORDER_RECONCILIATION_REQUIRED','刪除列已有差異，停止清除並保留操作待人工核對');
+     await this.setPhase(op.id,'sheet_submitting');
+     try{
+      await this.sheets.clearOrder!(input.id);row=rowCells(await this.sheets.locateForDelete!(input.id));
+      if(!blankRow(row))throw new Error('Delete verification mismatch');
+     }catch{await this.setPhase(op.id,'pending');throw new OrderConflict(409,'ORDER_RECONCILIATION_REQUIRED','訂單清除結果尚待確認；請保留操作並對帳，不會回補庫存');}
+    }
+    return this.finish(op,plan,row,actor,'');
+   }
+   if(!op)throw new OrderConflict(503,'ORDER_OPERATION_RESULT_UNKNOWN','訂單操作結果尚待確認；請保留本次操作識別並重試');
+   if(!row.length)row=rowCells(await this.sheets.locate(input.id));
+   plan=JSON.parse(op.after_fields);
    if(op.phase==='sheet_submitting'||op.phase==='pending'){
     if(await rowRevision(row)!==plan.after_hash)throw new OrderConflict(409,'ORDER_RECONCILIATION_REQUIRED','上次操作結果尚待確認，不會重複寫入或回補庫存');
    }else if(Object.keys(plan.fields).length){
@@ -98,6 +122,7 @@ export class OrderWriteService {
   });
  }
  private async finish(op:Operation,plan:Plan,row:string[],actor:string,reason:string):Promise<Record<string,unknown>>{
+  if(op.kind==='delete'&&!blankRow(row))throw new OrderConflict(409,'ORDER_RECONCILIATION_REQUIRED','刪除列尚未完全清空，停止結案與庫存處理');
   const result={success:true,id:op.order_id,revision:await rowRevision(row),...(op.kind==='items'?{items:pricedItems(plan.next),total:total(plan.next)}:{}),warning:plan.warning,message:plan.warning||'訂單已更新'};
   const positive=Object.fromEntries(Object.entries(plan.delta).filter(([,n])=>n>0));
   try{await this.catalog.orderCommit(positive,actor,op.id,[
@@ -188,14 +213,23 @@ export class OrderWriteService {
   uuid.parse(operationId);if(typeof reason!=='string'||reason.trim().length<3||reason.length>300)throw new OrderConflict(400,'REASON_REQUIRED','請填寫核對原因');
   return this.lease(async()=>{
    const op=await this.operation(operationId);if(!op)throw new OrderConflict(404,'OPERATION_NOT_FOUND','找不到待辦操作');if(['completed','rejected'].includes(op.phase))return {success:true,reused:true,message:'操作已結案'};
-   const plan=JSON.parse(op.after_fields) as Plan,row=await this.sheets.locate(op.order_id),hash=await rowRevision(row);
-   if(action==='confirm'){if(hash!==plan.after_hash)throw new OrderConflict(409,'RECONCILIATION_UNCERTAIN','資料尚不符合預期結果，停止補寫與回補；請人工核對');return this.finish(op,plan,row,actor,reason);}
+   const plan=JSON.parse(op.after_fields) as Plan,isDelete=op.kind==='delete';
+   if(isDelete&&action==='confirm'&&hasInventoryDelta(plan.delta))throw deleteStockReview();
+   if(isDelete&&(!this.sheets.locateForDelete||!this.sheets.clearOrder))throw new OrderConflict(503,'ORDER_DELETE_UNAVAILABLE','訂單清除功能尚未配置，沒有變更資料或庫存。');
+   const row=rowCells(isDelete?await this.sheets.locateForDelete!(op.order_id):await this.sheets.locate(op.order_id)),hash=await rowRevision(row);
+   if(action==='confirm'){
+    if(isDelete&&!blankRow(row))throw new OrderConflict(409,'RECONCILIATION_UNCERTAIN','刪除列尚未確認 A:R 全空，停止結案與庫存處理');
+    if(hash!==plan.after_hash)throw new OrderConflict(409,'RECONCILIATION_UNCERTAIN','資料尚不符合預期結果，停止補寫與回補；請人工核對');
+    return this.finish(op,plan,row,actor,reason);
+   }
    if(hash!==op.expected_hash||plan.after_hash===op.expected_hash)throw new OrderConflict(409,'RECONCILIATION_UNCERTAIN','無法確認未寫入，不能撤回此操作');
    if(op.phase!=='prepared'&&Date.now()-Date.parse(op.created_at)<600000)throw new OrderConflict(409,'RECONCILIATION_WAIT','結果不明的操作至少等待十分鐘後再核對，避免晚到的寫入');
-   const second=await this.sheets.locate(op.order_id);if(await rowRevision(second)!==op.expected_hash)throw new OrderConflict(409,'RECONCILIATION_UNCERTAIN','核對期間資料已變更，停止撤回');
+   const second=rowCells(isDelete?await this.sheets.locateForDelete!(op.order_id):await this.sheets.locate(op.order_id));if(await rowRevision(second)!==op.expected_hash)throw new OrderConflict(409,'RECONCILIATION_UNCERTAIN','核對期間資料已變更，停止撤回');
    const restore=Object.fromEntries(Object.entries(plan.delta).filter(([,n])=>n<0).map(([id,n])=>[id,-n]));
-   await this.catalog.orderCommit(restore,actor,op.id,[this.db.prepare("INSERT INTO order_operation_effects(operation_id,effect,actor,reason,created_at) VALUES(?,'rejected',?,?,?)").bind(op.id,actor,reason.trim(),now()),this.db.prepare("UPDATE order_operations SET phase='rejected',result=?,updated_at=? WHERE id=?").bind(JSON.stringify({message:'已核對未寫入並撤回預留'}),now(),op.id)]);
-   return {success:true,message:'已撤回未完成的操作與追加預留'};
+   const message=isDelete?'已核對訂單尚未清空並撤回操作；刪除不會自動回補庫存。':'已撤回未完成的操作與追加預留';
+   await this.catalog.orderCommit(restore,actor,op.id,[this.db.prepare("INSERT INTO order_operation_effects(operation_id,effect,actor,reason,created_at) VALUES(?,'rejected',?,?,?)").bind(op.id,actor,reason.trim(),now()),this.db.prepare("UPDATE order_operations SET phase='rejected',result=?,updated_at=? WHERE id=?").bind(JSON.stringify({message}),now(),op.id)]);
+   return {success:true,message};
   });
  }
+
 }
