@@ -19,7 +19,6 @@ import {
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
-import { getDataSource, setDataSourceAndNotify, subscribeDataSourceChange } from '@/services/orderService';
 
 interface CompactControlPanelProps {
   // 統計資訊
@@ -55,15 +54,6 @@ const CompactControlPanel: React.FC<CompactControlPanelProps> = ({
 }) => {
   const [isStatsExpanded, setIsStatsExpanded] = useState(defaultExpanded);
   const [isFiltersExpanded, setIsFiltersExpanded] = useState(false);
-  const [currentSource, setCurrentSource] = useState(getDataSource());
-
-  // 監聽資料來源變更，觸發 UI 更新
-  React.useEffect(() => {
-    const unsub = subscribeDataSourceChange(() => setCurrentSource(getDataSource()));
-    return () => {
-      if (unsub) unsub();
-    };
-  }, []);
 
   return (
     <div className="space-y-2 mb-4">

@@ -24,12 +24,14 @@ const CustomerFilters: React.FC<CustomerFiltersProps> = ({ onFilterChange }) => 
   const [search, setSearch] = useState<string>('');
   const [regions, setRegions] = useState<string[]>(['所有地區']);
   const [products, setProducts] = useState<string[]>(['所有商品']);
+  const [optionsError, setOptionsError] = useState('');
 
   // 初始化地區和商品選項
   useEffect(() => {
     const loadFilterOptions = async () => {
       try {
         const customers = await fetchCustomers();
+        setOptionsError('');
         
         // 提取所有地區
         const uniqueRegions = new Set<string>();
@@ -51,7 +53,7 @@ const CustomerFilters: React.FC<CustomerFiltersProps> = ({ onFilterChange }) => 
         });
         setProducts(Array.from(uniqueProducts));
       } catch (error) {
-        console.error('載入篩選選項失敗:', error);
+        setOptionsError(error instanceof Error ? error.message : '篩選選項目前無法讀取。');
       }
     };
     
@@ -80,6 +82,7 @@ const CustomerFilters: React.FC<CustomerFiltersProps> = ({ onFilterChange }) => 
 
   return (
     <div className="p-4 mb-6 bg-card border rounded-lg shadow-sm">
+      {optionsError && <p role="alert" className="mb-3 text-sm text-destructive">客戶篩選選項載入失敗：{optionsError}</p>}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 items-end">
         <Select value={region} onValueChange={handleRegionChange}>
           <SelectTrigger className="w-full">

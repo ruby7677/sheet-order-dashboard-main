@@ -1,3 +1,4 @@
+import { useAuth } from '@/components/AuthProvider';
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -12,21 +13,20 @@ import {
   ChevronLeft,
   ChevronRight,
   Home,
-  Package,
   TrendingUp,
-  Database,
   ShoppingCart,
+  Package,
   Calendar,
-  FileText
+  FileText,
+  LogOut
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import useScrollAwareMenu from '@/hooks/useScrollAwareMenu';
-import { getDataSource, setDataSourceAndNotify, subscribeDataSourceChange } from '@/services/orderService';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 
 interface ModernSidebarProps {
-  pageMode: 'orders' | 'customers' | 'delivery-settings' | 'products';
-  onPageModeChange: (mode: 'orders' | 'customers' | 'delivery-settings' | 'products') => void;
+  pageMode: 'orders' | 'customers' | 'products' | 'delivery-settings' | 'operations';
+  onPageModeChange: (mode: 'orders' | 'customers' | 'products' | 'delivery-settings' | 'operations') => void;
   orderStats?: {
     total: number;
     pending: number;
@@ -46,9 +46,9 @@ const ModernSidebar: React.FC<ModernSidebarProps> = ({
   customerStats,
   className
 }) => {
+  const { user, logout } = useAuth();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
-  const [currentSource, setCurrentSource] = useState(getDataSource());
   const [isContentScrolled, setIsContentScrolled] = useState(false);
   
   // 滾動感知邏輯
@@ -59,14 +59,6 @@ const ModernSidebar: React.FC<ModernSidebarProps> = ({
     hideAtTop: false, // 在頂部也顯示按鈕
     minScrollDistance: 5
   });
-
-  // 監聽資料來源變更
-  React.useEffect(() => {
-    const unsub = subscribeDataSourceChange(() => setCurrentSource(getDataSource()));
-    return () => {
-      if (unsub) unsub();
-    };
-  }, []);
 
   // 監聽主內容區域的滾動狀態
   useEffect(() => {
@@ -100,24 +92,9 @@ const ModernSidebar: React.FC<ModernSidebarProps> = ({
       description: '管理客戶資訊',
       onClick: () => onPageModeChange('customers')
     },
-    {
-      id: 'products' as const,
-      label: '商品管理',
-      icon: Package,
-      badge: 0,
-      subBadge: 0,
-      description: '管理商品資料',
-      onClick: () => onPageModeChange('products')
-    },
-    {
-      id: 'delivery-settings' as const,
-      label: '設定到貨日期',
-      icon: Calendar,
-      badge: 0,
-      subBadge: 0,
-      description: '設定訂單到貨日期',
-      onClick: () => onPageModeChange('delivery-settings')
-    }
+    {id:'operations' as const,label:'待辦對帳',icon:FileText,badge:0,subBadge:0,description:'待確認操作與紀錄',onClick:()=>onPageModeChange('operations')},
+    {id:'products' as const,label:'商品設定',icon:Package,badge:0,subBadge:0,description:'商品資料與庫存',onClick:()=>onPageModeChange('products')},
+    {id:'delivery-settings' as const,label:'到貨日期設定',icon:Calendar,badge:0,subBadge:0,description:'前台可選到貨日期',onClick:()=>onPageModeChange('delivery-settings')},
   ];
 
   const SidebarContent = () => (
@@ -172,7 +149,6 @@ const ModernSidebar: React.FC<ModernSidebarProps> = ({
                   <div className="flex-1 text-left">
                     <div className="flex items-center justify-between">
                       <span className="font-medium">{item.label}</span>
-                      {item.id !== 'products' && item.id !== 'delivery-settings' && (
                         <div className="flex items-center gap-1">
                           {item.subBadge > 0 && (
                             <Badge 
@@ -189,7 +165,6 @@ const ModernSidebar: React.FC<ModernSidebarProps> = ({
                             {item.badge}
                           </Badge>
                         </div>
-                      )}
                     </div>
                     <p className="text-xs opacity-70 mt-1">{item.description}</p>
                   </div>
@@ -221,32 +196,13 @@ const ModernSidebar: React.FC<ModernSidebarProps> = ({
         )}
       </div>
 
-      {/* 資料來源切換 */}
-      {(!isCollapsed || isMobileOpen) && (
-        <div className="p-3 border-t border-border/50">
-          <div className="text-xs text-muted-foreground mb-2 px-1">資料來源</div>
-          <div className="flex gap-1 mb-3">
-            <Button
-              variant={currentSource === 'sheets' ? "default" : "outline"}
-              size="sm"
-              className="flex-1 h-8"
-              onClick={() => setDataSourceAndNotify('sheets')}
-            >
-              <Database className="h-3 w-3 mr-1" />
-              Sheets
-            </Button>
-            <Button
-              variant={currentSource === 'supabase' ? "default" : "outline"}
-              size="sm"
-              className="flex-1 h-8"
-              onClick={() => setDataSourceAndNotify('supabase')}
-            >
-              <Database className="h-3 w-3 mr-1" />
-              Supabase
-            </Button>
-          </div>
-        </div>
-      )}
+      <div className="p-3 border-t border-border/50">
+        {(!isCollapsed || isMobileOpen) && <p className="text-xs text-muted-foreground truncate mb-2" title={user?.email}>{user?.email}</p>}
+        <Button type="button" variant="outline" className="w-full" onClick={logout} aria-label="登出管理後台" title="登出管理後台">
+          <LogOut className="h-4 w-4" />
+          {(!isCollapsed || isMobileOpen) && <span className="ml-2">登出</span>}
+        </Button>
+      </div>
 
       {/* 底部系統狀態 */}
       {!isCollapsed && (

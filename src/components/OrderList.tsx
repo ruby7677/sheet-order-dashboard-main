@@ -21,7 +21,7 @@ interface OrderListProps {
   /** 訂單過濾條件 */
   filters: FilterCriteria;
   /** 點擊訂單時的 callback，可傳入 updateOrderInList */
-  onOrderClick: (order: Order, updateOrderInList: (orderId: string, newStatus?: '訂單確認中' | '已抄單' | '已出貨' | '取消訂單', newPaymentStatus?: PaymentStatus, newItems?: OrderItem[], newTotal?: number) => void) => void;
+  onOrderClick: (order: Order, updateOrderInList: (orderId: string, newStatus?: '訂單確認中' | '已抄單' | '已出貨' | '取消訂單', newPaymentStatus?: PaymentStatus, newItems?: OrderItem[], newTotal?: number, newRevision?: string) => void) => void;
   /** 訂單資料變動時的 callback */
   onOrdersChange: () => void;
   /** 已選擇訂單 id 陣列，由父元件管理 */
@@ -53,7 +53,7 @@ const OrderList: React.FC<OrderListProps> = ({ filters, onOrderClick, onOrdersCh
     newStatus?: '訂單確認中' | '已抄單' | '已出貨' | '取消訂單',
     newPaymentStatus?: PaymentStatus,
     newItems?: OrderItem[],
-    newTotal?: number
+    newTotal?: number, newRevision?: string
   ) => {
     // 更新目前頁面的可見清單
     setOrders(prev => prev.map(order => {
@@ -63,7 +63,7 @@ const OrderList: React.FC<OrderListProps> = ({ filters, onOrderClick, onOrdersCh
         status: newStatus !== undefined ? newStatus : order.status,
         paymentStatus: newPaymentStatus !== undefined ? newPaymentStatus : order.paymentStatus,
         items: Array.isArray(newItems) ? newItems : order.items,
-        total: typeof newTotal === 'number' ? newTotal : order.total
+        total: typeof newTotal === 'number' ? newTotal : order.total, revision:newRevision||order.revision
       };
     }));
 
@@ -75,7 +75,7 @@ const OrderList: React.FC<OrderListProps> = ({ filters, onOrderClick, onOrdersCh
         status: newStatus !== undefined ? newStatus : order.status,
         paymentStatus: newPaymentStatus !== undefined ? newPaymentStatus : order.paymentStatus,
         items: Array.isArray(newItems) ? newItems : order.items,
-        total: typeof newTotal === 'number' ? newTotal : order.total
+        total: typeof newTotal === 'number' ? newTotal : order.total, revision:newRevision||order.revision
       };
     }));
   };
@@ -85,11 +85,13 @@ const OrderList: React.FC<OrderListProps> = ({ filters, onOrderClick, onOrdersCh
   const [allOrders, setAllOrders] = useState<Order[]>([]); // 儲存所有訂單資料
   // 載入狀態
   const [loading, setLoading] = useState<boolean>(true);
+  const [loadError, setLoadError] = useState('');
   const { toast } = useToast();
 
   // 載入訂單的共用函式
   const reloadOrders = async (force: boolean = false) => {
     setLoading(true);
+    setLoadError('');
     try {
       // 僅在需要強制刷新時清除快取，平時優先走前端記憶體快取
       if (force) {
@@ -127,10 +129,11 @@ const OrderList: React.FC<OrderListProps> = ({ filters, onOrderClick, onOrdersCh
         onSelectedChange(stillExistingSelectedIds);
       }
     } catch (error) {
-      console.error('Failed to load orders:', error);
+      const message = error instanceof Error ? error.message : '訂單資料目前無法讀取，請重新載入。';
+      setLoadError(message);
       toast({
         title: '錯誤',
-        description: '載入訂單失敗',
+        description: message,
         variant: 'destructive',
       });
     } finally {
@@ -151,6 +154,7 @@ const OrderList: React.FC<OrderListProps> = ({ filters, onOrderClick, onOrdersCh
   useEffect(() => {
     reloadOrders(false);
   }, [filters]);
+  useEffect(()=>{const reload=()=>{void reloadOrders(true)};window.addEventListener('orders:reload',reload);return()=>window.removeEventListener('orders:reload',reload);},[filters,currentPage]);
 
 
   // 單筆選取/取消
@@ -197,7 +201,7 @@ const OrderList: React.FC<OrderListProps> = ({ filters, onOrderClick, onOrdersCh
 
     // 顯示確認對話框
     const confirmed = window.confirm(
-      `確定要刪除訂單 ${orderNumber} 嗎？\n\n⚠️ 注意：此操作將會從 Google Sheets 中永久刪除該訂單資料，無法復原！`
+      `確定要刪除訂單 ${orderNumber} 嗎？\n\n⚠️ 注意：此操作會將訂單存檔並從清單移除；未出貨且有扣庫存紀錄的商品會自動回補。`
     );
 
     if (!confirmed) {
@@ -205,17 +209,9 @@ const OrderList: React.FC<OrderListProps> = ({ filters, onOrderClick, onOrdersCh
     }
 
     try {
-      const result = await deleteOrder(orderId);
+      const result = await deleteOrder(orderId,orderToDelete?.revision);
 
-      // 檢查是否有重排序結果
-      let description = `訂單 ${orderNumber} 已從 Google Sheets 中永久刪除`;
-      if (result && result.reorder_result) {
-        if (result.reorder_result.success && result.reorder_result.updated_rows > 0) {
-          description += `，已重新排序 ${result.reorder_result.updated_rows} 個後續訂單的ID`;
-        } else if (result.reorder_result.updated_rows === 0) {
-          description += `，無需重新排序後續訂單`;
-        }
-      }
+      const description = result.warning||'訂單已存檔並從清單移除';
 
       toast({
         title: '成功',
@@ -264,7 +260,7 @@ const OrderList: React.FC<OrderListProps> = ({ filters, onOrderClick, onOrdersCh
 
     setBatchDeleting(true);
     try {
-      const result = await batchDeleteOrders(selected);
+      const result = await batchDeleteOrders(selected,allOrders);
 
       // 處理結果
       const successCount = result.totalDeleted;
@@ -326,6 +322,11 @@ const OrderList: React.FC<OrderListProps> = ({ filters, onOrderClick, onOrdersCh
 
   return (
     <div className="bg-card border rounded-lg shadow-sm overflow-hidden max-w-7xl mx-auto">
+      {loadError && (
+        <p role="alert" className="border-b bg-destructive/10 p-3 text-sm text-destructive">
+          訂單資料載入失敗，以下保留上次成功資料：{loadError}
+        </p>
+      )}
       {/* 批次操作區塊 - 優化設計 */}
       {selected.length > 0 && (
         <div className="border-b bg-gradient-to-r from-orange-50 to-red-50 p-3">
@@ -357,10 +358,10 @@ const OrderList: React.FC<OrderListProps> = ({ filters, onOrderClick, onOrdersCh
                     if (!batchOrderStatus || selected.length === 0) {return;}
                     setBatchLoading(true);
                     try {
-                      await batchUpdateOrderStatus(selected, batchOrderStatus as '訂單確認中' | '已抄單' | '已出貨' | '取消訂單');
+                      const outcome=await batchUpdateOrderStatus(selected, batchOrderStatus as '訂單確認中' | '已抄單' | '已出貨' | '取消訂單',allOrders);
                       toast({
                         title: '成功',
-                        description: '訂單狀態已批次更新',
+                        description: `已更新 ${outcome.totalDeleted} 筆，未完成 ${outcome.totalFailed} 筆`, variant:outcome.totalFailed?'destructive':'default',
                       });
                       await reloadOrders(true);
                       setBatchOrderStatus('');
@@ -403,10 +404,10 @@ const OrderList: React.FC<OrderListProps> = ({ filters, onOrderClick, onOrdersCh
                     if (!batchPaymentStatus || selected.length === 0) {return;}
                     setBatchLoading(true);
                     try {
-                      await batchUpdateOrderPaymentStatus(selected, batchPaymentStatus);
+                      const outcome=await batchUpdateOrderPaymentStatus(selected, batchPaymentStatus,allOrders);
                       toast({
                         title: '成功',
-                        description: '款項狀態已批次更新',
+                        description: `已更新 ${outcome.totalDeleted} 筆，未完成 ${outcome.totalFailed} 筆`, variant:outcome.totalFailed?'destructive':'default',
                       });
                       // 確保前端顯示更新
                       await reloadOrders(true);
@@ -457,15 +458,19 @@ const OrderList: React.FC<OrderListProps> = ({ filters, onOrderClick, onOrdersCh
 
       {/* 行動版：使用虛擬清單卡片渲染 */}
       {isMobile ? (
-        <OrderListMobile
-          allOrders={orders} // 修復：傳入分頁後的資料，而非全部資料
-          loading={loading}
-          selected={selected}
-          onToggleSelect={handleSelectOrder}
-          onOrderClick={onOrderClick}
-          onDeleteOrder={handleDeleteOrder}
-          updateOrderInList={updateOrderInList}
-        />
+        loadError && !loading && orders.length === 0 ? (
+          <p role="alert" className="p-8 text-center text-destructive">訂單清單無法載入，請重新讀取。</p>
+        ) : (
+          <OrderListMobile
+            allOrders={orders} // 修復：傳入分頁後的資料，而非全部資料
+            loading={loading}
+            selected={selected}
+            onToggleSelect={handleSelectOrder}
+            onOrderClick={onOrderClick}
+            onDeleteOrder={handleDeleteOrder}
+            updateOrderInList={updateOrderInList}
+          />
+        )
       ) : (
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
@@ -501,6 +506,10 @@ const OrderList: React.FC<OrderListProps> = ({ filters, onOrderClick, onOrdersCh
                     載入中...
                   </div>
                 </td>
+              </tr>
+            ) : orders.length === 0 && loadError ? (
+              <tr>
+                <td colSpan={10} className="p-8 text-center text-red-600">訂單清單無法載入，請重新讀取。</td>
               </tr>
             ) : orders.length === 0 ? (
               <tr>

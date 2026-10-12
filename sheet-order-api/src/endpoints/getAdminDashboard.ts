@@ -1,8 +1,15 @@
 import { OpenAPIRoute } from 'chanfana';
+import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { z } from 'zod';
-import { AppContext, ApiResponse, ApiError, safeArrayAccess, DashboardStats } from '../types';
-import { GoogleSheetsService } from '../services/GoogleSheetsService';
+import { AppContext, ApiResponse, ApiError, DashboardStats } from '../types';
+import { OrderSheets } from '../services/OrderSheets';
 import { CacheService } from '../services/CacheService';
+import { getSheetNames } from '../services/SheetNames';
+import { OrderColumn, OrderConflict, rowCells } from '../services/OrderContract';
+import { tryNormalizePhoneIdentity } from '../services/PhoneIdentity';
+import { publicApiError } from '../services/PublicApiError';
+import { safeArrayAccess } from '../types';
+import { countDashboardOrderDates } from '../services/DashboardCalendar';
 
 /**
  * 管理員儀表板統計資料 API 端點
@@ -73,9 +80,14 @@ export class GetAdminDashboard extends OpenAPIRoute {
 
 			// 初始化服務
 			const env = c.env;
-			const sheetsService = new GoogleSheetsService(
+			if (!env.GOOGLE_SERVICE_ACCOUNT_KEY || !env.GOOGLE_SHEET_ID) {
+				throw new ApiError(503, '訂單資料服務尚未配置', 'GOOGLE_SHEETS_NOT_CONFIGURED');
+			}
+			const sheetNames = getSheetNames(env);
+			const sheetsService = new OrderSheets(
 				env.GOOGLE_SERVICE_ACCOUNT_KEY,
-				env.GOOGLE_SHEET_ID
+				env.GOOGLE_SHEET_ID,
+				sheetNames.orders
 			);
 			const cacheService = new CacheService(
 				env.CACHE_KV,
@@ -83,7 +95,7 @@ export class GetAdminDashboard extends OpenAPIRoute {
 			);
 
 			// 檢查快取
-			const cacheKey = CacheService.generateKey('admin_dashboard');
+			const cacheKey = CacheService.generateKey('admin_dashboard_v2');
 			let cachedData: any = null;
 
 			if (!forceRefresh) {
@@ -109,7 +121,7 @@ export class GetAdminDashboard extends OpenAPIRoute {
 			}
 
 			// 從 Google Sheets 獲取統計資料
-			const dashboardStats = await this.getDashboardStatsFromSheet(sheetsService);
+			const dashboardStats = await this.getDashboardStatsFromSheet(sheetsService, sheetNames.customers);
 
 			// 準備回應資料
 			const response = {
@@ -126,19 +138,23 @@ export class GetAdminDashboard extends OpenAPIRoute {
 			return c.json(response);
 
 		} catch (error) {
-			console.error('GetAdminDashboard 錯誤:', error);
-
+			console.error('get_admin_dashboard.failed');
+			if (error instanceof OrderConflict) {
+				return c.json({ success: false, code: error.code, message: error.message }, error.status as 400 | 403 | 404 | 409 | 503);
+			}
+			const publicError = error instanceof ApiError
+				? publicApiError(error, '無法從 Google Sheets 獲取儀表板統計資料')
+				: { status: 500, code: 'ADMIN_DASHBOARD_READ_FAILED', message: '無法從 Google Sheets 獲取儀表板統計資料' };
 			const errorResponse = {
 				success: false,
-				message: error instanceof ApiError ? error.message : '無法從 Google Sheets 獲取儀表板統計資料',
-				error: error instanceof Error ? error.message : String(error),
+				code: publicError.code,
+				message: publicError.message,
 				timestamp: Math.floor(Date.now() / 1000),
 				request_id: requestId
 			};
 
-			const statusCode = error instanceof ApiError ? error.statusCode : 500;
 			c.header('X-Response-Time', `${Date.now() - startTime}ms`);
-			return c.json(errorResponse, statusCode as 200 | 400 | 401 | 403 | 404 | 422 | 500);
+			return c.json(errorResponse, publicError.status as ContentfulStatusCode);
 		}
 	}
 
@@ -147,33 +163,25 @@ export class GetAdminDashboard extends OpenAPIRoute {
 	 * @param sheetsService Google Sheets 服務實例
 	 */
 	private async getDashboardStatsFromSheet(
-		sheetsService: GoogleSheetsService
+		sheetsService: OrderSheets,
+		customerSheetName: string
 	): Promise<DashboardStats> {
 		try {
-			// 從訂單工作表獲取資料
-			const sheetName = '訂單';
-			const sheetData = await sheetsService.getSheetData(sheetName);
+			// Use the same bounded A:R snapshot and archive column as the order list.
+			const sheetData = await sheetsService.rows();
 
 			if (!sheetData || sheetData.length === 0) {
 				return this.getEmptyStats();
 			}
 
-			// 第一行是標題
-			const header = safeArrayAccess(sheetData, 0);
-			if (!header) {
-				return this.getEmptyStats();
-			}
-			
-			const rows = sheetData.slice(1);
-
-			// 建立標題映射
-			const headerMap = this.buildHeaderMap(header);
+			// Share the fixed A:R positional contract with readOrders; exclude archive column R.
+			const rows = sheetData.slice(1).map(rowCells).filter(row=>row[OrderColumn.customerName].trim()&&!row[OrderColumn.archivedAt]);
 
 			// 計算統計資料
-			const stats = this.calculateStats(rows, headerMap);
+			const stats = this.calculateStats(rows);
 
 			// 獲取客戶統計
-			const customerStats = await this.getCustomerStats(sheetsService);
+			const customerStats = await this.getCustomerStats(sheetsService, customerSheetName);
 
 			return {
 				...stats,
@@ -182,51 +190,16 @@ export class GetAdminDashboard extends OpenAPIRoute {
 
 		} catch (error) {
 			if (error instanceof ApiError) {throw error;}
-			throw new ApiError(500, `獲取儀表板統計資料失敗: ${error instanceof Error ? error.message : String(error)}`, 'SHEET_ACCESS_ERROR');
+			throw new ApiError(500, '無法取得儀表板統計資料', 'SHEET_ACCESS_ERROR');
 		}
-	}
-
-	/**
-	 * 建立標題欄位映射
-	 * @param header 標題行資料
-	 */
-	private buildHeaderMap(header: string[]): { [key: string]: number } {
-		const headerMap: { [key: string]: number } = {};
-
-		header.forEach((title, idx) => {
-			switch (title) {
-				case '訂單時間':
-					headerMap.orderTime = idx;
-					break;
-				case '訂單狀態':
-					headerMap.orderStatus = idx;
-					break;
-				case '付款狀態':
-					headerMap.paymentStatus = idx;
-					break;
-				default:
-					// 其他欄位使用小寫作為鍵
-					headerMap[title.toLowerCase()] = idx;
-					break;
-			}
-		});
-
-		return headerMap;
 	}
 
 	/**
 	 * 計算統計資料
 	 * @param rows 資料行
-	 * @param headerMap 標題映射
 	 */
-	private calculateStats(rows: string[][], headerMap: { [key: string]: number }) {
-		const now = new Date();
-		const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-		const weekStart = new Date(today);
-		weekStart.setDate(today.getDate() - today.getDay()); // 本週開始（週日）
-
-		let todayOrders = 0;
-		let weekOrders = 0;
+	private calculateStats(rows: Array<ReturnType<typeof rowCells>>) {
+		const { todayOrders, weekOrders } = countDashboardOrderDates(rows.map(row => row[OrderColumn.timestamp]));
 		let totalOrders = 0;
 		let pendingOrders = 0;
 		let completedOrders = 0;
@@ -248,33 +221,11 @@ export class GetAdminDashboard extends OpenAPIRoute {
 		};
 
 		rows.forEach((row) => {
-			if (!row || row.length === 0) {return;}
-
 			totalOrders++;
 
-			// 處理訂單時間統計
-			if (headerMap.orderTime !== undefined && row[headerMap.orderTime]) {
-				const orderTimeStr = row[headerMap.orderTime];
-				if (orderTimeStr && typeof orderTimeStr === 'string') {
-					const orderDate = this.parseOrderDate(orderTimeStr);
-
-					if (orderDate) {
-						// 今日訂單
-						if (orderDate >= today) {
-							todayOrders++;
-						}
-
-						// 本週訂單
-						if (orderDate >= weekStart) {
-							weekOrders++;
-						}
-					}
-				}
-			}
-
 			// 處理訂單狀態統計
-			if (headerMap.orderStatus !== undefined && row[headerMap.orderStatus]) {
-				const status = row[headerMap.orderStatus];
+			if (row[OrderColumn.status]) {
+				const status = row[OrderColumn.status];
 				switch (status) {
 					case '訂單確認中':
 						statusBreakdown.confirming++;
@@ -311,8 +262,8 @@ export class GetAdminDashboard extends OpenAPIRoute {
 			}
 
 			// 處理付款狀態統計
-			if (headerMap.paymentStatus !== undefined && row[headerMap.paymentStatus]) {
-				const paymentStatus = row[headerMap.paymentStatus];
+			if (row[OrderColumn.paymentStatus]) {
+				const paymentStatus = row[OrderColumn.paymentStatus];
 				switch (paymentStatus) {
 					case '已付款':
 						paymentBreakdown.paid++;
@@ -350,54 +301,34 @@ export class GetAdminDashboard extends OpenAPIRoute {
 	 * 獲取客戶統計資料
 	 * @param sheetsService Google Sheets 服務實例
 	 */
-	private async getCustomerStats(sheetsService: GoogleSheetsService): Promise<{ totalCustomers: number }> {
+	private async getCustomerStats(sheetsService: OrderSheets, customerSheetName: string): Promise<{ totalCustomers: number }> {
 		try {
 			// 從客戶名單工作表獲取資料
-			const customerSheetData = await sheetsService.getSheetData('客戶名單');
+			const customerSheetData = await sheetsService.getSheetData(customerSheetName);
 			if (!customerSheetData || customerSheetData.length <= 1) {
 				return { totalCustomers: 0 };
 			}
 
 			// 扣除標題行
-			const totalCustomers = customerSheetData.length - 1;
-			return { totalCustomers };
+			const header = safeArrayAccess(customerSheetData, 0);
+			if (!header) return { totalCustomers: 0 };
+			const nameIndex = header.indexOf('姓名');
+			const phoneIndex = header.indexOf('電話');
+			if (nameIndex < 0 || phoneIndex < 0) return { totalCustomers: 0 };
+
+			const identities = new Set<string>();
+			let invalidPhoneRows = 0;
+			customerSheetData.slice(1).forEach((row, index) => {
+				if (!row || !String(row[nameIndex] ?? '').trim() || !String(row[phoneIndex] ?? '').trim()) return;
+				const identity = tryNormalizePhoneIdentity(String(row[phoneIndex] ?? ''));
+				if (identity) identities.add(identity);
+				else invalidPhoneRows++;
+			});
+			return { totalCustomers: identities.size + invalidPhoneRows };
 
 		} catch (error) {
-			// 如果客戶名單工作表不存在或無法存取，返回 0
-			console.warn('無法獲取客戶統計資料:', error);
-			return { totalCustomers: 0 };
-		}
-	}
-
-	/**
-	 * 解析訂單時間字串
-	 * @param orderTimeStr 訂單時間字串
-	 */
-	private parseOrderDate(orderTimeStr: string): Date | null {
-		try {
-			// 嘗試多種日期格式
-			const formats = [
-				// ISO 格式
-				/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/,
-				// 台灣常見格式
-				/^\d{4}\/\d{1,2}\/\d{1,2}/,
-				/^\d{4}-\d{1,2}-\d{1,2}/,
-				// 其他格式
-				/^\d{1,2}\/\d{1,2}\/\d{4}/
-			];
-
-			for (const format of formats) {
-				if (format.test(orderTimeStr)) {
-					const date = new Date(orderTimeStr);
-					if (!isNaN(date.getTime())) {
-						return date;
-					}
-				}
-			}
-
-			return null;
-		} catch (error) {
-			return null;
+			if (error instanceof ApiError) throw error;
+			throw new ApiError(500, '無法取得客戶統計資料', 'CUSTOMER_STATS_UNAVAILABLE');
 		}
 	}
 

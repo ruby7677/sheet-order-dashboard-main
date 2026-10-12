@@ -7,6 +7,7 @@ import { CacheOptions } from '../types';
 export class CacheService {
 	private kv: KVNamespace;
 	private defaultTTL: number;
+	private static readonly MAX_TTL_SECONDS = 86_400;
 
 	constructor(kv: KVNamespace, defaultTTL: number = 60) {
 		this.kv = kv;
@@ -21,31 +22,12 @@ export class CacheService {
 	async get<T>(key: string): Promise<T | null> {
 		try {
 			const cached = await this.kv.get(key, 'json');
-			if (!cached) {return null;}
-
-			// 檢查是否包含時間戳和 TTL 資訊
-			if (typeof cached === 'object' && cached !== null && 'data' in cached && 'timestamp' in cached && 'ttl' in cached) {
-				const cacheData = cached as {
-					data: T;
-					timestamp: number;
-					ttl: number;
-				};
-
-				// 檢查是否過期
-				const now = Date.now();
-				if (now - cacheData.timestamp > cacheData.ttl * 1000) {
-					// 快取已過期，刪除並返回 null
-					await this.delete(key);
-					return null;
-				}
-
-				return cacheData.data;
-			}
-
-			// 舊格式的快取資料，直接返回
-			return cached as T;
-		} catch (error) {
-			console.error(`快取讀取錯誤 (key: ${key}):`, error);
+			if (cached === null) return null;
+			const now=Date.now(),envelope=this.envelope<T>(cached,now);
+			if(!envelope||now-envelope.timestamp>=envelope.ttl*1000)return null;
+			return envelope.data;
+		} catch {
+			console.error('cache.get.failed');
 			return null;
 		}
 	}
@@ -58,7 +40,8 @@ export class CacheService {
 	 */
 	async set<T>(key: string, data: T, ttl?: number): Promise<void> {
 		try {
-			const actualTTL = ttl || this.defaultTTL;
+			const actualTTL = ttl ?? this.defaultTTL;
+			if(!Number.isSafeInteger(actualTTL)||actualTTL<1||actualTTL>CacheService.MAX_TTL_SECONDS)throw new Error('Invalid cache TTL');
 			const cacheData = {
 				data,
 				timestamp: Date.now(),
@@ -73,8 +56,8 @@ export class CacheService {
 			await this.kv.put(key, JSON.stringify(cacheData), {
 				expirationTtl: kvExpirationTtl
 			});
-		} catch (error) {
-			console.error(`快取寫入錯誤 (key: ${key}):`, error);
+		} catch {
+			console.error('cache.set.failed');
 			// 快取寫入失敗不應該影響主要功能
 		}
 	}
@@ -86,8 +69,8 @@ export class CacheService {
 	async delete(key: string): Promise<void> {
 		try {
 			await this.kv.delete(key);
-		} catch (error) {
-			console.error(`快取刪除錯誤 (key: ${key}):`, error);
+		} catch {
+			console.error('cache.delete.failed');
 		}
 	}
 
@@ -102,8 +85,8 @@ export class CacheService {
 			
 			const deletePromises = list.keys.map(key => this.delete(key.name));
 			await Promise.all(deletePromises);
-		} catch (error) {
-			console.error(`快取失效錯誤 (pattern: ${pattern}):`, error);
+		} catch {
+			console.error('cache.invalidate.failed');
 		}
 	}
 
@@ -120,34 +103,26 @@ export class CacheService {
 	}> {
 		try {
 			const cached = await this.kv.get(key, 'json');
-			if (!cached) {
+			if (cached === null) {
 				return { exists: false, expired: false };
 			}
-
-			if (typeof cached === 'object' && cached !== null && 'timestamp' in cached && 'ttl' in cached) {
-				const cacheData = cached as {
-					timestamp: number;
-					ttl: number;
-				};
-
-				const now = Date.now();
-				const age = Math.floor((now - cacheData.timestamp) / 1000);
-				const expired = age > cacheData.ttl;
-
-				return {
-					exists: true,
-					expired,
-					age,
-					ttl: cacheData.ttl
-				};
-			}
-
-			// 舊格式快取，假設未過期
-			return { exists: true, expired: false };
-		} catch (error) {
-			console.error(`快取狀態檢查錯誤 (key: ${key}):`, error);
+			const now=Date.now(),envelope=this.envelope(cached,now);
+			if(!envelope)return {exists:false,expired:true};
+			const age=Math.floor((now-envelope.timestamp)/1000);
+			return {exists:true,expired:age>=envelope.ttl,age,ttl:envelope.ttl};
+		} catch {
+			console.error('cache.get_status.failed');
 			return { exists: false, expired: false };
 		}
+	}
+
+	private envelope<T>(value:unknown,now:number):{data:T;timestamp:number;ttl:number}|null{
+		if(!value||typeof value!=='object'||Array.isArray(value))return null;
+		const candidate=value as Record<string,unknown>;
+		if(!Object.prototype.hasOwnProperty.call(candidate,'data')||!Number.isSafeInteger(candidate.timestamp)||!Number.isSafeInteger(candidate.ttl))return null;
+		const timestamp=candidate.timestamp as number,ttl=candidate.ttl as number;
+		if(timestamp<1||timestamp>now||ttl<1||ttl>CacheService.MAX_TTL_SECONDS)return null;
+		return {data:candidate.data as T,timestamp,ttl};
 	}
 
 	/**
@@ -226,8 +201,8 @@ export class CacheService {
 				expired,
 				valid
 			};
-		} catch (error) {
-			console.error('快取統計錯誤:', error);
+		} catch {
+			console.error('cache.get_stats.failed');
 			return { total: 0, expired: 0, valid: 0 };
 		}
 	}

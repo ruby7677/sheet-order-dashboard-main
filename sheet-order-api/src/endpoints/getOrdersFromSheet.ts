@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { AppContext, Order, ApiResponse, ApiError, isValidEnv, safeArrayAccess } from '../types';
 import { GoogleSheetsService } from '../services/GoogleSheetsService';
 import { CacheService } from '../services/CacheService';
+import { getOrderSheetName } from '../services/SheetNames';
 
 /**
  * 從 Google Sheets 讀取訂單資料的 API 端點
@@ -124,7 +125,7 @@ export class GetOrdersFromSheet extends OpenAPIRoute {
 			}
 
 			// 從 Google Sheets 讀取資料
-			const sheetData = await sheetsService.getSheetData('Sheet1');
+			const sheetData = await sheetsService.getSheetData(getOrderSheetName(env));
 
 			if (!sheetData || sheetData.length === 0) {
 				const emptyResponse = {

@@ -1,4 +1,5 @@
 export interface OrderItem {
+  product_id?: string;
   product: string;
   price: number;
   quantity: number;
@@ -9,6 +10,13 @@ export type PaymentStatus = '未收費' | '已收費' | '待轉帳' | '未全款
 
 export interface Order {
   id: string;
+  revision?: string;
+  can_manage?: boolean;
+  can_edit_items?: boolean;
+  unitPricesConfirmed?: boolean;
+  historical?: boolean;
+  operation_pending?: boolean;
+  price_options?: Array<{product_id:string;name:string;price:number}>;
   orderNumber: string;
   customer: {
     name: string;

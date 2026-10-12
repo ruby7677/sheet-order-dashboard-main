@@ -19,6 +19,7 @@ import { format } from 'date-fns';
 import { Calendar as CalendarIcon, Search, X } from 'lucide-react';
 
 import { FilterCriteria } from '@/types/filters';
+import { getDeliveryPeriodRange, DeliveryPeriodShortcut } from '@/utils/deliveryPeriod';
 
 interface OrderFiltersProps {
   onFilterChange: (filters: Partial<FilterCriteria>) => void;
@@ -45,21 +46,23 @@ const OrderFilters = forwardRef<OrderFiltersRef, OrderFiltersProps>(({ onFilterC
     endDate: Date | undefined;
     search: string;
   }>) => {
+    const hasUpdate = (key: keyof typeof updates) => Object.prototype.hasOwnProperty.call(updates, key);
+
     // 更新本地狀態
-    if (updates.status !== undefined) {setStatus(updates.status);}
-    if (updates.deliveryMethod !== undefined) {setDeliveryMethod(updates.deliveryMethod);}
-    if (updates.paymentStatus !== undefined) {setPaymentStatus(updates.paymentStatus);}
-    if (updates.startDate !== undefined) {setStartDate(updates.startDate);}
-    if (updates.endDate !== undefined) {setEndDate(updates.endDate);}
-    if (updates.search !== undefined) {setSearch(updates.search);}
+    if (hasUpdate('status')) {setStatus(updates.status!);}
+    if (hasUpdate('deliveryMethod')) {setDeliveryMethod(updates.deliveryMethod!);}
+    if (hasUpdate('paymentStatus')) {setPaymentStatus(updates.paymentStatus!);}
+    if (hasUpdate('startDate')) {setStartDate(updates.startDate);}
+    if (hasUpdate('endDate')) {setEndDate(updates.endDate);}
+    if (hasUpdate('search')) {setSearch(updates.search!);}
 
     // 計算最新的篩選條件
-    const newStatus = updates.status !== undefined ? updates.status : status;
-    const newDeliveryMethod = updates.deliveryMethod !== undefined ? updates.deliveryMethod : deliveryMethod;
-    const newPaymentStatus = updates.paymentStatus !== undefined ? updates.paymentStatus : paymentStatus;
-    const newStartDate = updates.startDate !== undefined ? updates.startDate : startDate;
-    const newEndDate = updates.endDate !== undefined ? updates.endDate : endDate;
-    const newSearch = updates.search !== undefined ? updates.search : search;
+    const newStatus = hasUpdate('status') ? updates.status! : status;
+    const newDeliveryMethod = hasUpdate('deliveryMethod') ? updates.deliveryMethod! : deliveryMethod;
+    const newPaymentStatus = hasUpdate('paymentStatus') ? updates.paymentStatus! : paymentStatus;
+    const newStartDate = hasUpdate('startDate') ? updates.startDate : startDate;
+    const newEndDate = hasUpdate('endDate') ? updates.endDate : endDate;
+    const newSearch = hasUpdate('search') ? updates.search! : search;
 
     // 構建完整的篩選條件
     const dateRange = {
@@ -95,6 +98,16 @@ const OrderFilters = forwardRef<OrderFiltersRef, OrderFiltersProps>(({ onFilterC
 
   const handleEndDateChange = (date: Date | undefined) => {
     updateAllFilters({ endDate: date });
+  };
+
+  const applyDeliveryPeriod = (period: DeliveryPeriodShortcut) => {
+    const range = getDeliveryPeriodRange(new Date(), period);
+    const [startYear, startMonth, startDay] = range.startDate.split('-').map(Number);
+    const [endYear, endMonth, endDay] = range.endDate.split('-').map(Number);
+    updateAllFilters({
+      startDate: new Date(startYear, startMonth - 1, startDay),
+      endDate: new Date(endYear, endMonth - 1, endDay),
+    });
   };
 
   const clearDateRange = () => {
@@ -199,7 +212,18 @@ const OrderFilters = forwardRef<OrderFiltersRef, OrderFiltersProps>(({ onFilterC
 
       {/* 第二行：日期區間和搜尋 - 整合為一行三欄 */}
       <div className="space-y-1">
-        <label className="text-xs font-medium text-muted-foreground">日期區間與搜尋</label>
+        <label className="text-xs font-medium text-muted-foreground">配送／到貨日期區間與搜尋</label>
+        <div className="flex flex-wrap gap-2" role="group" aria-label="配送／到貨日期快捷篩選">
+          <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => applyDeliveryPeriod('previous')}>
+            上週三～六
+          </Button>
+          <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => applyDeliveryPeriod('current')}>
+            本週三～六
+          </Button>
+          <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => applyDeliveryPeriod('next')}>
+            下週三～六
+          </Button>
+        </div>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
           {/* 開始日期 */}
           <div>
@@ -207,6 +231,7 @@ const OrderFilters = forwardRef<OrderFiltersRef, OrderFiltersProps>(({ onFilterC
               <PopoverTrigger asChild>
                 <Button
                   variant="outline"
+                  aria-label="開始配送／到貨日期"
                   className="w-full h-8 justify-start text-left font-normal text-sm hover:bg-accent hover:text-accent-foreground"
                 >
                   <CalendarIcon className="mr-2 h-3 w-3" />
@@ -230,6 +255,7 @@ const OrderFilters = forwardRef<OrderFiltersRef, OrderFiltersProps>(({ onFilterC
               <PopoverTrigger asChild>
                 <Button
                   variant="outline"
+                  aria-label="結束配送／到貨日期"
                   className="w-full h-8 justify-start text-left font-normal text-sm hover:bg-accent hover:text-accent-foreground"
                 >
                   <CalendarIcon className="mr-2 h-3 w-3" />

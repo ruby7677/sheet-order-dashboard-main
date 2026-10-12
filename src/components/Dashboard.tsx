@@ -25,10 +25,13 @@ const Dashboard: React.FC<DashboardProps> = ({ refreshTrigger = 0, compact = fal
   });
 
   const [loading, setLoading] = useState<boolean>(true);
+  const [loadError, setLoadError] = useState('');
+  const [hasLoadedStats, setHasLoadedStats] = useState(false);
 
   // 載入統計數據
   const loadStats = async (immediate = false) => {
     setLoading(true);
+    setLoadError('');
 
     // 如果需要立即更新，則不延遲
     if (!immediate) {
@@ -41,8 +44,9 @@ const Dashboard: React.FC<DashboardProps> = ({ refreshTrigger = 0, compact = fal
       clearOrderCache();
       const data = await fetchOrderStats();
       setStats(data);
+      setHasLoadedStats(true);
     } catch (error) {
-      console.error('載入統計數據失敗:', error);
+      setLoadError(error instanceof Error ? error.message : '訂單統計目前無法讀取，請重新載入。');
     } finally {
       setLoading(false);
     }
@@ -63,76 +67,81 @@ const Dashboard: React.FC<DashboardProps> = ({ refreshTrigger = 0, compact = fal
     }).format(amount);
   };
 
+  const statValue = (value: string | number) => loading ? '...' : loadError && !hasLoadedStats ? '—' : value;
+
   // 統計卡片網格 - 響應式設計：手機3欄，平板5欄，桌面7欄
   const statsGrid = (
-    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 gap-2 sm:gap-3">
+    <>
+      {loadError && <p role="alert" className="mb-2 text-sm text-destructive">訂單統計載入失敗，以下保留上次成功資料：{loadError}</p>}
+      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 gap-2 sm:gap-3">
       <StatCard
         title="總訂單數"
-        value={loading ? '...' : stats.total}
+        value={statValue(stats.total)}
         compact={true}
         className="bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-900 border-slate-200 dark:border-slate-700"
       />
       <StatCard
         title="訂單確認中"
-        value={loading ? '...' : stats.pending}
+        value={statValue(stats.pending)}
         compact={true}
         className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30 border-blue-200 dark:border-blue-700"
       />
       <StatCard
         title="已抄單"
-        value={loading ? '...' : stats.processing}
+        value={statValue(stats.processing)}
         compact={true}
         className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/30 dark:to-orange-800/30 border-orange-200 dark:border-orange-700"
       />
       <StatCard
         title="已出貨"
-        value={loading ? '...' : stats.completed}
+        value={statValue(stats.completed)}
         compact={true}
         className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/30 dark:to-green-800/30 border-green-200 dark:border-green-700"
       />
       <StatCard
         title="取消訂單"
-        value={loading ? '...' : stats.canceled}
+        value={statValue(stats.canceled)}
         compact={true}
         className="bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/30 dark:to-red-800/30 border-red-200 dark:border-red-700"
       />
       <StatCard
         title="未收費"
-        value={loading ? '...' : stats.unpaid}
+        value={statValue(stats.unpaid)}
         compact={true}
         className="bg-gradient-to-br from-yellow-50 to-yellow-100 dark:from-yellow-900/30 dark:to-yellow-800/30 border-yellow-200 dark:border-yellow-700"
       />
       <StatCard
         title="總金額"
-        value={loading ? '...' : formatAmount(stats.totalAmount)}
+        value={statValue(formatAmount(stats.totalAmount))}
         compact={true}
         className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/30 dark:to-purple-800/30 border-purple-200 dark:border-purple-700"
       />
       <StatCard
         title="原味蘿蔔糕"
-        value={loading ? '...' : stats.totalRadishCake}
+        value={statValue(stats.totalRadishCake)}
         compact={true}
         className="bg-gradient-to-br from-stone-50 to-stone-100 dark:from-stone-900/30 dark:to-stone-800/30 border-stone-200 dark:border-stone-700"
       />
       <StatCard
         title="芋頭粿"
-        value={loading ? '...' : stats.totalTaroCake}
+        value={statValue(stats.totalTaroCake)}
         compact={true}
         className="bg-gradient-to-br from-violet-50 to-violet-100 dark:from-violet-900/30 dark:to-violet-800/30 border-violet-200 dark:border-violet-700"
       />
       <StatCard
         title="台式鹹蘿蔔糕"
-        value={loading ? '...' : stats.totalHKRadishCake}
+        value={statValue(stats.totalHKRadishCake)}
         compact={true}
         className="bg-gradient-to-br from-neutral-50 to-neutral-100 dark:from-neutral-900/30 dark:to-neutral-800/30 border-neutral-200 dark:border-neutral-700"
       />
       <StatCard
         title="鳳梨豆腐乳"
-        value={loading ? '...' : stats.totaltest}
+        value={statValue(stats.totaltest)}
         compact={true}
         className="bg-gradient-to-br from-neutral-50 to-neutral-100 dark:from-neutral-900/30 dark:to-neutral-800/30 border-neutral-200 dark:border-neutral-700"
       />
-    </div>
+      </div>
+    </>
   );
 
   // 緊湊模式只返回統計卡片

@@ -3,21 +3,25 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "deploy": "wrangler deploy",
-    "dev": "wrangler dev",
-    "start": "wrangler dev",
-    "cf-typegen": "wrangler types"
+    "deploy": "wrangler deploy --env production",
+    "dev": "wrangler dev --local",
+    "start": "wrangler dev --local",
+    "cf-typegen": "wrangler types",
+    "deploy:check": "wrangler deploy --env production --dry-run",
+    "test:security": "node tests/security.test.mjs",
+    "test:security-next": "node --test tests/security-next-api.test.mjs tests/security-next-error-redaction.test.mjs tests/dashboard-calendar.test.mjs tests/order-sheet-scope.test.mjs",
+    "test:catalog": "node tests/catalog.test.mjs",
+    "deploy:catalog": "wrangler deploy --config wrangler.catalog.jsonc --env production"
   },
   "dependencies": {
-    "chanfana": "^2.6.3",
-    "@supabase/supabase-js": "^2.54.0",
-    "hono": "^4.6.20",
+    "chanfana": "^2.8.3",
+    "hono": "^4.13.12",
     "zod": "^3.24.1"
   },
   "devDependencies": {
     "@types/node": "22.13.0",
     "@types/service-worker-mock": "^2.0.4",
     "typescript": "^5.9.2",
-    "wrangler": "^4.27.0"
+    "wrangler": "^4.145.0"
   }
 }

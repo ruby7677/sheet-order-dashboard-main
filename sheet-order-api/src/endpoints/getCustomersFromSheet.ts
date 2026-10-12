@@ -1,8 +1,12 @@
 import { OpenAPIRoute } from 'chanfana';
+import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { z } from 'zod';
-import { AppContext, Customer, ApiResponse, ApiError, isValidEnv, safeArrayAccess } from '../types';
+import { AppContext, Customer, ApiResponse, ApiError, safeArrayAccess } from '../types';
 import { GoogleSheetsService } from '../services/GoogleSheetsService';
-import { CacheService } from '../services/CacheService';
+import { tryNormalizePhoneIdentity } from '../services/PhoneIdentity';
+import { getCustomerSheetName } from '../services/SheetNames';
+import { OrderConflict } from '../services/OrderContract';
+import { publicApiError } from '../services/PublicApiError';
 
 /**
  * 從 Google Sheets 讀取客戶資料的 API 端點
@@ -30,7 +34,8 @@ export class GetCustomersFromSheet extends OpenAPIRoute {
 								contactMethod: z.string().optional(),
 								socialId: z.string().optional(),
 								orderTime: z.string().optional(),
-								items: z.string().optional()
+								items: z.string().optional(),
+								normalized_phone: z.string().nullable().optional()
 							})).optional()
 						})
 					}
@@ -65,15 +70,14 @@ export class GetCustomersFromSheet extends OpenAPIRoute {
 
 		try {
 			// 解析查詢參數
-			const { refresh, nonce } = c.req.query();
-			const forceRefresh = refresh === '1';
+			const { nonce } = c.req.query();
 			const actualRequestId = nonce || requestId;
 
 			// 初始化服務
 			const env = c.env;
 			
 			// 驗證環境變數
-			if (!isValidEnv(env)) {
+			if (!env.GOOGLE_SERVICE_ACCOUNT_KEY || !env.GOOGLE_SHEET_ID) {
 				c.header('X-Response-Time', `${Date.now() - startTime}ms`);
 				return c.json({
 					success: false,
@@ -87,41 +91,8 @@ export class GetCustomersFromSheet extends OpenAPIRoute {
 				env.GOOGLE_SERVICE_ACCOUNT_KEY,
 				env.GOOGLE_SHEET_ID
 			);
-			const cacheService = new CacheService(
-				env.CACHE_KV,
-				parseInt(env.CACHE_DURATION || '15')
-			);
-
-			// 生成快取鍵
-			const cacheKey = CacheService.generateKey('customers', 'all');
-
-			// 檢查快取狀態
-			const cacheStatus = await cacheService.getStatus(cacheKey);
-			let useCache = false;
-
-			if (!forceRefresh && cacheStatus.exists && !cacheStatus.expired) {
-				useCache = true;
-			}
-
-			// 如果使用快取
-			if (useCache) {
-				const cachedData = await cacheService.get(cacheKey);
-				if (cachedData) {
-					c.header('X-Cache', 'HIT');
-					c.header('X-Cache-Age', `${cacheStatus.age || 0}s`);
-					c.header('X-Response-Time', `${Date.now() - startTime}ms`);
-					return c.json(cachedData);
-				}
-			}
-
-			// 快取未命中或強制刷新，從 Google Sheets 獲取資料
-			c.header('X-Cache', 'MISS');
-			if (forceRefresh) {
-				c.header('X-Cache-Refresh', 'Forced');
-			}
-
 			// 從 Google Sheets 讀取資料（客戶名單工作表）
-			const sheetData = await sheetsService.getSheetData('客戶名單');
+			const sheetData = await sheetsService.getSheetData(getCustomerSheetName(env));
 
 			if (!sheetData || sheetData.length === 0) {
 				const emptyResponse = {
@@ -131,8 +102,6 @@ export class GetCustomersFromSheet extends OpenAPIRoute {
 					request_id: actualRequestId
 				};
 
-				// 快取空結果
-				await cacheService.set(cacheKey, emptyResponse);
 				c.header('X-Response-Time', `${Date.now() - startTime}ms`);
 				return c.json(emptyResponse);
 			}
@@ -147,26 +116,28 @@ export class GetCustomersFromSheet extends OpenAPIRoute {
 				request_id: actualRequestId
 			};
 
-			// 更新快取
-			await cacheService.set(cacheKey, response);
-
 			c.header('X-Response-Time', `${Date.now() - startTime}ms`);
 			return c.json(response);
 
 		} catch (error) {
-			console.error('GetCustomersFromSheet 錯誤:', error);
+			console.error('get_customers_from_sheet.failed');
+			if (error instanceof OrderConflict) {
+				return c.json({ success: false, code: error.code, message: error.message }, error.status as 400 | 403 | 404 | 409 | 503);
+			}
+			const publicError = error instanceof ApiError
+				? publicApiError(error, '無法從 Google Sheets 獲取客戶資料')
+				: { status: 500, code: 'CUSTOMER_SHEET_READ_FAILED', message: '無法從 Google Sheets 獲取客戶資料' };
 
 			const errorResponse = {
 				success: false,
-				message: error instanceof ApiError ? error.message : '無法從 Google Sheets 獲取客戶資料',
-				error: error instanceof ApiError ? undefined : (error instanceof Error ? error.message : String(error)),
+				code: publicError.code,
+				message: publicError.message,
 				timestamp: Math.floor(Date.now() / 1000),
 				request_id: requestId
 			};
 
-			const statusCode = error instanceof ApiError ? error.statusCode : 500;
 			c.header('X-Response-Time', `${Date.now() - startTime}ms`);
-			return c.json(errorResponse, statusCode as 200 | 400 | 401 | 403 | 404 | 422 | 500);
+			return c.json(errorResponse, publicError.status as ContentfulStatusCode);
 		}
 	}
 
@@ -180,6 +151,7 @@ export class GetCustomersFromSheet extends OpenAPIRoute {
 		socialId?: string;
 		orderTime?: string;
 		items?: string;
+		normalized_phone?: string | null;
 	}> {
 		if (!sheetData || sheetData.length === 0) {
 			return [];
@@ -234,6 +206,7 @@ export class GetCustomersFromSheet extends OpenAPIRoute {
 			socialId?: string;
 			orderTime?: string;
 			items?: string;
+			normalized_phone?: string | null;
 		}> = [];
 		
 		dataRows.forEach((row: string[], idx: number) => {
@@ -264,6 +237,7 @@ export class GetCustomersFromSheet extends OpenAPIRoute {
 				socialId?: string;
 				orderTime?: string;
 				items?: string;
+					normalized_phone?: string | null;
 			} = {
 				id: idx,
 				name: name || '',
@@ -275,7 +249,8 @@ export class GetCustomersFromSheet extends OpenAPIRoute {
 				contactMethod: headerMap['contactMethod'] !== undefined ? (safeArrayAccess(row, headerMap['contactMethod']) || '') : '',
 				socialId: headerMap['socialId'] !== undefined ? (safeArrayAccess(row, headerMap['socialId']) || '') : '',
 				orderTime: headerMap['orderTime'] !== undefined ? (safeArrayAccess(row, headerMap['orderTime']) || '') : '',
-				items: headerMap['items'] !== undefined ? (safeArrayAccess(row, headerMap['items']) || '') : ''
+				items: headerMap['items'] !== undefined ? (safeArrayAccess(row, headerMap['items']) || '') : '',
+				normalized_phone: tryNormalizePhoneIdentity(phone)
 			};
 			
 			customers.push(customer);

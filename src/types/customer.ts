@@ -16,6 +16,20 @@ export interface CustomerWithStats extends Customer {
   purchaseCount: number;
   purchasedItems: string[];
   region: string; // 地區，從地址中提取
+  /** Full E.164 phone for comparison. Null marks a preserved invalid legacy row. */
+  normalizedPhone?: string | null;
+  /** Original Sheet rows retained behind the phone-group view. */
+  sourceRecords?: CustomerSourceRecord[];
+}
+
+export interface CustomerSourceRecord {
+  rowId: string;
+  name: string;
+  phone: string;
+  deliveryMethod: string;
+  address: string;
+  orderTime: string;
+  items: string;
 }
 
 export interface CustomerOrder {

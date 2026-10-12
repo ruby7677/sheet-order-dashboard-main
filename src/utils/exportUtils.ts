@@ -1,3 +1,4 @@
+import { escapeHtml } from '@/utils/htmlUtils';
 
 import { Order } from '@/types/order';
 import { exportToCsv } from '@/services/orderService';
@@ -117,8 +118,7 @@ export const downloadExcelCsv = (orders: Order[], filename: string = 'excel_orde
  * 專為黑貓宅配系統設計的 Excel XLS 下載功能
  * 提供最佳的相容性和編碼支援
  */
-export const downloadBlackCatXls = async (orders: Order[], filename: string = '宅配到府訂單.xlsx'): Promise<void> => {
-  try {
+export const createBlackCatXlsxBuffer = async (orders: Order[]) => {
     // 建立新的工作簿
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('宅配到府訂單');
@@ -251,8 +251,15 @@ export const downloadBlackCatXls = async (orders: Order[], filename: string = '�
       });
     });*/
     
-    // 產生檔案並下載
+    // Keep address and note values as explicit string cells in the XLSX file.
     const buffer = await workbook.xlsx.writeBuffer();
+
+    return buffer;
+};
+
+export const downloadBlackCatXls = async (orders: Order[], filename: string = '宅配到府訂單.xlsx'): Promise<void> => {
+  try {
+    const buffer = await createBlackCatXlsxBuffer(orders);
     const blob = new Blob([buffer], { 
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
     });
@@ -405,22 +412,22 @@ export const printOrders = (orders: Order[]): void => {
               ${group.map(order => `
                 <div class="order-block">
                   <div class="order-header">
-                    <div class="order-title">訂單詳情 #${order.orderNumber}</div>
-                    <div>訂單建立時間: ${order.createdAt}</div>
+                    <div class="order-title">訂單詳情 #${escapeHtml(order.orderNumber)}</div>
+                    <div>訂單建立時間: ${escapeHtml(order.createdAt)}</div>
                   </div>
                   <div class="order-info">
                     <div class="order-details">
                       <div>
                         <strong>客戶資訊</strong>
-                        <div>${order.customer.name}</div>
-                        <div>${order.customer.phone}</div>
+                        <div>${escapeHtml(order.customer.name)}</div>
+                        <div>${escapeHtml(order.customer.phone)}</div>
                       </div>
                       <div>
                         <strong>配送資訊</strong>
-                        <div>配送方式: ${order.deliveryMethod}</div>
-                        <div>配送地址: ${order.deliveryAddress}</div>
-                        <div>到貨日期: ${order.dueDate}</div>
-                        <div>到貨時間: ${order.deliveryTime}</div>
+                        <div>配送方式: ${escapeHtml(order.deliveryMethod)}</div>
+                        <div>配送地址: ${escapeHtml(order.deliveryAddress)}</div>
+                        <div>到貨日期: ${escapeHtml(order.dueDate)}</div>
+                        <div>到貨時間: ${escapeHtml(order.deliveryTime)}</div>
                       </div>
                     </div>
                   </div>
@@ -436,28 +443,28 @@ export const printOrders = (orders: Order[]): void => {
                     <tbody>
                       ${order.items.map(item => `
                         <tr>
-                          <td>${item.product}</td>
-                          <td>$${item.price}</td>
-                          <td>${item.quantity}</td>
-                          <td>$${item.subtotal}</td>
+                          <td>${escapeHtml(item.product)}</td>
+                          <td>${order.unitPricesConfirmed === false ? '未確認' : '$' + escapeHtml(item.price)}</td>
+                          <td>${escapeHtml(item.quantity)}</td>
+                          <td>${order.unitPricesConfirmed === false ? '未確認' : '$' + escapeHtml(item.subtotal)}</td>
                         </tr>
                       `).join('')}
                     </tbody>
                   </table>
-                  <div class="order-total">總計: $${order.total}</div>
+                  <div class="order-total">總計: $${escapeHtml(order.total)}</div>
                   <div class="order-info">
                     <div class="order-details">
                       <div>
                         <strong>付款資訊</strong>
-                        <div>付款方式: ${order.paymentMethod}</div>
-                        <div>訂單金額: $${order.total}</div>
+                        <div>付款方式: ${escapeHtml(order.paymentMethod)}</div>
+                        <div>訂單金額: $${escapeHtml(order.total)}</div>
                       </div>
                       <div>
-                        ${order.notes ? `<strong>備註</strong><div>${order.notes}</div>` : ''}
+                        ${order.notes ? `<strong>備註</strong><div>${escapeHtml(order.notes)}</div>` : ''}
                       </div>
                     </div>
-                    <div><strong>訂單狀態:</strong> ${order.status}</div>
-                    <div><strong>款項狀態:</strong> ${order.paymentStatus}</div>
+                    <div><strong>訂單狀態:</strong> ${escapeHtml(order.status)}</div>
+                    <div><strong>款項狀態:</strong> ${escapeHtml(order.paymentStatus)}</div>
                   </div>
                 </div>
               `).join('')}
@@ -465,15 +472,17 @@ export const printOrders = (orders: Order[]): void => {
           `).join('');
         })()}
 
-        <script>
-          window.onload = function() {
-            window.print();
-            setTimeout(function() { window.close(); }, 500);
-          };
-        </script>
       </body>
     </html>
   `;
+
+  // The new document inherits this page's CSP. Keep its print code in this
+  // already-authorized module instead of embedding an inline script.
+  printWindow.addEventListener('load', () => {
+    printWindow.focus();
+    printWindow.print();
+    printWindow.setTimeout(() => printWindow.close(), 500);
+  }, { once: true });
 
   printWindow.document.open();
   printWindow.document.write(htmlContent);

@@ -15,8 +15,8 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
-import SecureApiService from '@/services/secureApiService';
+import { getDeliverySetting, saveDeliverySetting } from '@/services/settingsApi';
+import { Switch } from '@/components/ui/switch';
 
 interface DeliverySetting {
   id: string;
@@ -41,7 +41,13 @@ const DeliveryDateSettingsPage: React.FC = () => {
   
   const [currentSettings, setCurrentSettings] = useState<DeliverySetting | null>(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [saving,setSaving]=useState(false);
+  const [readOnly,setReadOnly]=useState(true);
+  const [revision,setRevision]=useState(0);
+  const [homeAdvanceDays,setHomeAdvanceDays]=useState(0);
+  const [storeAdvanceDays,setStoreAdvanceDays]=useState(0);
+  const [excludeHomeSunday,setExcludeHomeSunday]=useState(true);
+  const [excludeStoreSunday,setExcludeStoreSunday]=useState(false);
   const [formData, setFormData] = useState({
     start_date: '',
     end_date: '',
@@ -53,85 +59,8 @@ const DeliveryDateSettingsPage: React.FC = () => {
   });
 
   // 載入當前設定
-  const loadCurrentSettings = async () => {
-    try {
-      setLoading(true);
-      
-      // 優先走安全 Edge Function（帶有 admin JWT），避免 RLS/匿名權限問題
-      try {
-        // TODO: 等 SecureApiService 支援 delivery_date_settings API 後使用
-        // const data = await new SecureApiService().getDeliveryDateSettings();
-        // 暫時直接使用 supabase
-        const { data } = await supabase
-          .from('delivery_date_settings')
-          .select('*')
-          .eq('is_active', true)
-          .order('updated_at', { ascending: false })
-          .limit(1)
-          .single();
-        
-        if (data) {
-          setCurrentSettings(data);
-          setFormData({
-            start_date: data.start_date,
-            end_date: data.end_date,
-            description: data.description || ''
-          });
-          generatePreviewDates(data.start_date, data.end_date);
-        }
-      } catch (e) {
-        // 後備：若未登入或 Edge Function 尚未部署，才直接走 anon supabase
-        try {
-          const { data, error, status, statusText } = await supabase
-            .from('delivery_date_settings')
-            .select('*')
-            .eq('is_active', true)
-            .order('updated_at', { ascending: false })
-            .limit(1)
-            .single();
-          if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
-            throw new Error(`[${status} ${statusText}] ${error.message}`);
-          }
-          if (data) {
-            setCurrentSettings(data);
-            setFormData({
-              start_date: data.start_date,
-              end_date: data.end_date,
-              description: data.description || ''
-            });
-            generatePreviewDates(data.start_date, data.end_date);
-          } else {
-            // 如果沒有資料，初始化空的表單
-            setCurrentSettings(null);
-            setFormData({
-              start_date: '',
-              end_date: '',
-              description: ''
-            });
-          }
-        } catch (fallbackError) {
-          console.error('載入設定失敗:', fallbackError);
-          setCurrentSettings(null);
-          setFormData({
-            start_date: '',
-            end_date: '',
-            description: ''
-          });
-        }
-      }
-    } catch (error) {
-      console.error('載入設定錯誤:', error);
-      toast({
-        title: '錯誤',
-        description: '載入到貨日期設定失敗',
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+  const loadCurrentSettings=async()=>{try{setLoading(true);const result=await getDeliverySetting(),data=result.data;setRevision(result.revision);setReadOnly(result.readOnly);setCurrentSettings(data);setFormData({start_date:data.start_date,end_date:data.end_date,description:data.description||''});setExcludeHomeSunday(data.excludeHomeSunday??true);setExcludeStoreSunday(data.excludeStoreSunday??false);setHomeAdvanceDays(data.homeAdvanceDays??0);setStoreAdvanceDays(data.storeAdvanceDays??0);}catch{toast({title:'錯誤',description:'無法讀取目前到貨日期設定',variant:'destructive'});}finally{setLoading(false);}};
 
-  // 生成預覽日期
   const generatePreviewDates = (startDate: string, endDate: string) => {
     if (!startDate || !endDate) {
       setPreviewDates({ homeDelivery: [], storePickup: [] });
@@ -141,10 +70,11 @@ const DeliveryDateSettingsPage: React.FC = () => {
     const start = new Date(startDate);
     const end = new Date(endDate);
     const dates: PreviewDate[] = [];
+    if(!Number.isFinite(start.getTime())||!Number.isFinite(end.getTime())||start>end||end.getTime()-start.getTime()>366*86400000){setPreviewDates({homeDelivery:[],storePickup:[]});return;}
     
     const current = new Date(start);
     while (current <= end) {
-      const dayOfWeek = current.getDay();
+      const dayOfWeek = current.getUTCDay();
       const isSunday = dayOfWeek === 0;
       
       dates.push({
@@ -153,113 +83,20 @@ const DeliveryDateSettingsPage: React.FC = () => {
           month: '2-digit', 
           day: '2-digit',
           weekday: 'short'
+          ,timeZone:'Asia/Taipei'
         }),
         dayOfWeek,
         isSunday
       });
       
-      current.setDate(current.getDate() + 1);
+      current.setUTCDate(current.getUTCDate() + 1);
     }
     
-    setPreviewDates({
-      homeDelivery: dates.filter(d => !d.isSunday), // 宅配排除週日
-      storePickup: dates // 7-11 包含週日
-    });
+    const today=Date.parse(new Date(Date.now()+8*3600000).toISOString().slice(0,10));
+    setPreviewDates({homeDelivery:dates.filter(d=>(!excludeHomeSunday||!d.isSunday)&&Date.parse(d.date)>=today+homeAdvanceDays*86400000),storePickup:dates.filter(d=>(!excludeStoreSunday||!d.isSunday)&&Date.parse(d.date)>=today+storeAdvanceDays*86400000)});
   };
 
-  // 儲存設定
-  const handleSave = async () => {
-    if (!formData.start_date || !formData.end_date) {
-      toast({
-        title: '錯誤',
-        description: '請填入開始日期和結束日期',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    if (new Date(formData.start_date) > new Date(formData.end_date)) {
-      toast({
-        title: '錯誤',
-        description: '開始日期不能晚於結束日期',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    try {
-      setSaving(true);
-
-      // 優先 Edge Function（帶有 admin JWT），失敗回退 supabase 直連
-      try {
-        // TODO: 等 SecureApiService 支援 delivery_date_settings API 後使用
-        // await new SecureApiService().updateDeliveryDateSettings({ ... });
-        
-        // 先將現有的設定設為非活躍
-        if (currentSettings) {
-          await supabase
-            .from('delivery_date_settings')
-            .update({ is_active: false })
-            .eq('id', currentSettings.id);
-        }
-
-        // 新增新設定
-        const { data, error } = await supabase
-          .from('delivery_date_settings')
-          .insert({
-            start_date: formData.start_date,
-            end_date: formData.end_date,
-            description: formData.description,
-            is_active: true,
-            updated_by: 'admin'
-          })
-          .select()
-          .single();
-
-        if (error) throw error;
-        setCurrentSettings(data);
-      } catch (_) {
-        // 後備方案：直接使用 supabase
-        const { error, status, statusText } = await supabase
-          .from('delivery_date_settings')
-          .update({ is_active: false })
-          .neq('id', '00000000-0000-0000-0000-000000000000'); // 更新所有現有記錄
-
-        if (error) throw new Error(`[${status} ${statusText}] ${error.message}`);
-
-        const { data, error: insertError, status: insertStatus, statusText: insertStatusText } = await supabase
-          .from('delivery_date_settings')
-          .insert({
-            start_date: formData.start_date,
-            end_date: formData.end_date,
-            description: formData.description,
-            is_active: true,
-            updated_by: 'admin'
-          })
-          .select()
-          .single();
-
-        if (insertError) throw new Error(`[${insertStatus} ${insertStatusText}] ${insertError.message}`);
-        setCurrentSettings(data);
-      }
-
-      generatePreviewDates(formData.start_date, formData.end_date);
-      
-      toast({
-        title: '成功',
-        description: '到貨日期設定已更新',
-      });
-    } catch (error) {
-      console.error('儲存設定錯誤:', error);
-      toast({
-        title: '錯誤',
-        description: '儲存設定失敗',
-        variant: 'destructive',
-      });
-    } finally {
-      setSaving(false);
-    }
-  };
+  const handleSave=async()=>{if(readOnly||saving)return;setSaving(true);try{await saveDeliverySetting({...formData,exclude_home_sunday:excludeHomeSunday,exclude_store_sunday:excludeStoreSunday,home_advance_days:homeAdvanceDays,store_advance_days:storeAdvanceDays},revision);await loadCurrentSettings();toast({title:'到貨設定已儲存',description:'前台可選日期與下單驗證已使用這份規則。'});}catch(error){toast({title:'儲存失敗',description:error instanceof Error?error.message:'請重新載入後再試',variant:'destructive'});}finally{setSaving(false);}};
 
   useEffect(() => {
     loadCurrentSettings();
@@ -270,7 +107,7 @@ const DeliveryDateSettingsPage: React.FC = () => {
     if (formData.start_date && formData.end_date) {
       generatePreviewDates(formData.start_date, formData.end_date);
     }
-  }, [formData.start_date, formData.end_date]);
+  }, [formData.start_date, formData.end_date, excludeHomeSunday, excludeStoreSunday,homeAdvanceDays,storeAdvanceDays]);
 
   const formatDateTime = (dateString?: string) => {
     if (!dateString) return '-';
@@ -299,6 +136,7 @@ const DeliveryDateSettingsPage: React.FC = () => {
           <p className="mt-1 text-sm text-muted-foreground">設定本檔期可選擇的到貨日期範圍</p>
         </div>
         
+        <Alert className="mb-4"><AlertDescription>{readOnly?'前後台資料來源尚未完成切換，暫停儲存。':'到貨檔期、星期限制與提前天數和前台共用；儲存後請確認可選日期預覽。'}</AlertDescription></Alert>
         <div className="space-y-6">
         {/* 當前設定顯示 */}
         {currentSettings && (
@@ -385,9 +223,13 @@ const DeliveryDateSettingsPage: React.FC = () => {
             </div>
 
             <div className="flex gap-2 flex-wrap">
+              <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div><Label htmlFor="home-sunday">宅配排除星期日</Label><Switch id="home-sunday" checked={excludeHomeSunday} onCheckedChange={setExcludeHomeSunday}/><Label htmlFor="home-advance">宅配最少提前天數</Label><Input id="home-advance" type="number" min="0" max="365" value={homeAdvanceDays} onChange={e=>setHomeAdvanceDays(Number(e.target.value))}/></div>
+                <div><Label htmlFor="store-sunday">7-11 排除星期日</Label><Switch id="store-sunday" checked={excludeStoreSunday} onCheckedChange={setExcludeStoreSunday}/><Label htmlFor="store-advance">7-11 最少提前天數</Label><Input id="store-advance" type="number" min="0" max="365" value={storeAdvanceDays} onChange={e=>setStoreAdvanceDays(Number(e.target.value))}/></div>
+              </div>
               <Button 
                 onClick={handleSave} 
-                disabled={saving}
+                disabled={saving || readOnly}
                 className="flex items-center gap-2"
               >
                 {saving ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
@@ -418,8 +260,8 @@ const DeliveryDateSettingsPage: React.FC = () => {
             <Alert>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                <strong>宅配到府：</strong>排除星期日 
-                <strong>7-11門市取貨：</strong>包含星期日
+                <strong>宅配到府：</strong>{excludeHomeSunday ? '排除星期日' : '包含星期日'} 
+                <strong>7-11門市取貨：</strong>{excludeStoreSunday?'排除星期日':'包含星期日'}
               </AlertDescription>
             </Alert>
 

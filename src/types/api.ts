@@ -8,11 +8,30 @@ export interface ApiResponse<T = unknown> {
   error?: string;
 }
 
+export interface OrderPagination {
+  next_cursor: string | null;
+  total: number;
+  page_size: number;
+  snapshot_revision: string;
+}
+
+export interface OrdersPageResponse extends ApiResponse<SheetRowData[]> {
+  pagination?: OrderPagination;
+  code?: string;
+}
+
 // Google Sheets API 原始資料格式
 export interface SheetRowData {
   // 基本訂單資訊
   createdAt?: string;
   id?: string;
+  revision?: string;
+  priced_items?: Array<{product_id:string;product:string;quantity:number;price:number;subtotal:number}> | null;
+  can_manage?: boolean;
+  can_edit_items?: boolean;
+  historical?: boolean;
+  operation_pending?: boolean;
+  price_options?: Array<{product_id:string;name:string;price:number}>;
   orderNumber?: string;
   customerName?: string;
   customerPhone?: string;
@@ -45,32 +64,6 @@ export interface SheetRowData {
   };
 }
 
-// Supabase API 回應中的訂單資料格式
-export interface SupabaseOrderData {
-  id: string | number;
-  orderNumber: string;
-  customer?: {
-    name?: string;
-    phone?: string;
-  };
-  items: Array<{
-    product: string;
-    quantity: number;
-    price: number;
-    subtotal?: number;
-  }>;
-  total: number;
-  status: string;
-  createdAt: string;
-  deliveryMethod?: string;
-  deliveryAddress?: string;
-  dueDate?: string;
-  deliveryTime?: string;
-  paymentMethod?: string;
-  notes?: string;
-  paymentStatus?: string;
-}
-
 // API 錯誤類型
 export interface ApiError {
   message: string;
@@ -80,6 +73,7 @@ export interface ApiError {
 
 // 刪除訂單回應格式
 export interface DeleteOrderResponse {
+  reorder_result?: { success: boolean; message?: string; updated_rows: number };
   success: boolean;
   message?: string;
   orderNumber?: string;

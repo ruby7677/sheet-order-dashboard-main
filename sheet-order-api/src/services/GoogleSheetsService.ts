@@ -25,7 +25,7 @@ export class GoogleSheetsService {
 	 * 獲取 Google Sheets API 存取權杖
 	 * 使用 Service Account 進行 JWT 認證
 	 */
-	private async getAccessToken(): Promise<string> {
+	protected async getAccessToken(): Promise<string> {
 		// 檢查現有權杖是否仍然有效
 		if (this.accessToken && Date.now() < this.tokenExpiry) {
 			return this.accessToken;
@@ -47,7 +47,7 @@ export class GoogleSheetsService {
 			try {
 				serviceAccount = JSON.parse(this.serviceAccountKey);
 			} catch (parseError) {
-				throw new ApiError(500, `JSON 解析失敗: ${parseError instanceof Error ? parseError.message : String(parseError)}。Key 長度: ${this.serviceAccountKey.length}，前100字元: ${this.serviceAccountKey.substring(0, 100)}`, 'JSON_PARSE_ERROR');
+				throw new ApiError(500, '服務帳戶金鑰格式錯誤', 'JSON_PARSE_ERROR');
 			}
 			
 			// 建立 JWT payload
@@ -76,8 +76,8 @@ export class GoogleSheetsService {
 			});
 
 			if (!response.ok) {
-				const error = await response.text();
-				throw new ApiError(401, `Google OAuth 認證失敗: ${error}`, 'AUTH_FAILED');
+                await response.body?.cancel();
+                throw new ApiError(401, 'Google OAuth 認證失敗', 'AUTH_FAILED');
 			}
 
 			const tokenData = await response.json() as { 

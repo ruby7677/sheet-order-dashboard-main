@@ -1,57 +1,9 @@
 import { CustomerWithStats, CustomerOrder, CustomerFilterCriteria, CustomerStats } from '@/types/customer';
-import { fetchOrders } from './orderService';
+import { canonicalizePhone } from './orderService';
 
-// 動態 API 配置系統 (與 orderService 保持一致)
-const getApiConfig = () => {
-  const hostname = window.location.hostname;
-  const port = window.location.port;
-  const protocol = window.location.protocol;
-  
-  // 檢查是否在 Cloudflare Pages 環境
-  const isCloudflarePages = hostname.includes('.pages.dev') || 
-                           hostname.includes('lopokao.767780.xyz') ||
-                           hostname.includes('node.767780.xyz');
-  
-  // 本地開發環境
-  const isLocalDev = hostname === 'localhost' || hostname === '127.0.0.1';
-  
-  console.log('🌍 客戶服務環境檢測:', {
-    hostname,
-    port,
-    protocol,
-    isCloudflarePages,
-    isLocalDev
-  });
-  
-  return {
-    isLocalDev,
-    isCloudflarePages,
-    // Workers API 端點 (生產環境)
-    workersApiUrl: 'https://sheet-order-api.ruby7677.workers.dev',
-    // 本地 Workers API (開發時)
-    localWorkersApiUrl: 'http://127.0.0.1:5714',
-    // 傳統 PHP API (後備方案)
-    legacyApiBase: isLocalDev && port === '8080' 
-      ? '/sheet-order-dashboard-main/api' 
-      : '/api'
-  };
-};
-
-// 根據環境動態選擇 API 端點
-const getApiEndpoint = (endpoint: string) => {
-  const config = getApiConfig();
-  
-  // 優先嘗試 Workers API
-  if (config.isCloudflarePages || !config.isLocalDev) {
-    // 生產環境或 Cloudflare Pages: 使用生產 Workers API
-    return `${config.workersApiUrl}${endpoint}`;
-  } else if (config.isLocalDev) {
-    // 本地開發: 嘗試本地 Workers API，失敗則降級到傳統 API
-    return `${config.localWorkersApiUrl}${endpoint}`;
-  } else {
-    // 後備方案: 使用傳統 API
-    return `${config.legacyApiBase}${endpoint}`;
-  }
+const getApiEndpoint = (endpoint: string): string => {
+  if (!endpoint.startsWith('/api/') || endpoint.includes('://')) throw new Error('無效的管理 API 路徑');
+  return endpoint;
 };
 
 // 客戶資料快取
@@ -72,166 +24,130 @@ const customerOrdersCache: {
 // 快取有效期（毫秒）
 const CACHE_DURATION = 15 * 1000; // 15秒
 
-// 從後端 API 獲取客戶資料
-// 從訂單資料推導客戶清單與統計（避免呼叫不存在或失敗的客戶 API）
-export const fetchCustomers = async (filters?: CustomerFilterCriteria): Promise<CustomerWithStats[]> => {
-  // 檢查是否有快取且未過期
-  const now = Date.now();
+interface RawCustomer {
+  id?: string | number;
+  name?: string;
+  phone?: string;
+  normalized_phone?: string | null;
+  deliveryMethod?: string;
+  address?: string;
+  contactMethod?: string;
+  socialId?: string;
+  orderTime?: string;
+  items?: string;
+}
 
-  if (
-    customerCache &&
-    (now - customerCache.timestamp < CACHE_DURATION) &&
-    (!filters || (!filters.region && !filters.purchaseCount && !filters.purchasedItem && !filters.search))
-  ) {
-    console.log('使用快取的客戶資料');
-    if (filters) {return filterCustomersInMemory(customerCache.data, filters);}
-    return customerCache.data;
+function phoneForRow(row: RawCustomer): string | null {
+  const localCanonical = canonicalizePhone(String(row.phone ?? ''));
+  if (Object.prototype.hasOwnProperty.call(row, 'normalized_phone')) {
+    const apiCanonical = row.normalized_phone;
+    return typeof apiCanonical === 'string' && apiCanonical === localCanonical ? apiCanonical : null;
+  }
+  return localCanonical;
+}
+
+function productsFromRow(items: string): string[] {
+  if (!items) return [];
+  return items.split(/[,，、\n]/).map((part) => part.trim().split(/x|X|×/)[0].trim()).filter(Boolean);
+}
+
+function isLaterRecord(candidate: string, current: string): boolean {
+  if (!candidate) return false;
+  const candidateTime = Date.parse(candidate);
+  const currentTime = Date.parse(current);
+  if (!Number.isFinite(candidateTime)) return false;
+  return !Number.isFinite(currentTime) || candidateTime > currentTime;
+}
+
+/** Reads customer rows from Sheets; a failed API read is never disguised as a derived list. */
+export const fetchCustomers = async (
+  filters?: CustomerFilterCriteria,
+  options?: { forceRefresh?: boolean },
+): Promise<CustomerWithStats[]> => {
+  const now = Date.now();
+  if (!options?.forceRefresh && customerCache && now - customerCache.timestamp < CACHE_DURATION) {
+    return filters ? filterCustomersInMemory(customerCache.data, filters) : customerCache.data;
+  }
+  if (options?.forceRefresh) customerCache = null;
+
+  const endpoint = getApiEndpoint('/api/get_customers_from_sheet.php');
+  const response = await fetch(`${endpoint}?nonce=${now}`, {
+    credentials: 'same-origin',
+    cache: 'no-store',
+    headers: { Accept: 'application/json', 'Cache-Control': 'no-cache' },
+  });
+  if (!response.ok) throw new Error('客戶資料目前無法讀取，請重新載入或稍後再試。');
+
+  const result = await response.json();
+  if (!result?.success || !Array.isArray(result.data)) {
+    throw new Error('客戶資料回應格式錯誤，請重新載入或稍後再試。');
   }
 
-  // 從訂單資料推導（備援方案）
-  const deriveFromOrders = async (): Promise<CustomerWithStats[]> => {
-    const orders = await fetchOrders();
+  const groups = new Map<string, CustomerWithStats>();
+  (result.data as RawCustomer[]).forEach((row, index) => {
+    const phone = String(row.phone ?? '').trim();
+    const normalizedPhone = phoneForRow(row);
+    const rowId = String(row.id ?? index);
+    // The canonical phone key is only a frontend grouping/selection key, not a
+    // persistent customer UUID and never an ID for a write operation.
+    const id = normalizedPhone ? `phone:${normalizedPhone}` : rowId;
+    const key = id;
+    const name = String(row.name ?? '').trim();
+    const address = String(row.address ?? '').trim();
+    const deliveryMethod = String(row.deliveryMethod ?? '').trim();
+    const orderTime = String(row.orderTime ?? '');
+    const items = String(row.items ?? '');
+    const purchasedItems = productsFromRow(items);
+    const sourceRecord = { rowId, name, phone, deliveryMethod, address, orderTime, items };
+    const existing = groups.get(key);
 
-    const customersByPhone: { [phone: string]: typeof orders } = {};
-    orders.forEach(o => {
-      const phone = o.customer?.phone?.trim();
-      if (!phone) {return;}
-      if (!customersByPhone[phone]) {customersByPhone[phone] = [];}
-      customersByPhone[phone].push(o);
-    });
-
-    const customersWithStats: CustomerWithStats[] = Object.entries(customersByPhone).map(([phone, group]) => {
-      const latest = group[group.length - 1];
-      const name = latest.customer?.name || '';
-      const address = latest.deliveryAddress || '';
-      const region = extractRegion(address);
-      const deliveryMethod = latest.deliveryMethod || '';
-
-      const purchasedSet = new Set<string>();
-      group.forEach(o => o.items.forEach(i => purchasedSet.add(i.product)));
-      const purchasedItems = Array.from(purchasedSet);
-
-      const itemsStr = latest.items.map(i => `${i.product} x ${i.quantity}`).join('、');
-
-      const c: CustomerWithStats = {
-        id: phone,
+    if (!existing) {
+      groups.set(key, {
+        id,
         name,
         phone,
+        normalizedPhone,
         deliveryMethod,
         address,
-        contactMethod: '',
-        socialId: '',
-        orderTime: latest.createdAt || latest.dueDate || '',
-        items: itemsStr,
-        purchaseCount: group.length,
+        contactMethod: String(row.contactMethod ?? ''),
+        socialId: String(row.socialId ?? ''),
+        orderTime,
+        items,
+        purchaseCount: 1,
         purchasedItems,
-        region,
-      };
-
-      return c;
-    });
-
-    return customersWithStats;
-  };
-
-  try {
-    // 主要來源：從 Sheets 的「客戶名單」讀取
-    const apiEndpoint = getApiEndpoint('/api/get_customers_from_sheet.php');
-    console.log('📡 客戶資料 API 端點:', apiEndpoint);
-    
-    const resp = await fetch(`${apiEndpoint}?nonce=${now}`, {
-      headers: { 'Cache-Control': 'no-cache' },
-    });
-    const json = await resp.json();
-
-    if (!json?.success || !Array.isArray(json.data)) {
-      console.warn('客戶名單 API 回傳格式不正確，改用訂單資料推導');
-      const fallback = await deriveFromOrders();
-      customerCache = { timestamp: now, data: fallback, filters: filters ? { ...filters } : undefined };
-      return filters ? filterCustomersInMemory(fallback, filters) : fallback;
+        region: extractRegion(address),
+        sourceRecords: [sourceRecord],
+      });
+      return;
     }
 
-    type RawCustomer = {
-      id?: string | number;
-      name?: string;
-      phone?: string;
-      deliveryMethod?: string;
-      address?: string;
-      contactMethod?: string;
-      socialId?: string;
-      orderTime?: string;
-      items?: string;
-    };
-
-    // 以電話為 key 聚合，避免表內重複列
-    const groups: Record<string, CustomerWithStats> = {};
-    (json.data as RawCustomer[]).forEach((row, idx) => {
-      const phone = (row.phone || '').trim();
-      const name = (row.name || '').trim();
-      const address = (row.address || '').trim();
-      const deliveryMethod = (row.deliveryMethod || '').trim();
-      const orderTime = row.orderTime || '';
-      const itemsStr = row.items || '';
-
-      const purchased: string[] = [];
-      if (itemsStr) {
-        // 以常見分隔符拆分，並移除數量（x/X/×）
-        const parts = itemsStr.split(/[,，、\n]/).map(p => p.trim()).filter(Boolean);
-        parts.forEach(p => {
-          const product = p.split(/x|X|×/)[0].trim();
-          if (product) {purchased.push(product);}
-        });
+    existing.sourceRecords = [...(existing.sourceRecords ?? []), sourceRecord];
+    existing.purchaseCount += 1;
+    existing.purchasedItems = Array.from(new Set([...existing.purchasedItems, ...purchasedItems]));
+    if (isLaterRecord(orderTime, existing.orderTime)) {
+      existing.name = name || existing.name;
+      existing.phone = phone || existing.phone;
+      existing.deliveryMethod = deliveryMethod || existing.deliveryMethod;
+      existing.address = address || existing.address;
+      existing.contactMethod = String(row.contactMethod ?? '') || existing.contactMethod;
+      existing.socialId = String(row.socialId ?? '') || existing.socialId;
+      existing.orderTime = orderTime;
+      existing.items = items || existing.items;
+      existing.region = extractRegion(existing.address);
+    } else {
+      if (!existing.name && name) existing.name = name;
+      if (!existing.address && address) {
+        existing.address = address;
+        existing.region = extractRegion(address);
       }
+      if (!existing.deliveryMethod && deliveryMethod) existing.deliveryMethod = deliveryMethod;
+      if (!existing.items && items) existing.items = items;
+    }
+  });
 
-      const id = phone || String(row.id ?? idx);
-      const region = extractRegion(address);
-      const key = phone || id;
-
-      if (!groups[key]) {
-        groups[key] = {
-          id,
-          name,
-          phone,
-          deliveryMethod,
-          address,
-          contactMethod: row.contactMethod || '',
-          socialId: row.socialId || '',
-          orderTime,
-          items: itemsStr,
-          purchaseCount: 0,
-          purchasedItems: [],
-          region,
-        };
-      }
-
-      const g = groups[key];
-      g.purchaseCount += 1;
-      g.purchasedItems = Array.from(new Set([...g.purchasedItems, ...purchased]));
-      // 用較新的非空資料覆蓋
-      if (!g.name && name) {g.name = name;}
-      if (!g.address && address) {g.address = address;}
-      if (!g.deliveryMethod && deliveryMethod) {g.deliveryMethod = deliveryMethod;}
-      if (!g.orderTime && orderTime) {g.orderTime = orderTime;}
-      if (!g.items && itemsStr) {g.items = itemsStr;}
-    });
-
-    const customersWithStats = Object.values(groups);
-
-    // 更新快取
-    customerCache = {
-      timestamp: now,
-      data: customersWithStats,
-      filters: filters ? { ...filters } : undefined,
-    };
-
-    // 有過濾條件時前端進行過濾
-    return filters ? filterCustomersInMemory(customersWithStats, filters) : customersWithStats;
-  } catch (err) {
-    console.error('載入客戶名單失敗，改用訂單資料推導:', err);
-    const fallback = await deriveFromOrders();
-    customerCache = { timestamp: now, data: fallback, filters: filters ? { ...filters } : undefined };
-    return filters ? filterCustomersInMemory(fallback, filters) : fallback;
-  }
+  const customers = Array.from(groups.values());
+  customerCache = { timestamp: Date.now(), data: customers };
+  return filters ? filterCustomersInMemory(customers, filters) : customers;
 };
 
 // 從地址中提取地區資訊
@@ -284,10 +200,13 @@ const filterCustomersInMemory = (customers: CustomerWithStats[], filters: Custom
 
   // 搜尋篩選
   if (filters.search) {
-    const searchLower = filters.search.toLowerCase();
+    const rawSearch = filters.search.trim();
+    const searchLower = rawSearch.toLowerCase();
+    const phoneSearch = canonicalizePhone(rawSearch);
     filteredCustomers = filteredCustomers.filter(customer =>
       customer.name.toLowerCase().includes(searchLower) ||
-      customer.phone.includes(filters.search!) ||
+      customer.phone.toLowerCase().includes(searchLower) ||
+      (phoneSearch !== null && customer.normalizedPhone === phoneSearch) ||
       customer.address.toLowerCase().includes(searchLower)
     );
   }
@@ -327,185 +246,64 @@ export const getCustomerStats = (customers: CustomerWithStats[]): CustomerStats 
   };
 };
 
-// 電話號碼標準化函數（移除所有非數字字符）
-const normalizePhone = (phone: string): string => {
-  if (!phone) return '';
-  // 移除所有非數字字符
-  return phone.replace(/[^0-9]/g, '');
-};
-
-// 獲取電話號碼的後九碼（與 PHP API 邏輯一致）
-const getLastNineDigits = (phone: string): string => {
-  const normalized = normalizePhone(phone);
-  return normalized.length >= 9 ? normalized.slice(-9) : normalized;
-};
+export class InvalidCustomerPhoneError extends Error {
+  constructor() {
+    super('電話格式無效，無法安全查詢訂單歷史。');
+    this.name = 'InvalidCustomerPhoneError';
+  }
+}
 
 // 獲取客戶訂單歷史
 // 使用專門的客戶訂單 API 端點
-export const fetchCustomerOrders = async (phone: string): Promise<CustomerOrder[]> => {
+export const fetchCustomerOrders = async (
+  phone: string,
+  options?: { forceRefresh?: boolean },
+): Promise<CustomerOrder[]> => {
   // 檢查是否有快取且未過期
+  const phoneKey = canonicalizePhone(phone);
+  if (!phoneKey) throw new InvalidCustomerPhoneError();
   const now = Date.now();
-  const phoneKey = getLastNineDigits(phone);
-  
-  if (
-    customerOrdersCache[phoneKey] &&
-    (now - customerOrdersCache[phoneKey].timestamp < CACHE_DURATION)
-  ) {
-    console.log('使用快取的客戶訂單資料:', phoneKey);
+
+  if (!options?.forceRefresh && customerOrdersCache[phoneKey] && now - customerOrdersCache[phoneKey].timestamp < CACHE_DURATION) {
     return customerOrdersCache[phoneKey].data;
   }
+  if (options?.forceRefresh) delete customerOrdersCache[phoneKey];
 
-  console.log('🔍 正在從客戶名單獲取訂單歷史:', { 
-    原始電話: phone, 
-    後九碼: phoneKey 
+  const response = await fetch(`/api/customers/orders?phone=${encodeURIComponent(phoneKey)}`, {
+    credentials: 'same-origin',
+    cache: 'no-store',
+    headers: { Accept: 'application/json' },
   });
+  if (response.status === 400) throw new InvalidCustomerPhoneError();
+  if (!response.ok) throw new Error('客戶訂單歷史目前無法讀取，請稍後重試。');
 
-  try {
-    // 優先嘗試 Workers API，失敗則降級到 PHP API
-    const config = getApiConfig();
-    let response: Response;
-    let url: string;
-    
-    if (config.isCloudflarePages || !config.isLocalDev) {
-      // 生產環境：使用 Workers API
-      url = `${config.workersApiUrl}/api/customers/orders?phone=${encodeURIComponent(phone)}&nonce=${now}`;
-      console.log('🌐 嘗試 Workers API:', url);
-      
-      response = await fetch(url, {
-        headers: { 
-          'Cache-Control': 'no-cache',
-          'Accept': 'application/json'
-        },
-      });
-    } else {
-      // 本地開發：嘗試本地 Workers API
-      try {
-        url = `${config.localWorkersApiUrl}/api/customers/orders?phone=${encodeURIComponent(phone)}&nonce=${now}`;
-        console.log('🌐 嘗試本地 Workers API:', url);
-        
-        response = await fetch(url, {
-          headers: { 
-            'Cache-Control': 'no-cache',
-            'Accept': 'application/json'
-          },
-        });
-        
-        if (!response.ok) {
-          throw new Error(`Workers API 失敗: ${response.status}`);
-        }
-      } catch (workersError) {
-        console.log('⚠️ Workers API 失敗，降級到 PHP API:', workersError);
-        
-        // 降級到 PHP API
-        const phpEndpoint = getApiEndpoint('/api/get_customer_orders.php');
-        url = `${phpEndpoint}?phone=${encodeURIComponent(phone)}&nonce=${now}`;
-        console.log('🌐 嘗試 PHP API:', url);
-        
-        response = await fetch(url, {
-          headers: { 
-            'Cache-Control': 'no-cache',
-            'Accept': 'application/json'
-          },
-        });
-      }
-    }
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    const result = await response.json();
-    console.log('📦 API 回應:', result);
-
-    if (!result.success) {
-      throw new Error(result.message || '獲取客戶訂單失敗');
-    }
-
-    // 轉換 API 資料格式
-    const orders: CustomerOrder[] = (result.data || []).map((order: { id?: string | number; orderTime?: string; items?: string; name?: string }, index: number) => ({
-      id: order.id ? String(order.id) : `order-${index}`,
-      orderTime: order.orderTime || '',
-      items: order.items || '',
-      name: order.name || '',
-    }));
-
-    console.log('📊 處理後的客戶訂單:', {
-      客戶電話: phone,
-      找到訂單數: orders.length,
-      訂單詳情: orders
-    });
-
-    // 更新快取
-    customerOrdersCache[phoneKey] = {
-      timestamp: now,
-      data: orders,
-    };
-
-    console.log('💾 客戶訂單已快取:', {
-      客戶: phoneKey,
-      訂單數: orders.length
-    });
-
-    return orders;
-  } catch (error) {
-    console.error('❌ 從 API 載入客戶訂單失敗:', error);
-    
-    // 降級方案：從訂單資料推導
-    console.log('🔄 嘗試降級方案：從訂單資料推導...');
-    try {
-      const allOrders = await fetchOrders();
-      console.log('📋 所有訂單數量:', allOrders.length);
-      
-      // 使用後九碼比對（與 PHP API 一致）
-      const customerOrders = allOrders.filter(order => {
-        const orderPhone = getLastNineDigits(order.customer?.phone || '');
-        const targetPhone = getLastNineDigits(phone);
-        return orderPhone === targetPhone;
-      });
-
-      const orders: CustomerOrder[] = customerOrders
-        .sort((a, b) => {
-          // 按時間排序，最早的在前（與 PHP API 一致）
-          const timeA = new Date(a.createdAt || a.dueDate || '').getTime();
-          const timeB = new Date(b.createdAt || b.dueDate || '').getTime();
-          return timeA - timeB;
-        })
-        .map((order, index) => ({
-          id: order.id || `fallback-${index}`,
-          orderTime: order.createdAt || order.dueDate || '',
-          items: order.items.map(item => `${item.product} x ${item.quantity}`).join(', '),
-          name: order.customer?.name,
-        }));
-
-      console.log('🔄 降級方案結果:', {
-        客戶電話: phone,
-        找到訂單數: orders.length
-      });
-
-      return orders;
-    } catch (fallbackError) {
-      console.error('❌ 降級方案也失敗了:', fallbackError);
-      return [];
-    }
+  const result = await response.json();
+  if (!result?.success || !Array.isArray(result.data)) {
+    throw new Error('客戶訂單歷史回應格式錯誤，請稍後重試。');
   }
+
+  const orders: CustomerOrder[] = result.data.map((order: { id?: string | number; orderTime?: string; items?: string; name?: string }, index: number) => ({
+    id: order.id !== undefined && order.id !== null ? String(order.id) : `order-${index}`,
+    orderTime: String(order.orderTime ?? ''),
+    items: String(order.items ?? ''),
+    name: String(order.name ?? ''),
+  }));
+
+  customerOrdersCache[phoneKey] = { timestamp: Date.now(), data: orders };
+  return orders;
 };
 
 // 清除客戶資料快取
 export const clearCustomerCache = () => {
   customerCache = null;
-  console.log('已清除客戶資料快取');
 };
 
 // 清除客戶訂單快取
 export const clearCustomerOrderCache = (phone?: string) => {
   if (phone) {
-    const phoneKey = getLastNineDigits(phone);
-    delete customerOrdersCache[phoneKey];
-    console.log(`已清除客戶 ${phone} (後九碼: ${phoneKey}) 的訂單快取`);
+    const phoneKey = canonicalizePhone(phone);
+    if (phoneKey) delete customerOrdersCache[phoneKey];
   } else {
-    Object.keys(customerOrdersCache).forEach(key => {
-      delete customerOrdersCache[key];
-    });
-    console.log('已清除所有客戶訂單快取');
+    Object.keys(customerOrdersCache).forEach(key => delete customerOrdersCache[key]);
   }
 };
