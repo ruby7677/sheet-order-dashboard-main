@@ -31,7 +31,7 @@ const makeOrder = (overrides: Partial<Order> = {}): Order => ({
 const capturePrintHtml = (order: Order): string => {
   const written: string[] = [];
   const popup = {
-    document: { open: vi.fn(), write: vi.fn((html: string) => written.push(html)), close: vi.fn() },
+    document: { title: '', body: { textContent: '' }, open: vi.fn(), write: vi.fn((html: string) => written.push(html)), close: vi.fn() },
     addEventListener: vi.fn(), focus: vi.fn(), print: vi.fn(), setTimeout: vi.fn(), close: vi.fn(),
   } as unknown as Window;
   vi.spyOn(window, 'open').mockReturnValue(popup);
@@ -105,7 +105,8 @@ describe('order exports after UUID migration', () => {
     let onLoad: EventListener | undefined;
     const popup = {
       document: {
-        open: vi.fn(),
+        title: '', body: { textContent: '' },
+        open: vi.fn(() => { onLoad = undefined; }),
         write: vi.fn((html: string) => written.push(html)),
         close: vi.fn(),
       },
@@ -129,6 +130,7 @@ describe('order exports after UUID migration', () => {
     onLoad?.(new Event('load'));
     expect(popup.focus).toHaveBeenCalledOnce();
     expect(popup.print).toHaveBeenCalledOnce();
-    expect(popup.setTimeout).toHaveBeenCalledWith(expect.any(Function), 500);
+    expect(popup.setTimeout).not.toHaveBeenCalled();
+    expect(popup.close).not.toHaveBeenCalled();
   });
 });

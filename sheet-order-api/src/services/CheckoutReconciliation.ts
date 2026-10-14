@@ -110,6 +110,14 @@ export async function checkoutReconciliation(
   } catch {
     throw new OrderConflict(503, 'RECONCILIATION_INVALID_RESPONSE', '對帳服務回應格式不正確');
   }
+  if (input.action === 'create_manual') {
+    if (response.ok && data.success === true) return { status: 200, result: data.data };
+    const error = data as { message?: unknown; safe_to_restart?: unknown };
+    const message = typeof error.message === 'string' && error.message.length <= 300 && !/[<>]/.test(error.message)
+      ? error.message : '入單結果尚待確認，請保留原資料並核對';
+    const status = [400,401,403,409,429,503].includes(response.status) ? response.status : 503;
+    return { status, result: { success: false, message, safe_to_restart: status === 400 && error.safe_to_restart === true } };
+  }
   if (!response.ok) {
     if (input.action === 'list' || input.action === 'list_page') {
       const safe = safeOperationsPaginationError(data.code, response.status);
