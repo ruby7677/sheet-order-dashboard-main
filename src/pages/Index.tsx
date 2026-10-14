@@ -1,4 +1,5 @@
 import OrderOperationsPage from './OrderOperationsPage';
+import ManualOrderPage from './ManualOrderPage';
 import ProductManagementPage from './ProductManagementPage';
 import DeliveryDateSettingsPage from './DeliveryDateSettingsPage';
 import React, { useState, useEffect, useRef } from 'react';
@@ -21,17 +22,17 @@ import { FilterCriteria } from '../types/filters';
 import { CustomerFilterCriteria } from '../types/customer';
 import { fetchOrders, detectDuplicateOrders, DuplicateGroup } from '@/services/orderService';
 import { fetchCustomers, getCustomerStats } from '@/services/customerService';
-import { downloadBlackCatXls, printOrders } from '@/utils/exportUtils';
+import { downloadBlackCatXls, printOrders, openOrderPrintWindow } from '@/utils/exportUtils';
 import { downloadQuickStoreXlsx } from '@/utils/exportQuickStoreXlsx';
 import { Download, Printer, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-const Index: React.FC = () => {
+const Index: React.FC<{initialMode?:'orders'|'manual'}> = ({initialMode='orders'}) => {
   // 檢測是否在 iframe 中
   const [isInIframe, setIsInIframe] = useState(false);
 
   // 頁面模式：'orders'、'customers'、'delivery-settings' 或 'products'
-  const [pageMode, setPageMode] = useState<'orders' | 'customers' | 'products' | 'delivery-settings' | 'operations'>('orders');
+  const [pageMode, setPageMode] = useState<'orders' | 'customers' | 'products' | 'delivery-settings' | 'operations' | 'manual'>(initialMode);
 
   // 訂單相關狀態
   // 已選擇訂單 id 陣列
@@ -82,15 +83,24 @@ const Index: React.FC = () => {
 
   // 列印已選擇訂單
   const handlePrintSelected = async () => {
+    if (selected.length === 0) {
+      toast({ title: '提示', description: '請選擇要列印的訂單' });
+      return;
+    }
+    // Preserve Chrome user activation before the asynchronous Sheet read.
+    const printWindow = openOrderPrintWindow();
+    if (!printWindow) { return; }
     try {
       const allOrders = await fetchOrders(filters);
       const selectedOrders = allOrders.filter(order => selected.includes(order.id));
       if (selectedOrders.length === 0) {
+        printWindow.close();
         toast({ title: '提示', description: '請選擇要列印的訂單' });
         return;
       }
-      printOrders(selectedOrders);
+      printOrders(selectedOrders, printWindow);
     } catch (error) {
+      if (!printWindow.closed) { printWindow.close(); }
       toast({ title: '錯誤', description: '列印失敗', variant: 'destructive' });
     }
   };
@@ -521,6 +531,7 @@ const Index: React.FC = () => {
         )}
 
         {pageMode === 'operations' && <OrderOperationsPage />}
+        {pageMode === 'manual' && <ManualOrderPage onCreated={()=>{handleOrdersChange();updateCustomerStats();setCustomerDashboardRefreshTrigger(previous=>previous+1);}} />}
         {pageMode === 'products' && <ProductManagementPage />}
         {pageMode === 'delivery-settings' && <DeliveryDateSettingsPage />}
         </main>

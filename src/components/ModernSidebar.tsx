@@ -18,8 +18,8 @@ import useScrollAwareMenu from '@/hooks/useScrollAwareMenu';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
 
 interface ModernSidebarProps {
-  pageMode: 'orders' | 'customers' | 'products' | 'delivery-settings' | 'operations';
-  onPageModeChange: (mode: 'orders' | 'customers' | 'products' | 'delivery-settings' | 'operations') => void;
+  pageMode: 'orders' | 'customers' | 'products' | 'delivery-settings' | 'operations' | 'manual';
+  onPageModeChange: (mode: 'orders' | 'customers' | 'products' | 'delivery-settings' | 'operations' | 'manual') => void;
   orderStats?: {
     total: number;
     pending: number;
@@ -88,6 +88,7 @@ const ModernSidebar: React.FC<ModernSidebarProps> = ({
     {id:'operations' as const,label:'待辦對帳',icon:FileText,badge:0,subBadge:0,description:'待確認操作與紀錄',onClick:()=>onPageModeChange('operations')},
     {id:'products' as const,label:'商品設定',icon:Package,badge:0,subBadge:0,description:'商品資料與庫存',onClick:()=>onPageModeChange('products')},
     {id:'delivery-settings' as const,label:'到貨日期設定',icon:Calendar,badge:0,subBadge:0,description:'前台可選到貨日期',onClick:()=>onPageModeChange('delivery-settings')},
+    {id:'manual' as const,label:'手抄單',icon:FileText,badge:0,subBadge:0,description:'管理員代客建立訂單',onClick:()=>onPageModeChange('manual')},
   ];
 
   const SidebarContent = () => {
@@ -173,26 +174,6 @@ const ModernSidebar: React.FC<ModernSidebarProps> = ({
           );
         })}
 
-        {/* 手抄單連結按鈕 */}
-        {showFullContent && (
-          <div className="pt-2 mt-2 border-t border-border/50">
-            <Button
-              variant="ghost"
-              className="w-full min-w-0 whitespace-normal justify-start h-auto p-3 transition-all duration-200 hover:bg-accent hover:text-accent-foreground"
-              onClick={() => window.open('https://767780.xyz/pos8-test.php', '_blank', 'width=800,height=900,scrollbars=yes,resizable=yes')}
-            >
-              <div className="flex w-full min-w-0 items-start gap-3">
-                <FileText className="h-5 w-5 flex-shrink-0" />
-                <div className="min-w-0 flex-1 text-left">
-                  <div className="flex items-center justify-between">
-                    <span className="whitespace-normal break-words font-medium">手抄單</span>
-                  </div>
-                  <p className="mt-1 whitespace-normal break-words text-xs opacity-70">開啟手抄單頁面</p>
-                </div>
-              </div>
-            </Button>
-          </div>
-        )}
       </div>
 
       <div className="shrink-0 p-3 border-t border-border/50">

@@ -34,6 +34,7 @@ app.post('/internal/checkout-reconciliation',async c=>{
   }
   return c.json({success:false,message:'對帳操作格式錯誤'},400);
  }
+ if(parsed.data.action==='create_manual'&&!(c.env as Env&{ADMIN_WRITE_EMAILS?:string}).ADMIN_WRITE_EMAILS?.split(',').map(email=>email.trim().toLowerCase()).includes(identity.email))return c.json({success:false,message:'此帳號沒有手抄單建立權限'},403);
  try{const data=await checkoutReconciliation(c.env.SERVICE_HMAC_SECRET,identity.email,parsed.data);return c.json({success:true,data});}
  catch(error){const safe=error instanceof OrderConflict?safeOperationsPaginationError(error.code,error.status):null;if(safe)return c.json({success:false,code:safe.code,message:safe.message},safe.status);return c.json({success:false,message:'下單核對尚未完成，沒有自動補寫或重寄'},503);}
 });

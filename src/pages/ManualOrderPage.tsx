@@ -1,0 +1,91 @@
+import React,{useEffect,useRef,useState} from 'react';
+import {Button} from '@/components/ui/button';
+import {Input} from '@/components/ui/input';
+import {Label} from '@/components/ui/label';
+import {Textarea} from '@/components/ui/textarea';
+import {useAuth} from '@/components/AuthProvider';
+import {beginAnotherManualOrder,getManualOptions,hasManualPending,recoverManualDraft,retryManualOrder,searchManualStores,submitManualOrder} from '@/services/manualOrderService';
+import type {ManualOptions,ManualOrderInput,ManualReceipt,ManualStore} from '@/services/manualOrderService';
+
+type Fields=Omit<ManualOrderInput['order'],'requestId'|'catalogRevision'|'products'|'totalAmount'|'shipping'>;
+const initial:Fields={customerName:'',phone:'',deliveryMethod:'宅配到府',district:'',area:'',address:'',storeName:'',storeAddress:'',storeId:'',preferredDate:'',preferredTime:'不指定',contactMethod:'電話',socialAccount:'',paymentMethod:'銀行轉帳',notes:''};
+const selectClass='h-11 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+function dates(options:ManualOptions|null,method:Fields['deliveryMethod']):string[]{
+ if(!options)return [];
+ const {start_date:start,end_date:end}=options.delivery.delivery_period;
+ const rule=method==='來店自取'?{advance_days:0,exclude_sunday:false}:method==='宅配到府'?options.delivery.delivery_rules.home_delivery:options.delivery.delivery_rules.store_pickup;
+ const today=new Date(Date.now()+8*3600000).toISOString().slice(0,10),minimum=new Date(Date.parse(today)+rule.advance_days*86400000).toISOString().slice(0,10);
+ const output=[];for(let date=Date.parse(start),last=Date.parse(end);date<=last&&output.length<=366;date+=86400000){const value=new Date(date).toISOString().slice(0,10);if(value>=minimum&&(!rule.exclude_sunday||new Date(date).getUTCDay()!==0))output.push(value);}return output;
+}
+export default function ManualOrderPage({onCreated}:{onCreated?:()=>void}={}){
+ const {user}=useAuth(),email=user?.email||user?.username||'';
+ const [options,setOptions]=useState<ManualOptions|null>(null),[fields,setFields]=useState<Fields>(initial),[quantities,setQuantities]=useState<Record<string,number>>({});
+ const [sendSms,setSendSms]=useState(false),[busy,setBusy]=useState(false),[pending,setPending]=useState(false),[receipt,setReceipt]=useState<ManualReceipt|null>(null),[error,setError]=useState('');
+ const [originalQuote,setOriginalQuote]=useState<{total:number;shipping:number}|null>(null),[restored,setRestored]=useState(false);
+ const [review,setReview]=useState(false),[storeQuery,setStoreQuery]=useState(''),[stores,setStores]=useState<ManualStore[]>([]),[storeBusy,setStoreBusy]=useState(false),[storeError,setStoreError]=useState('');
+ const storeRequest=useRef<AbortController|null>(null),lock=useRef(false),errorRef=useRef<HTMLDivElement>(null);
+ const change=<K extends keyof Fields>(key:K,value:Fields[K])=>setFields(previous=>({...previous,[key]:value}));
+ async function loadOptions(){const value=await getManualOptions();setOptions(value);return value;}
+ useEffect(()=>{let current=true;const boot=async()=>{try{const value=await getManualOptions();if(current)setOptions(value);if(hasManualPending(email)){if(current)setPending(true);const original=await recoverManualDraft(email);if(current&&original){const {requestId:_id,catalogRevision:_revision,products,totalAmount,shipping,...rest}=original.order;setFields(rest);setQuantities(products);setSendSms(original.send_sms);setOriginalQuote({total:totalAmount,shipping});setRestored(true);}}}catch(e){if(current)setError(e instanceof Error?e.message:'設定讀取失敗');}};boot();return()=>{current=false;storeRequest.current?.abort();};},[email]);
+ useEffect(()=>{if(!pending)return;const warn=(event:BeforeUnloadEvent)=>{event.preventDefault();event.returnValue='';};window.addEventListener('beforeunload',warn);return()=>window.removeEventListener('beforeunload',warn);},[pending]);
+ const calculated=(options?.products||[]).reduce((sum,product)=>sum+Math.round(product.price*100)*(quantities[product.id]||0),0)/100;
+ const subtotal=pending&&originalQuote?originalQuote.total-originalQuote.shipping:calculated;
+ const shipping=pending&&originalQuote?originalQuote.shipping:subtotal===0||fields.deliveryMethod==='來店自取'||subtotal>=350?0:100,total=subtotal+shipping;
+ const availableDates=dates(options,fields.deliveryMethod),disabled=busy||(pending&&restored);
+ function report(message:string){setError(message);setTimeout(()=>errorRef.current?.focus(),0);}
+ function validate():boolean{
+  if(!options||options.readOnly){report('手抄單設定尚未就緒，請重新載入');return false;}
+  if(!fields.customerName.trim()){report('請填寫客戶姓名');return false;}
+  if(!/^0\d{7,9}$/.test(fields.phone.replace(/[\s()+-]/g,''))){report('請填寫有效的電話號碼');return false;}
+  if(!subtotal||Object.values(quantities).reduce((a,b)=>a+b,0)>500){report('請選擇有效商品數量');return false;}
+  if(options.products.some(product=>(quantities[product.id]||0)>product.stock_quantity||(quantities[product.id]||0)>100)){report('商品數量超過目前庫存或單筆上限');return false;}
+  if(!availableDates.includes(fields.preferredDate)){report('請選擇目前檔期可用日期');return false;}
+  if(fields.deliveryMethod==='宅配到府'&&(!fields.district.trim()||!fields.area.trim()||!fields.address.trim())){report('請填寫縣市、區域與完整宅配地址');return false;}
+  if(fields.deliveryMethod==='7-11門市'&&!fields.storeId){report('請搜尋並選取取貨門市');return false;}
+  if(fields.contactMethod!=='電話'&&!fields.socialAccount.trim()){report('請填寫社群帳號名稱，或改用電話聯繫');return false;}
+  return true;
+ }
+ async function save(){
+  if(lock.current)return;lock.current=true;setBusy(true);setError('');
+  try{
+   const result=pending&&restored?await retryManualOrder(email):await submitManualOrder(email,{...fields,catalogRevision:options!.revision,products:Object.fromEntries(Object.entries(quantities).filter(([,quantity])=>quantity>0)),totalAmount:total,shipping},sendSms);
+   setReceipt(result);setPending(false);setReview(false);onCreated?.();
+  }catch(e){
+   setReview(false);const unresolved=hasManualPending(email);setPending(unresolved);report(e instanceof Error?e.message:'入單結果尚待確認');
+   if(unresolved){try{const original=await recoverManualDraft(email);if(original){setOriginalQuote({total:original.order.totalAmount,shipping:original.order.shipping});setRestored(true);}}catch{/* Keep identity; only matching original data may be re-entered. */}}
+   else{setOriginalQuote(null);setRestored(false);try{await loadOptions();}catch{/* Retain input and error. */}}
+  }finally{setBusy(false);lock.current=false;}
+ }
+ async function findStores(){storeRequest.current?.abort();const controller=new AbortController();storeRequest.current=controller;setStoreBusy(true);setStoreError('');try{const result=await searchManualStores(storeQuery,controller.signal);if(!controller.signal.aborted)setStores(result);}catch(e){if(!controller.signal.aborted){setStores([]);setStoreError(e instanceof Error?e.message:'門市搜尋失敗');}}finally{if(storeRequest.current===controller)setStoreBusy(false);}}
+ async function another(){try{beginAnotherManualOrder(email);setReceipt(null);setFields(initial);setQuantities({});setSendSms(false);setOriginalQuote(null);setRestored(false);setError('');setStoreQuery('');setStores([]);setOptions(null);await loadOptions();}catch(e){report(e instanceof Error?e.message:'設定讀取失敗');}}
+ if(receipt)return <section className="mx-auto max-w-3xl space-y-5 py-6"><h1 className="text-2xl font-semibold">手抄單已建立</h1><div role="status" className="rounded-lg border bg-card p-5"><p>訂單識別：<span className="break-all font-mono text-sm">{receipt.order_id}</span></p><p className="mt-3">{receipt.sms_sent?'簡訊已送出':sendSms?'簡訊尚未送出，請查看待辦對帳':'依管理員選擇，未發送簡訊'}</p>{(receipt.customer_sync_pending||receipt.stock_confirmation_pending)&&<p className="mt-3 text-amber-800">訂單已儲存，部分同步尚待確認，請到待辦對帳查看。</p>}</div><Button className="min-h-11" onClick={another}>建立下一張手抄單</Button></section>;
+ const textField=(key:keyof Fields,label:string,extra:React.InputHTMLAttributes<HTMLInputElement>={})=><div className="space-y-2"><Label htmlFor={`manual-${key}`}>{label}</Label><Input id={`manual-${key}`} value={fields[key]} onChange={event=>change(key,event.target.value as never)} className="h-11" {...extra}/></div>;
+ return <section className="mx-auto max-w-5xl space-y-6 pb-8">
+  <header className="flex flex-wrap items-start justify-between gap-4"><div><h1 className="text-2xl font-semibold">手抄單</h1><p className="mt-2 text-sm text-muted-foreground">管理員代客入單；依目前商品與檔期計價，成功後扣除庫存。</p></div><Button variant="outline" disabled={disabled} onClick={()=>loadOptions().catch(e=>report(e.message))}>重新讀取設定</Button></header>
+  {error&&<div ref={errorRef} tabIndex={-1} role="alert" className="rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive">{error}</div>}
+  {pending&&<p role="status" className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">{restored?'上一張結果尚待確認。資料暫時鎖定；下方按鈕只會核對原單，不會重新報價或建立另一張。':'上一張結果尚待確認，尚無可恢復的原單。請保留原頁，或依原內容重填核對；系統會沿用原識別碼，內容不同時不會送出。'}</p>}
+  {options?.readOnly&&<p role="status">手抄單尚未啟用，目前只能查看設定。</p>}
+  <form onSubmit={event=>{event.preventDefault();if(pending&&restored){save();return;}if(validate()){setError('');setReview(true);}}} className="space-y-6">
+   <fieldset disabled={disabled||review} className="space-y-6">
+    <section className="rounded-lg border bg-card p-4 sm:p-6"><h2 className="mb-4 text-lg font-semibold">1. 商品與數量</h2>{!options?<p role="status">設定載入中…</p>:<div className="space-y-3">{options.products.map(product=><div key={product.id} className="flex flex-wrap items-center justify-between gap-3 border-b pb-3 last:border-0 last:pb-0"><div><Label htmlFor={`quantity-${product.id}`} className="font-medium">{product.name}</Label><p className="mt-1 text-sm text-muted-foreground">NT$ {product.price}／{product.unit||'條'} · 庫存 {product.stock_quantity}</p></div><Input id={`quantity-${product.id}`} aria-label={`${product.name}數量`} className="h-11 w-24" type="number" inputMode="numeric" min={0} max={Math.min(100,product.stock_quantity)} disabled={product.stock_status==='sold_out'||product.stock_quantity===0} value={quantities[product.id]||0} onChange={event=>setQuantities(previous=>({...previous,[product.id]:Math.max(0,Math.min(100,Number(event.target.value)||0))}))}/></div>)}</div>}</section>
+    <section className="rounded-lg border bg-card p-4 sm:p-6"><h2 className="mb-4 text-lg font-semibold">2. 客戶與配送</h2><div className="grid gap-4 sm:grid-cols-2">
+     {textField('customerName','客戶姓名',{autoComplete:'name',maxLength:100})}{textField('phone','電話',{type:'tel',autoComplete:'tel',maxLength:30})}
+     <div className="space-y-2"><Label htmlFor="manual-method">配送方式</Label><select id="manual-method" className={selectClass} value={fields.deliveryMethod} onChange={event=>{change('deliveryMethod',event.target.value as Fields['deliveryMethod']);change('preferredDate','');}}><option>宅配到府</option><option>7-11門市</option><option>來店自取</option></select></div>
+     <div className="space-y-2"><Label htmlFor="manual-date">到貨／取貨日期</Label><select id="manual-date" className={selectClass} value={fields.preferredDate} onChange={event=>change('preferredDate',event.target.value)}><option value="">選擇日期</option>{availableDates.map(date=><option key={date}>{date}</option>)}</select>{options&&!availableDates.length&&<p className="text-sm text-muted-foreground">目前沒有可選日期，請先確認到貨日期設定。</p>}</div>
+     <div className="space-y-2"><Label htmlFor="manual-time">配送／取貨時間</Label><select id="manual-time" className={selectClass} value={fields.preferredTime} onChange={event=>change('preferredTime',event.target.value as Fields['preferredTime'])}><option>不指定</option><option>上午</option><option>下午</option></select></div>
+     {fields.deliveryMethod==='宅配到府'&&<>{textField('district','縣市',{maxLength:30})}{textField('area','區／鄉／鎮',{maxLength:30})}<div className="sm:col-span-2">{textField('address','詳細地址與門牌',{autoComplete:'street-address',maxLength:250})}</div></>}
+     {fields.deliveryMethod==='來店自取'&&<div className="sm:col-span-2">{textField('address','自取地點／交付說明（選填）',{maxLength:250})}<p className="mt-2 text-sm text-muted-foreground">來店自取不收運費；取貨日須在目前檔期內。</p></div>}
+     {fields.deliveryMethod==='7-11門市'&&<div className="space-y-3 sm:col-span-2"><Label htmlFor="manual-store-search">搜尋門市名稱、地址或六碼店號</Label><div className="flex gap-2"><Input id="manual-store-search" className="h-11" value={storeQuery} onChange={event=>{storeRequest.current?.abort();setStoreBusy(false);setStores([]);setStoreQuery(event.target.value);}}/><Button type="button" variant="outline" className="h-11 shrink-0" disabled={storeBusy||!storeQuery.trim()} onClick={findStores}>{storeBusy?'搜尋中…':'搜尋'}</Button></div>{storeError&&<p role="alert" className="text-sm text-destructive">{storeError}</p>}<div className="max-h-64 space-y-2 overflow-y-auto">{stores.map(store=><button key={store.id} type="button" className="block w-full rounded-md border p-3 text-left text-sm hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring" onClick={()=>{setFields(previous=>({...previous,storeId:store.id,storeName:store.name,storeAddress:store.address}));setStores([]);}}>{store.name} · {store.id}<span className="mt-1 block text-muted-foreground">{store.address}</span></button>)}</div>{fields.storeId&&<p role="status" className="text-sm">已選取：{fields.storeName} · {fields.storeId} · {fields.storeAddress}</p>}</div>}
+     <div className="space-y-2"><Label htmlFor="manual-contact">聯繫方式</Label><select id="manual-contact" className={selectClass} value={fields.contactMethod} onChange={event=>change('contactMethod',event.target.value as Fields['contactMethod'])}><option>電話</option><option>Line</option><option>Facebook</option></select></div>
+     {fields.contactMethod!=='電話'&&textField('socialAccount','社群帳號名稱',{maxLength:100})}
+     <div className="space-y-2"><Label htmlFor="manual-payment">付款方式</Label><select id="manual-payment" className={selectClass} value={fields.paymentMethod} onChange={event=>change('paymentMethod',event.target.value as Fields['paymentMethod'])}><option>銀行轉帳</option><option>貨到付款</option></select></div>
+     <div className="space-y-2 sm:col-span-2"><Label htmlFor="manual-notes">備註（選填）</Label><Textarea id="manual-notes" value={fields.notes} onChange={event=>change('notes',event.target.value)} maxLength={2000}/></div>
+    </div></section>
+    <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border p-4 text-sm"><input type="checkbox" className="h-5 w-5" checked={sendSms} onChange={event=>setSendSms(event.target.checked)}/>發送訂單簡訊（每日上限 100 筆；未勾選則不發送）</label>
+   </fieldset>
+   <section className="rounded-lg border bg-card p-4 sm:p-6"><div className="flex flex-wrap items-end justify-between gap-4"><dl className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm"><dt>商品小計</dt><dd className="text-right">NT$ {subtotal}</dd><dt>運費</dt><dd className="text-right">NT$ {shipping}</dd><dt className="text-lg font-semibold">總金額</dt><dd className="text-right text-lg font-semibold">NT$ {total}</dd></dl>{!review&&<Button type="submit" className="min-h-11" disabled={busy||(!pending&&(!options||options.readOnly))}>{busy?'處理中…':pending?'核對原手抄單':'核對訂單內容'}</Button>}</div>
+    {review&&<div className="mt-5 space-y-4 border-t pt-4"><h2 className="font-semibold">確認這張手抄單</h2><p className="text-sm">{fields.customerName} · {fields.phone} · {fields.deliveryMethod} · {fields.preferredDate} {fields.preferredTime}</p><p className="text-sm">{fields.deliveryMethod==='7-11門市'?`${fields.storeName} ${fields.storeId} ${fields.storeAddress}`:[fields.district,fields.area,fields.address].filter(Boolean).join(' ')}</p><p className="text-sm">{fields.paymentMethod} · {sendSms?'發送簡訊':'不發送簡訊'} · 成功後自動扣庫存</p><div className="flex flex-wrap gap-3"><Button type="button" className="min-h-11" disabled={busy} onClick={save}>{busy?'建立中…':'確認建立手抄單'}</Button><Button type="button" variant="outline" className="min-h-11" disabled={busy} onClick={()=>setReview(false)}>返回修改</Button></div></div>}
+   </section>
+  </form>
+ </section>;
+}

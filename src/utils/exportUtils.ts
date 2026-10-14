@@ -319,13 +319,21 @@ export const downloadBlackCatGuide = (): void => {
   downloadBlob(blob, '黑貓宅配檔案匯出指南.txt');
 };
 
-export const printOrders = (orders: Order[]): void => {
+export const openOrderPrintWindow = (): Window | null => {
   // Create a new window for printing
   const printWindow = window.open('', '_blank');
   if (!printWindow) {
     alert('請允許彈出視窗以列印訂單');
-    return;
+    return null;
   }
+  printWindow.document.title = '正在準備列印訂單';
+  printWindow.document.body.textContent = '正在取得訂單，請稍候…';
+  return printWindow;
+};
+
+export const printOrders = (orders: Order[], preparedWindow?: Window): void => {
+  const printWindow = preparedWindow ?? openOrderPrintWindow();
+  if (!printWindow || printWindow.closed) { return; }
 
   // Generate HTML for printing
   const htmlContent = `
@@ -478,13 +486,13 @@ export const printOrders = (orders: Order[]): void => {
 
   // The new document inherits this page's CSP. Keep its print code in this
   // already-authorized module instead of embedding an inline script.
+  // document.open() clears Window listeners; register only after it opens.
+  printWindow.document.open();
   printWindow.addEventListener('load', () => {
     printWindow.focus();
     printWindow.print();
-    printWindow.setTimeout(() => printWindow.close(), 500);
   }, { once: true });
 
-  printWindow.document.open();
   printWindow.document.write(htmlContent);
   printWindow.document.close();
 };

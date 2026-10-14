@@ -47,6 +47,7 @@ const App = () => (
           <BrowserRouter>
             <Routes>
               <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+              <Route path="/manual-orders" element={<ProtectedRoute><Index initialMode="manual" /></ProtectedRoute>} />
               <Route path="/products" element={<ProtectedRoute><ProductManagementPage /></ProtectedRoute>} />
               <Route path="/delivery-settings" element={<ProtectedRoute><DeliveryDateSettingsPage /></ProtectedRoute>} />
               {AdminRoutes.map((route, idx) => (

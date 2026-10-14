@@ -1,6 +1,8 @@
 import {catalogVersionDiagnostic,checkoutGateway,checkoutMutationSchema,CheckoutGatewayError}from './services/CheckoutGateway';
 import type {CheckoutServiceBinding} from './services/CheckoutGateway';
 import {z}from 'zod';
+import {manualOrderInputSchema,manualGatewayResultSchema} from './services/ManualOrderContract';
+import {CacheService} from './services/CacheService';
 import {adminPolicy} from './security/adminPolicy';
 import {readOrders,mutateOrder,deleteBatch,pendingOrders,auditOrders,reconcileOrder} from './endpoints/orderManagement';
 import { CatalogService, CatalogError, visibleProducts } from './services/CatalogService';
@@ -46,6 +48,16 @@ app.post('/api/admin/login', c => c.json({ success:false, code:'USE_CLOUDFLARE_A
 app.post('/api/admin_login.php', c => c.json({ success:false, code:'USE_CLOUDFLARE_ACCESS' }, 410));
 app.use('/api/*',bodyLimit({maxSize:65536,onError:c=>c.json({success:false,message:'請求過大'},413)}));
 app.get('/api/orders',readOrders);app.get('/api/get_orders_from_sheet.php',readOrders);
+app.get('/api/manual-orders/options',async c=>{try{const s=await new CatalogService(c.env.CATALOG_DB).snapshot();return c.json({success:true,data:{products:visibleProducts(s.products),delivery:s.delivery},revision:s.revision,read_only:s.read_only||(c.env as Env&{MANUAL_ORDER_READY?:string}).MANUAL_ORDER_READY!=='1'});}catch{return c.json({success:false,message:'手抄單設定目前無法讀取'},503);}});
+app.post('/api/manual-orders',async c=>{
+ if(c.env.ORDER_WRITE_READY!=='1'||(c.env as Env&{MANUAL_ORDER_READY?:string}).MANUAL_ORDER_READY!=='1')return c.json({success:false,message:'手抄單尚未啟用',safe_to_restart:false},503);
+ const parsed=manualOrderInputSchema.safeParse(await c.req.json().catch(()=>null));
+ if(!parsed.success)return c.json({success:false,message:'請確認手抄單欄位與商品數量',safe_to_restart:false},400);
+ try{const result=manualGatewayResultSchema.parse(await checkoutGateway((c.env as Env&{CATALOG_API?:CheckoutServiceBinding}).CATALOG_API,c.req.header('Cf-Access-Jwt-Assertion')||'',{action:'create_manual',...parsed.data},c.get('admin').email));if(result.result.success&&c.env.CACHE_KV)await c.env.CACHE_KV.delete(CacheService.generateKey('admin_dashboard_v2')).catch(()=>console.error('manual_dashboard_cache_clear_failed'));return c.json(result.result,result.status);}
+ catch(error){const failure=checkoutGatewayFailure('reconcile',error);return c.json({success:false,message:'入單結果尚待確認，請保留此頁並核對原單',safe_to_restart:false,code:failure.code},failure.status);}
+});
+app.get('/api/manual-orders/stores',async c=>{const query=c.req.query('query')||'';if(!query.trim()||query.length>100)return c.json({success:false,message:'請輸入門市名稱、地址或店號'},400);try{const data=await checkoutGateway((c.env as Env&{CATALOG_API?:CheckoutServiceBinding}).CATALOG_API,c.req.header('Cf-Access-Jwt-Assertion')||'',{action:'store_search',query});if(!Array.isArray(data))throw new Error('INVALID_STORES');return c.json({success:true,data});}catch{return c.json({success:false,message:'門市搜尋暫時無法完成，請稍後再試'},503);}});
+app.get('/api/manual-orders/status',async c=>{const id=z.string().uuid().safeParse(c.req.query('id'));if(!id.success)return c.json({success:false,message:'訂單識別不正確'},400);try{const data=await checkoutGateway((c.env as Env&{CATALOG_API?:CheckoutServiceBinding}).CATALOG_API,c.req.header('Cf-Access-Jwt-Assertion')||'',{action:'manual_status',order_id:id.data});return c.json({success:true,data});}catch{return c.json({success:false,message:'原單資料尚無法恢復，請保留原頁或到待辦核對'},409);}});
 app.put('/api/orders/status',mutateOrder('status'));app.post('/api/update_order_status.php',mutateOrder('status'));
 app.put('/api/orders/payment',mutateOrder('payment'));app.post('/api/update_payment_status.php',mutateOrder('payment'));
 app.put('/api/orders/items',mutateOrder('items'));app.post('/api/update_order_items.php',mutateOrder('items'));

@@ -1,7 +1,10 @@
 import { z } from 'zod';
+import { manualCheckoutSchema, manualGatewayResultSchema } from './ManualOrderContract';
 import { safeOperationsPaginationError, validateOperationsPageCursorScope, validateOperationsPageEnvelope } from './OperationsPagination';
 
 const checkoutListSchema = z.object({ action: z.literal('list') }).strict();
+const checkoutStoreSchema = z.object({action:z.literal('store_search'),query:z.string().trim().min(1).max(100)}).strict();
+const checkoutManualStatusSchema = z.object({action:z.literal('manual_status'),order_id:z.string().uuid()}).strict();
 const checkoutListPageSchema = z.object({
   action: z.literal('list_page'),
   page_size: z.number().int().min(1).max(100).optional(),
@@ -14,7 +17,7 @@ export const checkoutMutationSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('retry_budget_sms'), order_id: z.string().uuid(), reason: z.string().trim().min(3).max(300) }).strict(),
   z.object({ action: z.literal('close_missing_primary'), order_id: z.string().uuid(), reason: z.string().trim().min(3).max(300) }).strict(),
 ]);
-export const checkoutRequestSchema = z.union([checkoutListSchema, checkoutListPageSchema, checkoutMutationSchema]);
+export const checkoutRequestSchema = z.union([checkoutListSchema, checkoutListPageSchema, checkoutMutationSchema, manualCheckoutSchema, checkoutStoreSchema, checkoutManualStatusSchema]);
 export type CheckoutGatewayRequest = z.infer<typeof checkoutRequestSchema>;
 
 export interface CheckoutServiceBinding {
@@ -189,6 +192,14 @@ export async function checkoutGateway(
     } catch {
       throw new CheckoutGatewayError(503, 'CATALOG_RESPONSE_INVALID');
     }
+  }
+  if (validated.action === 'create_manual') {
+    const parsed = manualGatewayResultSchema.safeParse(result.data);
+    if (!parsed.success || (parsed.data.result.success && (parsed.data.status !== 200 || parsed.data.result.order_id !== validated.order.requestId))
+        || (!parsed.data.result.success && parsed.data.result.safe_to_restart === true && parsed.data.status !== 400)) {
+      throw new CheckoutGatewayError(503, 'CATALOG_RESPONSE_INVALID');
+    }
+    return parsed.data;
   }
   return result.data;
 }

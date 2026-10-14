@@ -32,6 +32,7 @@
         "ACCESS_TEAM_DOMAIN": "767780.cloudflareaccess.com",
         "ACCESS_AUDIENCE": "acba9bfaa5b6ea9abaac4bfd10b052aba1c0cec6a99166d995f5f95353099438",
         "ADMIN_EMAILS": "ruby7677@gmail.com,wade7616@gmail.com",
+        "ADMIN_WRITE_EMAILS": "ruby7677@gmail.com,wade7616@gmail.com",
         "ALLOWED_ORIGINS": "https://sheet-order-dashboard-main.pages.dev"
       },
       "d1_databases": [

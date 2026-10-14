@@ -8,12 +8,18 @@
     "dev:debug": "vite --host 127.0.0.1 --port 8080 --debug",
     "build": "vite build",
     "build:dev": "vite build --mode development",
-    "lint": "eslint .",
+    "lint": "eslint src functions vite.config.ts vitest.config.ts scripts",
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "type-check": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.test.json",
+    "lint:all": "eslint .",
+    "test:release": "node --test scripts/__tests__/*.test.mjs",
+    "release:preflight": "node --use-system-ca scripts/pages-release.mjs preflight production",
+    "release:production": "node --use-system-ca scripts/pages-release.mjs deploy production",
+    "release:staging": "node --use-system-ca scripts/pages-release.mjs deploy staging"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
@@ -107,5 +113,8 @@
     },
     "brace-expansion@2": "^2.1.7",
     "minimatch@5": "^5.1.9"
+  },
+  "engines": {
+    "node": ">=22.19.0"
   }
 }
