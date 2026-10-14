@@ -3,7 +3,7 @@ import {webcrypto} from 'node:crypto';
 const {request}=vi.hoisted(()=>({request:vi.fn()}));
 vi.mock('../adminApi',()=>({adminFetch:request}));
 const email='ruby7677@gmail.com';
-const order={catalogRevision:1,customerName:'Synthetic customer',phone:'0900000000',deliveryMethod:'來店自取' as const,district:'',area:'',address:'',storeName:'',storeAddress:'',storeId:'',preferredDate:'2026-10-21',preferredTime:'不指定' as const,contactMethod:'電話' as const,socialAccount:'',paymentMethod:'銀行轉帳' as const,notes:'Synthetic',products:{fixture:1},totalAmount:100,shipping:0};
+const order={catalogRevision:1,customerName:'Synthetic customer',phone:'0900000000',deliveryMethod:'來店自取' as const,district:'',area:'',address:'雲林縣西螺鎮中山路302-3號（戶政事務所跟西光幼稚園中間）',storeName:'',storeAddress:'',storeId:'',preferredDate:'2026-10-21',preferredTime:'不指定' as const,contactMethod:'電話' as const,socialAccount:'',paymentMethod:'銀行轉帳' as const,paymentStatus:'未收費' as const,notes:'Synthetic',products:{fixture:1},totalAmount:100,shipping:0};
 beforeEach(()=>{vi.resetModules();vi.stubGlobal('crypto',webcrypto);sessionStorage.clear();request.mockReset();});
 describe('manual order transport',()=>{
  it('retains identity and original input after unknown results, stores no customer payload',async()=>{

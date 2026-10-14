@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { SELF_PICKUP_ADDRESS, TAIWAN_DISTRICTS } from '../../../src/data/taiwanDistricts';
 
 const text = (maximum: number) => z.string().max(maximum).refine(value => !/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/.test(value));
 export const manualOrderInputSchema = z.object({
@@ -11,10 +12,14 @@ export const manualOrderInputSchema = z.object({
     storeName: text(100), storeAddress: text(250), storeId: text(30),
     preferredDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), preferredTime: z.enum(['上午', '下午', '不指定']),
     contactMethod: z.enum(['Line', 'Facebook', '電話']), socialAccount: text(100),
-    paymentMethod: z.enum(['銀行轉帳', '貨到付款']), notes: text(2000),
+    paymentMethod: z.enum(['銀行轉帳', '貨到付款']), paymentStatus: z.enum(['未收費', '已收費']).optional(), notes: text(2000),
     products: z.record(z.string().min(1).max(64), z.number().int().min(1).max(100)).refine(value => Object.keys(value).length > 0 && Object.keys(value).length <= 50),
     totalAmount: z.number().finite().positive().max(50_100_000), shipping: z.number().finite().nonnegative().max(1000),
-  }).strict(),
+  }).strict().superRefine((order,context)=>{
+    if(order.paymentStatus==='已收費'&&order.paymentMethod!=='銀行轉帳')context.addIssue({code:z.ZodIssueCode.custom,path:['paymentStatus'],message:'已收費僅適用銀行轉帳'});
+    if(order.paymentStatus!==undefined&&order.deliveryMethod==='宅配到府'&&(!TAIWAN_DISTRICTS[order.district]?.includes(order.area)||!order.address.trim()))context.addIssue({code:z.ZodIssueCode.custom,path:['area'],message:'宅配縣市、行政區或地址不正確'});
+    if(order.paymentStatus!==undefined&&order.deliveryMethod==='來店自取'&&order.address!==SELF_PICKUP_ADDRESS)context.addIssue({code:z.ZodIssueCode.custom,path:['address'],message:'來店自取地點不正確'});
+  }),
   send_sms: z.boolean(),
 }).strict();
 export const manualCheckoutSchema = manualOrderInputSchema.extend({ action: z.literal('create_manual') }).strict();
