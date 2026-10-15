@@ -490,9 +490,9 @@ const OrderList: React.FC<OrderListProps> = ({ filters, onOrderClick, onOrdersCh
               <th className="p-3 font-semibold w-40 min-w-[120px] max-w-[180px]">客戶資訊</th>
               <th className="p-3 font-semibold w-72 min-w-[200px] max-w-[320px]">商品摘要</th>
               <th className="p-3 font-semibold w-24 min-w-[80px] text-right">總金額</th>
-              <th className="p-3 font-semibold w-28 min-w-[100px]">到貨日期</th>
+              <th className="p-3 font-semibold w-28 min-w-[112px] whitespace-nowrap">到貨日期</th>
               <th className="p-3 font-semibold w-32 min-w-[120px] max-w-[160px]">備註</th>
-              <th className="p-3 font-semibold w-28 min-w-[100px]">訂單狀態</th>
+              <th className="p-3 font-semibold w-28 min-w-[112px] whitespace-nowrap">訂單狀態</th>
               <th className="p-3 font-semibold w-24 min-w-[100px]">款項狀態</th>
               <th className="p-3 font-semibold w-16 min-w-[64px] text-center">操作</th>
             </tr>
@@ -538,12 +538,12 @@ const OrderList: React.FC<OrderListProps> = ({ filters, onOrderClick, onOrdersCh
                     <Checkbox
                       checked={selected.includes(order.id)}
                       onCheckedChange={(checked) => handleSelectOrder(order.id, !!checked)}
-                      aria-label={`Select order ${order.orderNumber}`}
+                      aria-label={`選擇訂單 ${order.orderNumber}`}
                       className="border-slate-400 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
                     />
                   </td>
-                  <td className="p-3 w-16 text-center">
-                    <span className="font-mono text-xs bg-slate-100 px-2 py-1 rounded text-slate-600">
+                  <td className="p-3 w-24 text-center">
+                    <span className="whitespace-nowrap rounded bg-slate-100 px-2 py-1 font-mono text-xs text-slate-600">
                       {order.orderNumber}
                     </span>
                   </td>
@@ -568,8 +568,8 @@ const OrderList: React.FC<OrderListProps> = ({ filters, onOrderClick, onOrdersCh
                   <td className="p-3 w-24 text-right">
                     <span className="font-semibold text-slate-900">${order.total}</span>
                   </td>
-                  <td className="p-3 w-28">
-                    <span className="text-sm text-slate-700">{order.dueDate}</span>
+                  <td className="p-3 w-28 whitespace-nowrap">
+                    <span className="whitespace-nowrap text-sm text-slate-700">{order.dueDate}</span>
                   </td>
                   <td className="p-3 w-32 max-w-[160px]">
                     <div className="text-sm text-slate-600 whitespace-pre-line break-words line-clamp-2">
@@ -586,9 +586,9 @@ const OrderList: React.FC<OrderListProps> = ({ filters, onOrderClick, onOrdersCh
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100"
+                      className="h-11 w-11 text-slate-500 hover:text-red-600 hover:bg-red-50 transition-colors opacity-100 lg:opacity-0 lg:group-hover:opacity-100 focus-visible:opacity-100"
                       onClick={() => handleDeleteOrder(order.id)}
-                      aria-label={`Delete order ${order.orderNumber}`}
+                      aria-label={`刪除訂單 ${order.orderNumber}`}
                     >
                       <Trash className="h-4 w-4" />
                     </Button>
@@ -607,13 +607,13 @@ const OrderList: React.FC<OrderListProps> = ({ filters, onOrderClick, onOrdersCh
           <div className="text-sm text-muted-foreground order-2 sm:order-1">
             顯示 {((currentPage - 1) * itemsPerPage) + 1} 至 {Math.min(currentPage * itemsPerPage, allOrders.length)} 筆，共 {allOrders.length} 筆
           </div>
-          <div className="flex items-center gap-2 order-1 sm:order-2">
+          <div className="flex flex-wrap justify-center items-center gap-2 order-1 sm:order-2">
             <Button
               variant="outline"
               size="sm"
               onClick={() => handlePageChange(currentPage - 1)}
               disabled={currentPage === 1}
-              className="px-2 h-8"
+              className="px-3 h-11"
             >
               <ChevronLeft className="h-4 w-4" />
               <span className="ml-1">上一頁</span>
@@ -640,7 +640,7 @@ const OrderList: React.FC<OrderListProps> = ({ filters, onOrderClick, onOrdersCh
                     variant={pageNumber === currentPage ? "default" : "outline"}
                     size="sm"
                     onClick={() => handlePageChange(pageNumber)}
-                    className={`px-3 h-8 w-8 ${pageNumber === currentPage ? 'bg-primary text-primary-foreground' : ''}`}
+                    className={`px-3 h-11 min-w-11 ${pageNumber === currentPage ? 'bg-primary text-primary-foreground' : ''}`}
                   >
                     {pageNumber}
                   </Button>
@@ -653,7 +653,7 @@ const OrderList: React.FC<OrderListProps> = ({ filters, onOrderClick, onOrdersCh
               size="sm"
               onClick={() => handlePageChange(currentPage + 1)}
               disabled={currentPage === totalPages}
-              className="px-2 h-8"
+              className="px-3 h-11"
             >
               <span className="mr-1">下一頁</span>
               <ChevronRight className="h-4 w-4" />
