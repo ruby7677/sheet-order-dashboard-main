@@ -66,13 +66,21 @@ const ModernSidebar: React.FC<ModernSidebarProps> = ({
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const menuItems = [
+  const menuItems: Array<{
+    id: ModernSidebarProps['pageMode'];
+    label: string;
+    icon: typeof ShoppingBag;
+    badge?: number;
+    badgeLabel?: string;
+    description: string;
+    onClick: () => void;
+  }> = [
     {
       id: 'orders' as const,
       label: '訂單管理',
       icon: ShoppingBag,
-      badge: orderStats?.total || 0,
-      subBadge: orderStats?.pending || 0,
+      badge: orderStats?.total,
+      badgeLabel: '訂單總數',
       description: '管理所有訂單',
       onClick: () => onPageModeChange('orders')
     },
@@ -81,14 +89,14 @@ const ModernSidebar: React.FC<ModernSidebarProps> = ({
       label: '客戶資料',
       icon: Users,
       badge: customerStats?.total || 0,
-      subBadge: customerStats?.active || 0,
+      badgeLabel: '客戶總數',
       description: '管理客戶資訊',
       onClick: () => onPageModeChange('customers')
     },
-    {id:'operations' as const,label:'待辦對帳',icon:FileText,badge:0,subBadge:0,description:'待確認操作與紀錄',onClick:()=>onPageModeChange('operations')},
-    {id:'products' as const,label:'商品設定',icon:Package,badge:0,subBadge:0,description:'商品資料與庫存',onClick:()=>onPageModeChange('products')},
-    {id:'delivery-settings' as const,label:'到貨日期設定',icon:Calendar,badge:0,subBadge:0,description:'前台可選到貨日期',onClick:()=>onPageModeChange('delivery-settings')},
-    {id:'manual' as const,label:'手抄單',icon:FileText,badge:0,subBadge:0,description:'管理員代客建立訂單',onClick:()=>onPageModeChange('manual')},
+    {id:'operations' as const,label:'待辦對帳',icon:FileText,description:'待確認操作與紀錄',onClick:()=>onPageModeChange('operations')},
+    {id:'products' as const,label:'商品設定',icon:Package,description:'商品資料與庫存',onClick:()=>onPageModeChange('products')},
+    {id:'delivery-settings' as const,label:'到貨日期設定',icon:Calendar,description:'前台可選到貨日期',onClick:()=>onPageModeChange('delivery-settings')},
+    {id:'manual' as const,label:'手抄單',icon:FileText,description:'管理員代客建立訂單',onClick:()=>onPageModeChange('manual')},
   ];
 
   const SidebarContent = () => {
@@ -150,20 +158,15 @@ const ModernSidebar: React.FC<ModernSidebarProps> = ({
                     <div className="flex min-w-0 items-start justify-between gap-2">
                       <span className="min-w-0 flex-1 whitespace-normal break-words font-medium">{item.label}</span>
                       <div className="ml-auto flex shrink-0 items-center gap-1">
-                        {item.subBadge > 0 && (
+                        {typeof item.badge === 'number' && item.badge > 0 && (
                           <Badge
                             variant={isActive ? "secondary" : "default"}
                             className="h-5 min-w-5 shrink-0 px-1.5 text-xs tabular-nums"
+                            aria-label={`${item.badgeLabel} ${item.badge}`}
                           >
-                            {item.subBadge}
+                            {item.badge}
                           </Badge>
                         )}
-                        <Badge
-                          variant={isActive ? "outline" : "secondary"}
-                          className="h-5 min-w-5 shrink-0 px-1.5 text-xs tabular-nums"
-                        >
-                          {item.badge}
-                        </Badge>
                       </div>
                     </div>
                     <p className="mt-1 whitespace-normal break-words text-xs opacity-70">{item.description}</p>

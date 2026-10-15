@@ -1,5 +1,5 @@
 
-import React, { useState, useImperativeHandle, forwardRef } from 'react';
+import React, { useState, useImperativeHandle, forwardRef, useId } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
@@ -36,7 +36,13 @@ const OrderFilters = forwardRef<OrderFiltersRef, OrderFiltersProps>(({ onFilterC
   const [startDate, setStartDate] = useState<Date | undefined>(undefined);
   const [endDate, setEndDate] = useState<Date | undefined>(undefined);
   const [search, setSearch] = useState<string>('');
-
+  const componentId = useId();
+  const statusId = `order-status-${componentId}`;
+  const deliveryMethodId = `order-delivery-${componentId}`;
+  const paymentStatusId = `order-payment-${componentId}`;
+  const startDateId = `order-start-date-${componentId}`;
+  const endDateId = `order-end-date-${componentId}`;
+  const searchId = `order-search-${componentId}`;
   // 統一的篩選更新函數，確保所有篩選條件同時生效
   const updateAllFilters = (updates: Partial<{
     status: string;
@@ -54,7 +60,9 @@ const OrderFilters = forwardRef<OrderFiltersRef, OrderFiltersProps>(({ onFilterC
     if (hasUpdate('paymentStatus')) {setPaymentStatus(updates.paymentStatus!);}
     if (hasUpdate('startDate')) {setStartDate(updates.startDate);}
     if (hasUpdate('endDate')) {setEndDate(updates.endDate);}
-    if (hasUpdate('search')) {setSearch(updates.search!);}
+    if (hasUpdate('search')) {
+      setSearch(updates.search!);
+    }
 
     // 計算最新的篩選條件
     const newStatus = hasUpdate('status') ? updates.status! : status;
@@ -70,7 +78,6 @@ const OrderFilters = forwardRef<OrderFiltersRef, OrderFiltersProps>(({ onFilterC
       endDate: newEndDate ? format(newEndDate, 'yyyy-MM-dd') : undefined,
     };
 
-    // 一次性更新所有篩選條件
     onFilterChange({
       status: newStatus,
       deliveryMethod: newDeliveryMethod,
@@ -93,10 +100,12 @@ const OrderFilters = forwardRef<OrderFiltersRef, OrderFiltersProps>(({ onFilterC
   };
 
   const handleStartDateChange = (date: Date | undefined) => {
+
     updateAllFilters({ startDate: date });
   };
 
   const handleEndDateChange = (date: Date | undefined) => {
+
     updateAllFilters({ endDate: date });
   };
 
@@ -111,6 +120,7 @@ const OrderFilters = forwardRef<OrderFiltersRef, OrderFiltersProps>(({ onFilterC
   };
 
   const clearDateRange = () => {
+
     updateAllFilters({ startDate: undefined, endDate: undefined });
   };
 
@@ -151,7 +161,7 @@ const OrderFilters = forwardRef<OrderFiltersRef, OrderFiltersProps>(({ onFilterC
             variant="ghost"
             size="sm"
             onClick={clearDateRange}
-            className="h-6 px-2 text-xs text-muted-foreground hover:text-destructive transition-colors"
+            className="h-11 px-3 text-xs text-muted-foreground hover:text-destructive transition-colors sm:h-6 sm:px-2"
           >
             <X className="h-3 w-3 mr-1" />
             清除日期
@@ -162,13 +172,14 @@ const OrderFilters = forwardRef<OrderFiltersRef, OrderFiltersProps>(({ onFilterC
       {/* 第一行：狀態篩選器 - 緊湊設計 */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         <div className="space-y-1">
-          <label className="text-xs font-medium text-muted-foreground">訂單狀態</label>
+          <label htmlFor={statusId} className="text-xs font-medium text-muted-foreground">訂單狀態</label>
           <Select value={status} onValueChange={handleStatusChange}>
-            <SelectTrigger className="h-8 text-sm">
+            <SelectTrigger id={statusId} className="h-11 text-sm sm:h-8">
               <SelectValue placeholder="所有狀態" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="所有狀態">所有狀態</SelectItem>
+
               <SelectItem value="訂單確認中">訂單確認中</SelectItem>
               <SelectItem value="已抄單">已抄單</SelectItem>
               <SelectItem value="已出貨">已出貨</SelectItem>
@@ -178,9 +189,9 @@ const OrderFilters = forwardRef<OrderFiltersRef, OrderFiltersProps>(({ onFilterC
         </div>
 
         <div className="space-y-1">
-          <label className="text-xs font-medium text-muted-foreground">配送方式</label>
+          <label htmlFor={deliveryMethodId} className="text-xs font-medium text-muted-foreground">配送方式</label>
           <Select value={deliveryMethod} onValueChange={handleDeliveryMethodChange}>
-            <SelectTrigger className="h-8 text-sm">
+            <SelectTrigger id={deliveryMethodId} className="h-11 text-sm sm:h-8">
               <SelectValue placeholder="所有配送方式" />
             </SelectTrigger>
             <SelectContent>
@@ -193,9 +204,9 @@ const OrderFilters = forwardRef<OrderFiltersRef, OrderFiltersProps>(({ onFilterC
         </div>
 
         <div className="space-y-1">
-          <label className="text-xs font-medium text-muted-foreground">付款狀態</label>
+          <label htmlFor={paymentStatusId} className="text-xs font-medium text-muted-foreground">付款狀態</label>
           <Select value={paymentStatus} onValueChange={handlePaymentStatusChange}>
-            <SelectTrigger className="h-8 text-sm">
+            <SelectTrigger id={paymentStatusId} className="h-11 text-sm sm:h-8">
               <SelectValue placeholder="所有付款狀態" />
             </SelectTrigger>
             <SelectContent>
@@ -212,29 +223,30 @@ const OrderFilters = forwardRef<OrderFiltersRef, OrderFiltersProps>(({ onFilterC
 
       {/* 第二行：日期區間和搜尋 - 整合為一行三欄 */}
       <div className="space-y-1">
-        <label className="text-xs font-medium text-muted-foreground">配送／到貨日期區間與搜尋</label>
+        <div className="text-xs font-medium text-muted-foreground">配送／到貨日期區間與搜尋</div>
         <div className="flex flex-wrap gap-2" role="group" aria-label="配送／到貨日期快捷篩選">
-          <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => applyDeliveryPeriod('previous')}>
+          <Button type="button" variant="outline" size="sm" className="h-11 px-3 sm:h-8" onClick={() => applyDeliveryPeriod('previous')}>
             上週三～六
           </Button>
-          <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => applyDeliveryPeriod('current')}>
+          <Button type="button" variant="outline" size="sm" className="h-11 px-3 sm:h-8" onClick={() => applyDeliveryPeriod('current')}>
             本週三～六
           </Button>
-          <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => applyDeliveryPeriod('next')}>
+          <Button type="button" variant="outline" size="sm" className="h-11 px-3 sm:h-8" onClick={() => applyDeliveryPeriod('next')}>
             下週三～六
           </Button>
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
           {/* 開始日期 */}
-          <div>
+          <div className="space-y-1">
+            <label htmlFor={startDateId} className="text-xs font-medium text-muted-foreground">開始日期</label>
             <Popover>
               <PopoverTrigger asChild>
                 <Button
                   variant="outline"
-                  aria-label="開始配送／到貨日期"
-                  className="w-full h-8 justify-start text-left font-normal text-sm hover:bg-accent hover:text-accent-foreground"
+                  id={startDateId} aria-label="開始配送／到貨日期"
+                  className="w-full h-11 justify-start text-left font-normal text-sm hover:bg-accent hover:text-accent-foreground sm:h-8"
                 >
-                  <CalendarIcon className="mr-2 h-3 w-3" />
+                  <CalendarIcon className="mr-2 h-4 w-4 sm:h-3 sm:w-3" />
                   {startDate ? format(startDate, 'yyyy-MM-dd') : '開始日期'}
                 </Button>
               </PopoverTrigger>
@@ -250,15 +262,16 @@ const OrderFilters = forwardRef<OrderFiltersRef, OrderFiltersProps>(({ onFilterC
           </div>
 
           {/* 結束日期 */}
-          <div>
+          <div className="space-y-1">
+            <label htmlFor={endDateId} className="text-xs font-medium text-muted-foreground">結束日期</label>
             <Popover>
               <PopoverTrigger asChild>
                 <Button
                   variant="outline"
-                  aria-label="結束配送／到貨日期"
-                  className="w-full h-8 justify-start text-left font-normal text-sm hover:bg-accent hover:text-accent-foreground"
+                  id={endDateId} aria-label="結束配送／到貨日期"
+                  className="w-full h-11 justify-start text-left font-normal text-sm hover:bg-accent hover:text-accent-foreground sm:h-8"
                 >
-                  <CalendarIcon className="mr-2 h-3 w-3" />
+                  <CalendarIcon className="mr-2 h-4 w-4 sm:h-3 sm:w-3" />
                   {endDate ? format(endDate, 'yyyy-MM-dd') : '結束日期'}
                 </Button>
               </PopoverTrigger>
@@ -273,17 +286,19 @@ const OrderFilters = forwardRef<OrderFiltersRef, OrderFiltersProps>(({ onFilterC
             </Popover>
           </div>
 
-          {/* 搜尋欄位 */}
-          <div>
+      {/* 搜尋欄位 */}
+          <div className="space-y-1">
+            <label htmlFor={searchId} className="text-xs font-medium text-muted-foreground">搜尋訂單</label>
             <form onSubmit={handleSearch} className="flex gap-1">
               <Input
+                id={searchId}
                 placeholder="搜尋訂單編號、姓名或電話"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="flex-1 h-8 text-sm"
+                className="flex-1 h-11 text-sm sm:h-8"
               />
-              <Button type="submit" variant="outline" size="sm" className="h-8 px-2 hover:bg-primary/10">
-                <Search className="h-3 w-3 text-primary" />
+              <Button type="submit" variant="outline" size="sm" aria-label="套用搜尋" className="h-11 w-11 px-2 hover:bg-primary/10 sm:h-8 sm:w-8">
+                <Search className="h-4 w-4 text-primary sm:h-3 sm:w-3" />
               </Button>
             </form>
           </div>
