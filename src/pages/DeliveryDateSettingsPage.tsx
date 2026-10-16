@@ -133,10 +133,10 @@ const DeliveryDateSettingsPage: React.FC = () => {
             <Calendar className="h-6 w-6" />
             到貨日期設定
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">設定本檔期可選擇的到貨日期範圍</p>
+          <p className="mt-1 text-sm text-muted-foreground">設定前台可選的到貨日期，並分別確認宅配與 7-11 的限制。</p>
         </div>
         
-        <Alert className="mb-4"><AlertDescription>{readOnly?'前後台資料來源尚未完成切換，暫停儲存。':'到貨檔期、星期限制與提前天數和前台共用；儲存後請確認可選日期預覽。'}</AlertDescription></Alert>
+        <Alert className="mb-4"><AlertDescription>{loading?'正在讀取目前設定…':readOnly?'目前僅供查看，暫時無法儲存。請確認設定服務後再試。':'此設定與前台共用。請先確認下方日期預覽，再儲存本次修改。'}</AlertDescription></Alert>
         <div className="space-y-6">
         {/* 當前設定顯示 */}
         {currentSettings && (
@@ -144,24 +144,24 @@ const DeliveryDateSettingsPage: React.FC = () => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <CheckCircle2 className="h-5 w-5 text-green-600" />
-                當前設定
+                已儲存的設定
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                <div className="flex justify-between">
+                <div className="flex items-start justify-between gap-6 leading-relaxed [&>span:first-child]:shrink-0 [&>span:last-child]:min-w-0 [&>span:last-child]:break-words [&>span:last-child]:text-right">
                   <span className="font-medium text-muted-foreground">開始日期：</span>
                   <span>{currentSettings.start_date}</span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex items-start justify-between gap-6 leading-relaxed [&>span:first-child]:shrink-0 [&>span:last-child]:min-w-0 [&>span:last-child]:break-words [&>span:last-child]:text-right">
                   <span className="font-medium text-muted-foreground">結束日期：</span>
                   <span>{currentSettings.end_date}</span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex items-start justify-between gap-6 leading-relaxed [&>span:first-child]:shrink-0 [&>span:last-child]:min-w-0 [&>span:last-child]:break-words [&>span:last-child]:text-right">
                   <span className="font-medium text-muted-foreground">設定說明：</span>
                   <span>{currentSettings.description || '無'}</span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex items-start justify-between gap-6 leading-relaxed [&>span:first-child]:shrink-0 [&>span:last-child]:min-w-0 [&>span:last-child]:break-words [&>span:last-child]:text-right">
                   <span className="font-medium text-muted-foreground">最後更新：</span>
                   <span>
                     {formatDateTime(currentSettings.updated_at)} 
@@ -178,10 +178,10 @@ const DeliveryDateSettingsPage: React.FC = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Calendar className="h-5 w-5" />
-              更新設定
+              編輯到貨日期
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-3">
                 <Label htmlFor="start-date" className="text-base font-semibold text-foreground">
@@ -189,11 +189,12 @@ const DeliveryDateSettingsPage: React.FC = () => {
                 </Label>
                 <Input
                   id="start-date"
+                  aria-describedby="delivery-range-help"
                   type="date"
                   value={formData.start_date}
                   onChange={(e) => setFormData(prev => ({ ...prev, start_date: e.target.value }))}
                   required
-                  className="text-lg h-12 border-2 focus:border-primary"
+                  className="h-11 text-base"
                 />
               </div>
               <div className="space-y-3">
@@ -202,47 +203,52 @@ const DeliveryDateSettingsPage: React.FC = () => {
                 </Label>
                 <Input
                   id="end-date"
+                  aria-describedby="delivery-range-help"
                   type="date"
                   value={formData.end_date}
                   onChange={(e) => setFormData(prev => ({ ...prev, end_date: e.target.value }))}
                   required
-                  className="text-lg h-12 border-2 focus:border-primary"
+                  className="h-11 text-base"
                 />
               </div>
             </div>
             
+            <p id="delivery-range-help" className="text-sm leading-relaxed text-muted-foreground">開始與結束日期為本次可選範圍；實際日期還會套用下方的星期日與提前天數設定。</p>
             <div className="space-y-2">
-              <Label htmlFor="description">設定說明</Label>
+              <Label htmlFor="description">設定說明（選填）</Label>
               <Textarea
                 id="description"
                 placeholder="例如：春節檔期到貨日設定"
                 value={formData.description}
                 onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
                 rows={3}
+                className="min-h-24 resize-y text-base"
+                aria-describedby="delivery-description-help"
               />
+              <p id="delivery-description-help" className="text-sm text-muted-foreground">可註明本次檔期或調整原因，方便日後辨識。</p>
             </div>
 
-            <div className="flex gap-2 flex-wrap">
-              <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div><Label htmlFor="home-sunday">宅配排除星期日</Label><Switch id="home-sunday" checked={excludeHomeSunday} onCheckedChange={setExcludeHomeSunday}/><Label htmlFor="home-advance">宅配最少提前天數</Label><Input id="home-advance" type="number" min="0" max="365" value={homeAdvanceDays} onChange={e=>setHomeAdvanceDays(Number(e.target.value))}/></div>
-                <div><Label htmlFor="store-sunday">7-11 排除星期日</Label><Switch id="store-sunday" checked={excludeStoreSunday} onCheckedChange={setExcludeStoreSunday}/><Label htmlFor="store-advance">7-11 最少提前天數</Label><Input id="store-advance" type="number" min="0" max="365" value={storeAdvanceDays} onChange={e=>setStoreAdvanceDays(Number(e.target.value))}/></div>
+            <div className="flex gap-3 flex-wrap border-t pt-6">
+              <div className="mb-3 grid w-full grid-cols-1 gap-8 sm:grid-cols-2">
+                <div className="space-y-4"><h3 className="text-base font-semibold">宅配到府</h3><div className="flex items-center justify-between gap-4"><Label htmlFor="home-sunday" className="leading-relaxed">宅配排除星期日</Label><Switch id="home-sunday" checked={excludeHomeSunday} onCheckedChange={setExcludeHomeSunday} aria-describedby="home-sunday-help"/></div><p id="home-sunday-help" className="text-sm text-muted-foreground">開啟後，宅配日期不包含星期日。</p><div className="space-y-2"><Label htmlFor="home-advance">宅配最少提前天數</Label><Input id="home-advance" className="h-11 text-base" aria-describedby="home-advance-help" type="number" min="0" max="365" value={homeAdvanceDays} onChange={e=>setHomeAdvanceDays(Number(e.target.value))}/><p id="home-advance-help" className="text-sm leading-relaxed text-muted-foreground">以天為單位，決定從今天起最早可選的日期。</p></div></div>
+                <div className="space-y-4"><h3 className="text-base font-semibold">7-11 門市取貨</h3><div className="flex items-center justify-between gap-4"><Label htmlFor="store-sunday" className="leading-relaxed">7-11 排除星期日</Label><Switch id="store-sunday" checked={excludeStoreSunday} onCheckedChange={setExcludeStoreSunday} aria-describedby="store-sunday-help"/></div><p id="store-sunday-help" className="text-sm text-muted-foreground">開啟後，7-11 取貨日期不包含星期日。</p><div className="space-y-2"><Label htmlFor="store-advance">7-11 最少提前天數</Label><Input id="store-advance" className="h-11 text-base" aria-describedby="store-advance-help" type="number" min="0" max="365" value={storeAdvanceDays} onChange={e=>setStoreAdvanceDays(Number(e.target.value))}/><p id="store-advance-help" className="text-sm leading-relaxed text-muted-foreground">以天為單位，決定從今天起最早可選的日期。</p></div></div>
               </div>
               <Button 
                 onClick={handleSave} 
                 disabled={saving || readOnly}
-                className="flex items-center gap-2"
+                className="h-11 min-w-32 gap-2"
               >
                 {saving ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                儲存設定
+                {saving ? '儲存中…' : '儲存到貨設定'}
               </Button>
               <Button 
                 variant="outline" 
                 onClick={loadCurrentSettings}
                 disabled={loading}
-                className="flex items-center gap-2"
+                className="h-11 min-w-32 gap-2"
               >
                 <RefreshCw className="h-4 w-4" />
-                重新載入
+                {loading ? '讀取中…' : '重新讀取設定'}
               </Button>
             </div>
           </CardContent>
@@ -253,19 +259,20 @@ const DeliveryDateSettingsPage: React.FC = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Eye className="h-5 w-5" />
-              可選日期預覽
+              編輯中設定的日期預覽
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-6">
             <Alert>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                <strong>宅配到府：</strong>{excludeHomeSunday ? '排除星期日' : '包含星期日'} 
+                <span className="mr-6 inline-block"><strong>宅配到府：</strong>{excludeHomeSunday ? '排除星期日' : '包含星期日'}</span>
                 <strong>7-11門市取貨：</strong>{excludeStoreSunday?'排除星期日':'包含星期日'}
               </AlertDescription>
             </Alert>
 
-            <div className="space-y-4">
+            <p className="text-sm leading-relaxed text-muted-foreground">預覽會隨上方欄位更新；儲存後，才會套用至前台。</p>
+            <div className="space-y-6">
               <div>
                 <h4 className="text-sm font-medium mb-2">宅配到府可選日期：</h4>
                 <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
@@ -274,13 +281,13 @@ const DeliveryDateSettingsPage: React.FC = () => {
                       <Badge 
                         key={index} 
                         variant="secondary"
-                        className="justify-center text-xs py-1"
+                        className="justify-center whitespace-nowrap px-3 py-2 text-sm font-medium"
                       >
                         {date.display}
                       </Badge>
                     ))
                   ) : (
-                    <p className="text-sm text-muted-foreground col-span-full">請設定日期範圍</p>
+                    <p className="text-sm text-muted-foreground col-span-full">目前沒有可選日期，請核對日期範圍、星期日與提前天數設定。</p>
                   )}
                 </div>
               </div>
@@ -292,14 +299,14 @@ const DeliveryDateSettingsPage: React.FC = () => {
                     previewDates.storePickup.map((date, index) => (
                       <Badge 
                         key={index} 
-                        variant={date.isSunday ? "destructive" : "secondary"}
-                        className="justify-center text-xs py-1"
+                        variant="secondary"
+                        className="justify-center whitespace-nowrap px-3 py-2 text-sm font-medium"
                       >
                         {date.display}
                       </Badge>
                     ))
                   ) : (
-                    <p className="text-sm text-muted-foreground col-span-full">請設定日期範圍</p>
+                    <p className="text-sm text-muted-foreground col-span-full">目前沒有可選日期，請核對日期範圍、星期日與提前天數設定。</p>
                   )}
                 </div>
               </div>
