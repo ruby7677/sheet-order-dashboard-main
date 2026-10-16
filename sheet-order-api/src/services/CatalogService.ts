@@ -1,5 +1,5 @@
 export class CatalogError extends Error {
-  constructor(public status: 400 | 404 | 409 | 503, message: string) { super(message); }
+  constructor(public status: 400 | 403 | 404 | 409 | 503, message: string) { super(message); }
 }
 export interface CatalogProduct extends Record<string, unknown> {
   id: string; name: string; price: number; stock_quantity: number;
@@ -123,14 +123,17 @@ export class CatalogService {
     const quantities=record(input.products);if(Object.keys(quantities).length>50)fail('商品數量格式錯誤');let cents=0,count=0;
     for(const [key,v] of Object.entries(quantities)) {const n=integer(v,100);if(!n)continue;const p=s.products.find(p=>p.id===key);if(!p||!p.is_active||p.stock_status==='sold_out'||p.stock_quantity<n)throw new CatalogError(409,'商品已停售或庫存不足');cents+=Math.round(p.price*100)*n;count+=n;}
     if(count<1||count>500)fail('請選擇有效商品數量');
-    const shipping=cents>=35000?0:10000;if(input.shipping!==shipping/100||input.total_amount!==(cents+shipping)/100)throw new CatalogError(409,'商品價格或運費已更新');
+    const manualActor=input.manual_actor;
+    if(manualActor!==undefined&&!['ruby7677@gmail.com','wade7616@gmail.com'].includes(String(manualActor)))throw new CatalogError(403,'管理員入單來源不正確');
+    const selfPickup=manualActor!==undefined&&input.delivery_method==='來店自取';
+    const shipping=selfPickup||cents>=35000?0:10000;if(input.shipping!==shipping/100||input.total_amount!==(cents+shipping)/100)throw new CatalogError(409,'商品價格或運費已更新');
     const date=input.preferred_date,method=input.delivery_method;
     const today=new Date(Date.now()+8*3600000).toISOString().slice(0,10),period=s.delivery.delivery_period;
-    const rule=method==='宅配到府'?s.delivery.delivery_rules.home_delivery:method==='7-11門市'?s.delivery.delivery_rules.store_pickup:null;
+    const rule=selfPickup?{advance_days:0,exclude_sunday:false}:method==='宅配到府'?s.delivery.delivery_rules.home_delivery:method==='7-11門市'?s.delivery.delivery_rules.store_pickup:null;
     if(!rule||!validDate(date)||date<today||date<period.start_date||date>period.end_date||Date.parse(date)<Date.parse(today)+rule.advance_days*86400000||(rule.exclude_sunday&&new Date(date).getUTCDay()===0))throw new CatalogError(409,'到貨日期已更新或不可選');
     const before=structuredClone(s);for(const p of s.products)p.stock_quantity-=Number(quantities[p.id]||0);
     const now=new Date().toISOString();
-    try{await this.commit(s,'stock_reserve','checkout',{id,quantities},[this.db.prepare('INSERT INTO stock_reservations(id,fingerprint,quantities,snapshot,state,created_at,updated_at) VALUES(?,?,?,?,?,?,?)').bind(id,fingerprint,JSON.stringify(quantities),JSON.stringify(before),'reserved',now,now)]);}
+    try{await this.commit(s,'stock_reserve',manualActor===undefined?'checkout':String(manualActor),{id,quantities},[this.db.prepare('INSERT INTO stock_reservations(id,fingerprint,quantities,snapshot,state,created_at,updated_at) VALUES(?,?,?,?,?,?,?)').bind(id,fingerprint,JSON.stringify(quantities),JSON.stringify(before),'reserved',now,now)]);}
     catch(e){const winner=await this.reservation(id);if(winner&&winner.fingerprint===fingerprint&&winner.state!=='released')return {id,state:winner.state,snapshot:JSON.parse(winner.snapshot),reused:true};throw e;}
     return {id,state:'reserved',snapshot:before,reused:false};
   }

@@ -3,11 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
-  ChevronDown,
-  ChevronUp,
   Filter,
-  Printer,
-  Download,
   BarChart3,
   Settings,
   Eye,
@@ -40,6 +36,7 @@ interface CompactControlPanelProps {
 
   // 重置篩選功能
   onResetFilters?: () => void;
+
 }
 
 const CompactControlPanel: React.FC<CompactControlPanelProps> = ({
@@ -50,7 +47,8 @@ const CompactControlPanel: React.FC<CompactControlPanelProps> = ({
   selectedCount,
   itemType,
   defaultExpanded = false,
-  onResetFilters
+  onResetFilters,
+
 }) => {
   const [isStatsExpanded, setIsStatsExpanded] = useState(defaultExpanded);
   const [isFiltersExpanded, setIsFiltersExpanded] = useState(false);
@@ -65,7 +63,7 @@ const CompactControlPanel: React.FC<CompactControlPanelProps> = ({
             {/* 左側：控制按鈕和統計資訊 */}
             <div className="flex flex-col sm:flex-row sm:items-center gap-2">
               {/* 控制按鈕組 */}
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-2 pl-12 lg:pl-0">
                 {/* 統計卡片摺疊按鈕 */}
                 <Collapsible open={isStatsExpanded} onOpenChange={setIsStatsExpanded}>
                   <CollapsibleTrigger asChild>
@@ -73,7 +71,7 @@ const CompactControlPanel: React.FC<CompactControlPanelProps> = ({
                       variant="ghost"
                       size="sm"
                       className={cn(
-                        "h-7 px-2 text-xs transition-all duration-200",
+                        "h-11 min-h-[44px] px-2 text-sm transition-colors sm:text-xs sm:h-7 sm:min-h-0",
                         isStatsExpanded
                           ? "bg-blue-100 text-blue-700 border border-blue-200"
                           : "text-blue-600 hover:bg-blue-50 border border-transparent hover:border-blue-200"
@@ -96,7 +94,7 @@ const CompactControlPanel: React.FC<CompactControlPanelProps> = ({
                       variant="ghost"
                       size="sm"
                       className={cn(
-                        "h-7 px-2 text-xs transition-all duration-200",
+                        "h-11 min-h-[44px] px-2 text-sm transition-colors sm:text-xs sm:h-7 sm:min-h-0",
                         isFiltersExpanded
                           ? "bg-purple-100 text-purple-700 border border-purple-200"
                           : "text-purple-600 hover:bg-purple-50 border border-transparent hover:border-purple-200"
@@ -124,7 +122,7 @@ const CompactControlPanel: React.FC<CompactControlPanelProps> = ({
                 {selectedCount > 0 && (
                   <div className="flex items-center gap-1">
                     <span className="text-muted-foreground">已選擇:</span>
-                    <Badge variant="destructive" className="h-5 px-2 text-xs font-medium animate-pulse">
+                    <Badge variant="destructive" className="h-5 px-2 text-xs font-medium">
                       {selectedCount} 筆
                     </Badge>
                   </div>
@@ -133,7 +131,7 @@ const CompactControlPanel: React.FC<CompactControlPanelProps> = ({
             </div>
 
             {/* 右側：操作按鈕 - 更緊湊的佈局 */}
-            <div className="flex flex-wrap gap-1 items-center">
+            <div className="flex flex-wrap gap-2 items-center [&>button]:min-h-11 sm:[&>button]:min-h-0">
               {actionButtons}
             </div>
           </div>
@@ -143,7 +141,7 @@ const CompactControlPanel: React.FC<CompactControlPanelProps> = ({
       {/* 統計卡片摺疊區域 - 優化設計 */}
       <Collapsible open={isStatsExpanded} onOpenChange={setIsStatsExpanded}>
         <CollapsibleContent className="space-y-1">
-          <Card className="border-blue-200/[0.6] bg-gradient-to-r from-blue-50/[0.5] to-blue-100/[0.3] shadow-sm">
+          <Card className="border-blue-200/[0.6] bg-blue-50/40 shadow-sm">
             <CardContent className="p-3">
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-sm font-medium text-blue-700 flex items-center gap-1">
@@ -160,17 +158,17 @@ const CompactControlPanel: React.FC<CompactControlPanelProps> = ({
       {/* 篩選器摺疊區域 - 優化設計 */}
       <Collapsible open={isFiltersExpanded} onOpenChange={setIsFiltersExpanded}>
         <CollapsibleContent className="space-y-1">
-          <Card className="border-purple-200/[0.6] bg-gradient-to-r from-purple-50/[0.5] to-purple-100/[0.3] shadow-sm">
+          <Card className="border-purple-200/[0.6] bg-purple-50/40 shadow-sm">
             <CardContent className="p-3">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-medium text-purple-700 flex items-center gap-1">
+                <h3 className="text-sm font-medium text-foreground flex items-center gap-1">
                   <Filter className="h-4 w-4" />
                   篩選條件
                 </h3>
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-6 px-2 text-xs text-purple-600 hover:bg-purple-100 transition-colors"
+                  className="h-11 min-h-[44px] px-2 text-xs text-purple-600 hover:bg-purple-100 transition-colors sm:h-6 sm:min-h-0"
                   onClick={onResetFilters}
                   disabled={!onResetFilters}
                 >

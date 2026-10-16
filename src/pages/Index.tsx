@@ -1,4 +1,5 @@
 import OrderOperationsPage from './OrderOperationsPage';
+import ManualOrderPage from './ManualOrderPage';
 import ProductManagementPage from './ProductManagementPage';
 import DeliveryDateSettingsPage from './DeliveryDateSettingsPage';
 import React, { useState, useEffect, useRef } from 'react';
@@ -21,17 +22,17 @@ import { FilterCriteria } from '../types/filters';
 import { CustomerFilterCriteria } from '../types/customer';
 import { fetchOrders, detectDuplicateOrders, DuplicateGroup } from '@/services/orderService';
 import { fetchCustomers, getCustomerStats } from '@/services/customerService';
-import { downloadBlackCatXls, printOrders } from '@/utils/exportUtils';
+import { downloadBlackCatXls, printOrders, openOrderPrintWindow } from '@/utils/exportUtils';
 import { downloadQuickStoreXlsx } from '@/utils/exportQuickStoreXlsx';
 import { Download, Printer, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-const Index: React.FC = () => {
+const Index: React.FC<{initialMode?:'orders'|'manual'}> = ({initialMode='orders'}) => {
   // 檢測是否在 iframe 中
   const [isInIframe, setIsInIframe] = useState(false);
 
   // 頁面模式：'orders'、'customers'、'delivery-settings' 或 'products'
-  const [pageMode, setPageMode] = useState<'orders' | 'customers' | 'products' | 'delivery-settings' | 'operations'>('orders');
+  const [pageMode, setPageMode] = useState<'orders' | 'customers' | 'products' | 'delivery-settings' | 'operations' | 'manual'>(initialMode);
 
   // 訂單相關狀態
   // 已選擇訂單 id 陣列
@@ -82,15 +83,24 @@ const Index: React.FC = () => {
 
   // 列印已選擇訂單
   const handlePrintSelected = async () => {
+    if (selected.length === 0) {
+      toast({ title: '提示', description: '請選擇要列印的訂單' });
+      return;
+    }
+    // Preserve Chrome user activation before the asynchronous Sheet read.
+    const printWindow = openOrderPrintWindow();
+    if (!printWindow) { return; }
     try {
       const allOrders = await fetchOrders(filters);
       const selectedOrders = allOrders.filter(order => selected.includes(order.id));
       if (selectedOrders.length === 0) {
+        printWindow.close();
         toast({ title: '提示', description: '請選擇要列印的訂單' });
         return;
       }
-      printOrders(selectedOrders);
+      printOrders(selectedOrders, printWindow);
     } catch (error) {
+      if (!printWindow.closed) { printWindow.close(); }
       toast({ title: '錯誤', description: '列印失敗', variant: 'destructive' });
     }
   };
@@ -145,6 +155,7 @@ const Index: React.FC = () => {
     const updateStatsInitial = async () => {
       try {
         const allOrders = await fetchOrders();
+
         setStats({
           total: allOrders.length,
           processing: allOrders.filter(order => order.status === '已抄單').length,
@@ -190,6 +201,7 @@ const Index: React.FC = () => {
   const updateStats = async () => {
     try {
       const allOrders = await fetchOrders();
+
       setStats({
         total: allOrders.length,
         processing: allOrders.filter(order => order.status === '已抄單').length,
@@ -411,11 +423,12 @@ const Index: React.FC = () => {
       {/* 主內容區域 */}
       <div className="flex-1 min-w-0 flex flex-col min-h-screen">
         {/* 只在非 iframe 模式下顯示頂部工具欄 */}
-        <main className={`flex-1 min-w-0 ${isInIframe ? 'p-3' : 'p-6'}`}>
+        <main className={`flex-1 min-w-0 ${isInIframe ? 'p-3' : 'p-3 sm:p-6'}`}>
 
         {/* 訂單頁面 */}
         {pageMode === 'orders' && (
           <>
+
             {/* 整合式控制面板 */}
             <CompactControlPanel
               statsComponent={<Dashboard refreshTrigger={dashboardRefreshTrigger} compact={true} />}
@@ -426,7 +439,7 @@ const Index: React.FC = () => {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-7 px-3 text-xs border-2 border-yellow-400-80 text-yellow-600 hover:bg-yellow-50 hover:border-yellow-500 transition-all font-medium"
+                    className="h-11 sm:h-9 px-3 text-sm border-amber-400 text-amber-800 hover:bg-amber-50 font-medium"
                     onClick={handleDuplicateOrdersClick}
                   >
                     <AlertTriangle className="h-3 w-3 mr-1" />
@@ -435,7 +448,7 @@ const Index: React.FC = () => {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-7 px-3 text-xs border-2 border-orange-400-80 text-orange-600 hover:bg-orange-50 hover:border-orange-500 transition-all font-medium"
+                    className="h-11 sm:h-9 px-3 text-sm border-orange-400 text-orange-800 hover:bg-orange-50 font-medium"
                     onClick={handlePrintSelected}
                   >
                     <Printer className="h-3 w-3 mr-1" /> 列印訂單
@@ -443,18 +456,18 @@ const Index: React.FC = () => {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-7 px-3 text-xs border-2 border-blue-400-80 text-blue-600 hover:bg-blue-50 hover:border-blue-500 transition-all font-medium"
+                    className="h-11 sm:h-9 px-3 text-sm border-blue-400 text-blue-700 hover:bg-blue-50 font-medium"
                     onClick={handleDownloadBlackCatXls}
                   >
-                    <Download className="h-3 w-3 mr-1" /> 宅配到府
+                    <Download className="h-3 w-3 mr-1" /> 匯出宅配單
                   </Button>
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-7 px-3 text-xs border-2 border-green-400-80 text-green-600 hover:bg-green-50 hover:border-green-500 transition-all font-medium"
+                    className="h-11 sm:h-9 px-3 text-sm border-green-400 text-green-800 hover:bg-green-50 font-medium"
                     onClick={handleDownloadQuickStoreXlsx}
                   >
-                    <Download className="h-3 w-3 mr-1" /> 快速到店
+                    <Download className="h-3 w-3 mr-1" /> 匯出到店單
                   </Button>
                 </>
               }
@@ -521,6 +534,7 @@ const Index: React.FC = () => {
         )}
 
         {pageMode === 'operations' && <OrderOperationsPage />}
+        {pageMode === 'manual' && <ManualOrderPage onCreated={()=>{handleOrdersChange();updateCustomerStats();setCustomerDashboardRefreshTrigger(previous=>previous+1);}} />}
         {pageMode === 'products' && <ProductManagementPage />}
         {pageMode === 'delivery-settings' && <DeliveryDateSettingsPage />}
         </main>

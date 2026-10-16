@@ -1,64 +1,68 @@
-name: Deploy to Cloudflare Pages
+name: Verify and deploy dashboard
 
 on:
   push:
-    branches:
-      - main
-      - develop
+    branches: [main, develop]
   pull_request:
-    branches:
-      - main
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dashboard-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  build-and-deploy:
+  verify:
     runs-on: ubuntu-latest
-    
-    environment:
-      name: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
-    
     steps:
-      - name: Checkout 
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: '18'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run linting
-        run: npm run lint
-
-      - name: Create environment file
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm ci --prefix sheet-order-api
+      - run: npm run lint
+      - run: npm run type-check
+      - run: node sheet-order-api/node_modules/typescript/bin/tsc --noEmit -p sheet-order-api/tsconfig.json
+      - run: npm run test:run
+      - run: npm run test:release
+      - name: Build and record verified assets
+        env:
+          VITE_ENVIRONMENT: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
         run: |
-          echo "VITE_APP_ENV=${{ vars.VITE_APP_ENV || 'production' }}" > .env
-          echo "VITE_API_BASE_URL=${{ vars.VITE_API_BASE_URL || '/api' }}" >> .env
-          echo "VITE_API_HOST=${{ secrets.VITE_API_HOST }}" >> .env
-          echo "VITE_GOOGLE_SHEET_ID=${{ vars.VITE_GOOGLE_SHEET_ID }}" >> .env
-          echo "VITE_APP_TITLE=${{ vars.VITE_APP_TITLE || '融氏古早味蘿蔔糕 - 訂單管理後台' }}" >> .env
-          echo "VITE_APP_DESCRIPTION=${{ vars.VITE_APP_DESCRIPTION || '蘿蔔糕訂購系統管理後台' }}" >> .env
-          echo "VITE_CACHE_DURATION=${{ vars.VITE_CACHE_DURATION || '15000' }}" >> .env
-          echo "VITE_DEBUG_MODE=${{ vars.VITE_DEBUG_MODE || 'false' }}" >> .env
-
-      - name: Build application
-        run: npm run build
-
-      - name: Deploy to Cloudflare Pages
-        uses: cloudflare/pages-action@v1
+          node scripts/pages-release.mjs build "$VITE_ENVIRONMENT"
+      - uses: actions/upload-artifact@v4
         with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          projectName: ${{ vars.CLOUDFLARE_PROJECT_NAME || 'sheet-order-dashboard' }}
-          directory: dist
-          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+          name: verified-dashboard
+          include-hidden-files: true
+          path: |
+            dist/
+            .pages-release.json
 
-      - name: Deploy notification
-        if: success()
-        run: |
-          echo "🚀 部署成功！"
-          echo "環境: ${{ github.ref == 'refs/heads/main' && 'Production' || 'Staging' }}"
-          echo "分支: ${{ github.ref_name }}"
-          echo "提交: ${{ github.sha }}"
+  deploy:
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm ci --prefix sheet-order-api
+      - uses: actions/download-artifact@v4
+        with:
+          name: verified-dashboard
+          path: .
+      - name: Guarded deploy with Functions and binding verification
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          NODE_OPTIONS: --use-system-ca
+          RELEASE_ENV: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
+        run: node scripts/pages-release.mjs deploy "$RELEASE_ENV"

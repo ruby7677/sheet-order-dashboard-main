@@ -20,6 +20,7 @@
     "ADMIN_EMAILS": "",
     "ALLOWED_ORIGINS": "http://localhost:8080,http://127.0.0.1:8080",
     "ORDER_WRITE_READY": "0",
+    "MANUAL_ORDER_READY": "0",
     "ADMIN_WRITE_EMAILS": "",
     "ADMIN_DELETE_EMAILS": "",
     "ADMIN_PRICING_EMAILS": ""
@@ -65,6 +66,7 @@
         "PRODUCTION_SHEET_ID": "10MMALrfBonchPGjb-ps6Knw7MV6lllrrKRCTeafCIuo",
         "TEST_SHEET_ID": "",
         "ORDER_WRITE_READY": "1",
+        "MANUAL_ORDER_READY": "1",
         "ADMIN_WRITE_EMAILS": "ruby7677@gmail.com,wade7616@gmail.com",
         "ADMIN_DELETE_EMAILS": "ruby7677@gmail.com,wade7616@gmail.com",
         "ADMIN_PRICING_EMAILS": "ruby7677@gmail.com,wade7616@gmail.com"

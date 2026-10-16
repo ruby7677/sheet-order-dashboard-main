@@ -26,7 +26,7 @@ const StatusBadge: React.FC<StatusBadgeProps> = ({ status, className }) => {
 
   return (
     // 顯示中文狀態，並套用對應顏色
-    <span className={cn('status-badge', badgeClass[status], className)}>
+    <span className={cn('status-badge inline-flex shrink-0 whitespace-nowrap align-middle', badgeClass[status], className)}>
       {status}
     </span>
   );
