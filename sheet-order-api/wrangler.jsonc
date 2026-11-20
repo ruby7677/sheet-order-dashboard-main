@@ -28,13 +28,7 @@
   "kv_namespaces": [
     {
       "binding": "CACHE_KV",
-      "id": "9e131cdce1674b5e946c19ece9efef0c"
-    }
-  ],
-  "services": [
-    {
-      "binding": "CATALOG_API",
-      "service": "lopokao-catalog-test"
+      "id": "local-dev-only"
     }
   ],
   "env": {
@@ -84,8 +78,8 @@
   "d1_databases": [
     {
       "binding": "CATALOG_DB",
-      "database_name": "lopokao-catalog-test",
-      "database_id": "4d2301a9-8c1d-40fb-be33-063eb1cfb6fd",
+      "database_name": "local-dev-only",
+      "database_id": "local-dev-only",
       "migrations_dir": "migrations"
     }
   ]
