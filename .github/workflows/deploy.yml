@@ -2,7 +2,7 @@ name: Verify and deploy dashboard
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -32,7 +32,7 @@ jobs:
       - run: npm run test:release
       - name: Build and record verified assets
         env:
-          VITE_ENVIRONMENT: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
+          VITE_ENVIRONMENT: production
         run: |
           node scripts/pages-release.mjs build "$VITE_ENVIRONMENT"
       - uses: actions/upload-artifact@v4
@@ -44,10 +44,10 @@ jobs:
             .pages-release.json
 
   deploy:
-    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     needs: verify
     runs-on: ubuntu-latest
-    environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
+    environment: production
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -64,5 +64,4 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           NODE_OPTIONS: --use-system-ca
-          RELEASE_ENV: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
-        run: node scripts/pages-release.mjs deploy "$RELEASE_ENV"
+        run: node scripts/pages-release.mjs deploy production

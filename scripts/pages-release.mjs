@@ -7,7 +7,6 @@ import { spawnSync } from 'node:child_process';
 
 export const policies = {
  production: { project: 'sheet-order-dashboard-main', branch: 'main', service: 'sheet-order-api' },
- staging: { project: 'lopokao-dashboard-staging-20261002', branch: 'staging', service: 'sheet-order-api-staging-20261002' },
 };
 const account = '91137cab6bf37f92cb486965eed90181';
 const scriptRoot=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');

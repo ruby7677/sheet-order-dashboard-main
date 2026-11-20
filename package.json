@@ -18,8 +18,7 @@
     "lint:all": "eslint .",
     "test:release": "node --test scripts/__tests__/*.test.mjs",
     "release:preflight": "node --use-system-ca scripts/pages-release.mjs preflight production",
-    "release:production": "node --use-system-ca scripts/pages-release.mjs deploy production",
-    "release:staging": "node --use-system-ca scripts/pages-release.mjs deploy staging"
+    "release:production": "node --use-system-ca scripts/pages-release.mjs deploy production"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",

@@ -27,5 +27,5 @@ test('requires correct environment project and binding, Functions, branch and su
  assert.throws(()=>validateDeployment(project,{...deployment,deployment_trigger:{metadata:{branch:'develop'}}},'production','old'),/NOT_VERIFIED/);
  assert.throws(()=>validateDeployment(project,deployment,'production','new'),/NOT_VERIFIED/);
  const bad=structuredClone(project);bad.deployment_configs.production.services.ADMIN_API.service='wrong';assert.throws(()=>validateProject(bad,'production'),/MISMATCH/);
- const staging=structuredClone(project);staging.name=policies.staging.project;staging.production_branch=policies.staging.branch;staging.deployment_configs.production.services.ADMIN_API.service=policies.staging.service;assert.doesNotThrow(()=>validateProject(staging,'staging'));
+ assert.equal(policies.staging,undefined);
 });
