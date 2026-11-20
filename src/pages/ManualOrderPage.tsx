@@ -4,7 +4,7 @@ import {Input} from '@/components/ui/input';
 import {Label} from '@/components/ui/label';
 import {Textarea} from '@/components/ui/textarea';
 import {useAuth} from '@/components/AuthProvider';
-import {beginAnotherManualOrder,getManualOptions,hasManualPending,recoverManualDraft,retryManualOrder,searchManualStores,submitManualOrder} from '@/services/manualOrderService';
+import {beginAnotherManualOrder,discardUnrecoverableManualPending,getManualOptions,hasManualPending,recoverManualDraft,retryManualOrder,searchManualStores,submitManualOrder} from '@/services/manualOrderService';
 import type {ManualOptions,ManualOrderInput,ManualReceipt,ManualStore} from '@/services/manualOrderService';
 import {SELF_PICKUP_ADDRESS,TAIWAN_CITIES,TAIWAN_DISTRICTS} from '@/data/taiwanDistricts';
 
@@ -62,13 +62,17 @@ export default function ManualOrderPage({onCreated}:{onCreated?:()=>void}={}){
   }finally{setBusy(false);lock.current=false;}
  }
  async function findStores(){storeRequest.current?.abort();const controller=new AbortController();storeRequest.current=controller;setStoreBusy(true);setStoreError('');try{const result=await searchManualStores(storeQuery,controller.signal);if(!controller.signal.aborted)setStores(result);}catch(e){if(!controller.signal.aborted){setStores([]);setStoreError(e instanceof Error?e.message:'門市搜尋失敗');}}finally{if(storeRequest.current===controller)setStoreBusy(false);}}
+ function discardPending(){
+  if(!window.confirm('放棄這張待確認的手抄單？\n\n只在確定它沒有入單時使用：請先到「待辦對帳」或訂單列表查看是否已有這張單。放棄後可重新填寫新單。'))return;
+  try{discardUnrecoverableManualPending(email);setPending(false);setRestored(false);setOriginalQuote(null);setError('');}catch(e){report(e instanceof Error?e.message:'無法放棄待確認');}
+ }
  async function another(){try{beginAnotherManualOrder(email);setReceipt(null);setFields(initial);setPaymentChoice('');setQuantities({});setSendSms(false);setOriginalQuote(null);setRestored(false);setError('');setStoreQuery('');setStores([]);setOptions(null);await loadOptions();}catch(e){report(e instanceof Error?e.message:'設定讀取失敗');}}
  if(receipt)return <section className="mx-auto max-w-3xl space-y-5 py-6"><h1 className="text-2xl font-semibold">手抄單已建立</h1><div role="status" className="rounded-lg border bg-card p-5"><p>訂單識別：<span className="break-all font-mono text-sm">{receipt.order_id}</span></p><p className="mt-3">{receipt.sms_sent?'簡訊已送出':sendSms?'簡訊尚未送出，請查看待辦對帳':'依管理員選擇，未發送簡訊'}</p>{(receipt.customer_sync_pending||receipt.stock_confirmation_pending)&&<p className="mt-3 text-amber-800">訂單已儲存，部分同步尚待確認，請到待辦對帳查看。</p>}</div><Button className="min-h-11" onClick={another}>建立下一張手抄單</Button></section>;
  const textField=(key:keyof Fields,label:string,extra:React.InputHTMLAttributes<HTMLInputElement>={},hint?:string)=><div className="space-y-2"><Label htmlFor={`manual-${key}`} className="font-medium">{label}</Label><Input id={`manual-${key}`} value={fields[key]} onChange={event=>change(key,event.target.value as never)} className="h-11 text-base" aria-describedby={hint?`manual-${key}-help`:undefined} {...extra}/>{hint&&<p id={`manual-${key}-help`} className="text-sm leading-relaxed text-muted-foreground">{hint}</p>}</div>;
  return <section className="mx-auto max-w-5xl space-y-6 pb-8">
   <header className="flex flex-wrap items-start justify-between gap-4"><div><h1 className="text-2xl font-semibold">手抄單</h1><p className="mt-2 text-sm text-muted-foreground">代客填寫商品與配送資料，核對後再建立訂單；成功後會扣除庫存。</p></div><Button variant="outline" className="min-h-11 shrink-0" disabled={disabled} onClick={()=>loadOptions().catch(e=>report(e.message))}>重新讀取設定</Button></header>
   {error&&<div ref={errorRef} tabIndex={-1} role="alert" className="rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive">{error}</div>}
-  {pending&&<p role="status" className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">{restored?'上一張結果尚待確認。資料暫時鎖定；下方按鈕只會核對原單，不會重新報價或建立另一張。':'上一張結果尚待確認，尚無可恢復的原單。請保留原頁，或依原內容重填核對；系統會沿用原識別碼，內容不同時不會送出。'}</p>}
+  {pending&&<p role="status" className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">{restored?'上一張結果尚待確認。資料暫時鎖定；下方按鈕只會核對原單，不會重新報價或建立另一張。':'上一張結果尚待確認，尚無可恢復的原單。請保留原頁，或依原內容重填核對；系統會沿用原識別碼，內容不同時不會送出。'}{!restored&&<Button type="button" variant="outline" className="mt-3 min-h-11" disabled={busy} onClick={discardPending}>放棄待確認（原單無法恢復）</Button>}</p>}
   {options?.readOnly&&<p role="status">手抄單尚未啟用，目前只能查看設定。</p>}
   <form onSubmit={event=>{event.preventDefault();if(pending&&restored){save();return;}if(validate()){setError('');setReview(true);}}} className="space-y-6">
    <fieldset disabled={disabled||review} className="space-y-6">

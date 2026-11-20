@@ -75,6 +75,12 @@ export async function retryManualOrder(email:string):Promise<ManualReceipt>{
  const original=await recoverManualDraft(email);if(!original)throw new Error('沒有可核對的原單');
  inFlight=sendActive();try{return await inFlight;}finally{inFlight=null;}
 }
+/** Drop a pending marker whose original request cannot be recovered. Never touches a recoverable draft or a request in flight. */
+export function discardUnrecoverableManualPending(email:string):void{
+ if(inFlight)throw new Error('手抄單仍在處理，請稍後');
+ if(active?.email===email)throw new Error('原單資料仍可核對，請使用「核對原手抄單」');
+ sessionStorage.removeItem(key(email));completed=null;
+}
 export function beginAnotherManualOrder(email:string):void{
  if(hasManualPending(email)||inFlight)throw new Error('上一筆結果尚待確認');
  active=null;completed=null;

@@ -31,6 +31,20 @@ describe('manual order transport',()=>{
   const first=await service.submitManualOrder(email,order,false);expect((await service.submitManualOrder(email,order,false)).reused).toBe(true);expect(request).toHaveBeenCalledTimes(1);
   service.beginAnotherManualOrder(email);const next=await service.submitManualOrder(email,order,false);expect(next.order_id).not.toBe(first.order_id);expect(request).toHaveBeenCalledTimes(2);
  });
+ it('discards a pending marker whose original cannot be recovered, then allows a new order',async()=>{
+  request.mockRejectedValue(Error('Synthetic outage'));
+  const first=await import('../manualOrderService');await expect(first.submitManualOrder(email,order,false)).rejects.toThrow();vi.resetModules();
+  const fresh=await import('../manualOrderService');request.mockResolvedValue(Response.json({success:false},{status:409}));
+  await expect(fresh.recoverManualDraft(email)).rejects.toThrow('無法恢復');expect(fresh.hasManualPending(email)).toBe(true);
+  fresh.discardUnrecoverableManualPending(email);expect(fresh.hasManualPending(email)).toBe(false);
+  request.mockImplementation(async(_path,options)=>Response.json({success:true,order_id:JSON.parse(options.body).order.requestId}));
+  expect((await fresh.submitManualOrder(email,order,false)).success).toBe(true);
+ });
+ it('refuses to discard while the original draft is still recoverable in memory',async()=>{
+  const service=await import('../manualOrderService');request.mockRejectedValueOnce(Error('Synthetic network'));
+  await expect(service.submitManualOrder(email,order,false)).rejects.toThrow();
+  expect(()=>service.discardUnrecoverableManualPending(email)).toThrow('核對原手抄單');expect(service.hasManualPending(email)).toBe(true);
+ });
  it('does not replace corrupt saved identity or send an invalid quantity',async()=>{
   const service=await import('../manualOrderService');sessionStorage.setItem('lopokao-manual-request:'+email,'[]');await expect(service.submitManualOrder(email,order,false)).rejects.toThrow('識別');expect(request).not.toHaveBeenCalled();
   sessionStorage.clear();await expect(service.submitManualOrder(email,{...order,products:{fixture:1.5}},false)).rejects.toThrow('商品數量');expect(sessionStorage.length).toBe(0);expect(request).not.toHaveBeenCalled();
