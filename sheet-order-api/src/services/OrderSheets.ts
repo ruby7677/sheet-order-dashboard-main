@@ -71,6 +71,14 @@ export class OrderSheets extends GoogleSheetsService {
   if(result.totalUpdatedRows!==1)throw new OrderConflict(409,'ORDER_METADATA_CONFLICT','刪除清除結果需先對帳');
   const after=await this.locateForDelete(id);if(!after.every(cell=>cell===''))throw new OrderConflict(409,'ORDER_CLEAR_INCOMPLETE','訂單欄位未能全部清空，請人工核對');
  }
+ /** After a delete is completed: remove the blank row so the Sheet keeps no gaps. Re-locates by UUID right before deleting and only deletes a row that is still fully blank. Returns false when nothing was removed. */
+ async removeClearedRow(id:string):Promise<boolean>{
+  uuid.parse(id);const data=await this.api<MatchedRows>('/values:batchGetByDataFilter','POST',{dataFilters:[await this.filter(id)],valueRenderOption:'FORMATTED_VALUE'});
+  const row=this.parseSingleMatch(data,id,true);if(!row.every(cell=>cell===''))return false;
+  const location=this.parseRange(data.valueRanges![0]!.valueRange?.range);if(!location||location.rowNumber<2)return false;
+  await this.api(':batchUpdate','POST',{requests:[{deleteDimension:{range:{sheetId:await this.selectedId(),dimension:'ROWS',startIndex:location.rowNumber-1,endIndex:location.rowNumber}}}]});
+  return true;
+ }
 }
 interface MatchedRows {
  valueRanges?:Array<{valueRange?:{range?:string;values?:Array<Array<string|number|null>>}}>;

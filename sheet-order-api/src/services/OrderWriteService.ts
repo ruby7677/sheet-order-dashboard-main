@@ -5,7 +5,7 @@ import {MAX_OPERATIONS_SNAPSHOT_BYTES,MAX_OPERATIONS_SNAPSHOT_ROWS,paginateOpera
 import type {OperationsPage} from './OperationsPagination';
 interface Operation {id:string;order_id:string;expected_hash:string;fingerprint:string;actor:string;kind:string;before_fields:string;after_fields:string;phase:string;result:string;created_at:string;}
 interface Plan {fields:Record<number,string|number>;next:InventoryProof;delta:Record<string,number>;after_hash:string;warning?:string;reason?:string;}
-export interface OrderStore {locate(id:string):Promise<string[]>;locateForDelete?(id:string):Promise<string[]>;clearOrder?(id:string):Promise<void>;write(id:string,fields:Record<number,string|number>):Promise<void>;rows():Promise<string[][]>; }
+export interface OrderStore {locate(id:string):Promise<string[]>;locateForDelete?(id:string):Promise<string[]>;clearOrder?(id:string):Promise<void>;removeClearedRow?(id:string):Promise<boolean>;write(id:string,fields:Record<number,string|number>):Promise<void>;rows():Promise<string[][]>; }
 const now=()=>new Date().toISOString();
 const aliases:Record<string,string>={radish:'原味蘿蔔糕',taro:'芋頭粿',hongkong:'台式鹹蘿蔔糕'};
 const blankRow=(row:string[])=>row.length===18&&row.every(cell=>cell==='');
@@ -105,7 +105,7 @@ export class OrderWriteService {
       if(!blankRow(row))throw new Error('Delete verification mismatch');
      }catch{await this.setPhase(op.id,'pending');throw new OrderConflict(409,'ORDER_RECONCILIATION_REQUIRED','訂單清除結果尚待確認；請保留操作並對帳，不會回補庫存');}
     }
-    return this.finish(op,plan,row,actor,'');
+    const done=await this.finish(op,plan,row,actor,'');await this.dropClearedRow(input.id);return done;
    }
    if(!op)throw new OrderConflict(503,'ORDER_OPERATION_RESULT_UNKNOWN','訂單操作結果尚待確認；請保留本次操作識別並重試');
    if(!row.length)row=rowCells(await this.sheets.locate(input.id));
@@ -120,6 +120,11 @@ export class OrderWriteService {
    }
    return this.finish(op,plan,row,actor,'');
   });
+ }
+ /** Best effort after the delete is already completed: a failure only leaves a blank row, never changes the result. */
+ private async dropClearedRow(id:string):Promise<void>{
+  if(!this.sheets.removeClearedRow)return;
+  try{await this.sheets.removeClearedRow(id);}catch{console.error('order_blank_row_removal_failed');}
  }
  private async finish(op:Operation,plan:Plan,row:string[],actor:string,reason:string):Promise<Record<string,unknown>>{
   if(op.kind==='delete'&&!blankRow(row))throw new OrderConflict(409,'ORDER_RECONCILIATION_REQUIRED','刪除列尚未完全清空，停止結案與庫存處理');
@@ -220,7 +225,7 @@ export class OrderWriteService {
    if(action==='confirm'){
     if(isDelete&&!blankRow(row))throw new OrderConflict(409,'RECONCILIATION_UNCERTAIN','刪除列尚未確認 A:R 全空，停止結案與庫存處理');
     if(hash!==plan.after_hash)throw new OrderConflict(409,'RECONCILIATION_UNCERTAIN','資料尚不符合預期結果，停止補寫與回補；請人工核對');
-    return this.finish(op,plan,row,actor,reason);
+    const done=await this.finish(op,plan,row,actor,reason);if(isDelete)await this.dropClearedRow(op.order_id);return done;
    }
    if(hash!==op.expected_hash||plan.after_hash===op.expected_hash)throw new OrderConflict(409,'RECONCILIATION_UNCERTAIN','無法確認未寫入，不能撤回此操作');
    if(op.phase!=='prepared'&&Date.now()-Date.parse(op.created_at)<600000)throw new OrderConflict(409,'RECONCILIATION_WAIT','結果不明的操作至少等待十分鐘後再核對，避免晚到的寫入');
