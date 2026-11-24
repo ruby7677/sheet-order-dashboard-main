@@ -5,7 +5,7 @@ import {MAX_OPERATIONS_SNAPSHOT_BYTES,MAX_OPERATIONS_SNAPSHOT_ROWS,paginateOpera
 import type {OperationsPage} from './OperationsPagination';
 interface Operation {id:string;order_id:string;expected_hash:string;fingerprint:string;actor:string;kind:string;before_fields:string;after_fields:string;phase:string;result:string;created_at:string;}
 interface Plan {fields:Record<number,string|number>;next:InventoryProof;delta:Record<string,number>;after_hash:string;warning?:string;reason?:string;}
-export interface OrderStore {locate(id:string):Promise<string[]>;locateForDelete?(id:string):Promise<string[]>;clearOrder?(id:string):Promise<void>;removeClearedRow?(id:string):Promise<boolean>;write(id:string,fields:Record<number,string|number>):Promise<void>;rows():Promise<string[][]>; }
+export interface OrderStore {locate(id:string):Promise<string[]>;locateForDelete?(id:string):Promise<string[]>;clearOrder?(id:string):Promise<void>;removeClearedRow?(id:string):Promise<boolean>;renumberOrders?():Promise<number>;write(id:string,fields:Record<number,string|number>):Promise<void>;rows():Promise<string[][]>; }
 const now=()=>new Date().toISOString();
 const aliases:Record<string,string>={radish:'原味蘿蔔糕',taro:'芋頭粿',hongkong:'台式鹹蘿蔔糕'};
 const blankRow=(row:string[])=>row.length===18&&row.every(cell=>cell==='');
@@ -124,7 +124,11 @@ export class OrderWriteService {
  /** Best effort after the delete is already completed: a failure only leaves a blank row, never changes the result. */
  private async dropClearedRow(id:string):Promise<void>{
   if(!this.sheets.removeClearedRow)return;
-  try{await this.sheets.removeClearedRow(id);}catch{console.error('order_blank_row_removal_failed');}
+  let removed=false;
+  try{removed=await this.sheets.removeClearedRow(id);}catch{console.error('order_blank_row_removal_failed');}
+  // Renumbering changes column N, which is part of the row revision, so it waits while any operation is unresolved. The next delete renumbers the whole column again.
+  if(!removed||!this.sheets.renumberOrders)return;
+  try{if(await this.db.prepare("SELECT id FROM order_operations WHERE phase IN ('prepared','sheet_submitting','pending') LIMIT 1").first())return;await this.sheets.renumberOrders();}catch{console.error('order_renumber_failed');}
  }
  private async finish(op:Operation,plan:Plan,row:string[],actor:string,reason:string):Promise<Record<string,unknown>>{
   if(op.kind==='delete'&&!blankRow(row))throw new OrderConflict(409,'ORDER_RECONCILIATION_REQUIRED','刪除列尚未完全清空，停止結案與庫存處理');

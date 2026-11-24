@@ -79,6 +79,13 @@ export class OrderSheets extends GoogleSheetsService {
   await this.api(':batchUpdate','POST',{requests:[{deleteDimension:{range:{sheetId:await this.selectedId(),dimension:'ROWS',startIndex:location.rowNumber-1,endIndex:location.rowNumber}}}]});
   return true;
  }
+ /** Keep column N (legacy row number) equal to sheet row number minus 1, the same value the PHP intake writes. Only changed cells are written; returns how many. */
+ async renumberOrders():Promise<number>{
+  const rows=await this.rows(),quoted="'"+this.sheetName.replace(/'/g,"''")+"'!",data:Array<{range:string;values:number[][]}>=[];
+  for(let i=1;i<rows.length;i++){const row=rows[i]!;if(!row[1]!.trim())continue;if(row[13]!==String(i))data.push({range:`${quoted}N${i+1}`,values:[[i]]});}
+  for(let offset=0;offset<data.length;offset+=400)await this.api('/values:batchUpdate','POST',{valueInputOption:'RAW',data:data.slice(offset,offset+400)});
+  return data.length;
+ }
 }
 interface MatchedRows {
  valueRanges?:Array<{valueRange?:{range?:string;values?:Array<Array<string|number|null>>}}>;
